@@ -18,12 +18,26 @@ button{font-family:inherit;cursor:pointer}
 </helmet>
 <div style="width: 390px; height: 844px; box-sizing: border-box; background: #f7f5ee; display: flex; flex-direction: column; overflow: hidden;">
 
+<sc-if value="{{ showLoading }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; flex-grow: 1; padding: 40px 32px; box-sizing: border-box; text-align: center;">
+  <div style="font-size: 17px; font-weight: 700; color: #161512;">資料載入中…</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showLoadError }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; flex-grow: 1; padding: 40px 32px; box-sizing: border-box; text-align: center;">
+  <div style="font-size: 17px; font-weight: 700; color: #b00020;">資料載入失敗</div>
+  <div style="font-size: 14px; line-height: 1.5; color: #3a382f;">{{ loadError }}</div>
+  <button type="button" onClick="{{ retryLoad }}" style="margin-top: 8px; height: 48px; padding: 0 24px; border: 2px solid #d8d2bf; border-radius: 24px; background: #ffffff; color: #161512; font-size: 15px; font-weight: 700;">重新載入</button>
+</div>
+</sc-if>
+
 <sc-if value="{{ showSelect }}" hint-placeholder-val="{{ true }}">
 <div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
 
   <div style="display: flex; flex-direction: column; gap: 4px; padding: 40px 24px 18px; box-sizing: border-box;">
     <div style="font-size: 13px; font-weight: 700; color: #8a5a1e; letter-spacing: 1px;">演習名稱</div>
-    <div style="font-size: 25px; font-weight: 900; line-height: 1.3;">[請輸入演習名稱]</div>
+    <div style="font-size: 25px; font-weight: 900; line-height: 1.3;">{{ exerciseName }}</div>
   </div>
 
   <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 24px 18px; box-sizing: border-box;">
@@ -47,7 +61,7 @@ button{font-family:inherit;cursor:pointer}
           <div style="width: 42px; height: 42px; border-radius: 10px; background: #f0e2be; display: flex; align-items: center; justify-content: center; color: #7a4e0f;">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
           </div>
-          <div style="font-size: 13px; font-weight: 700; text-align: center; line-height: 1.3;">{{ it.label }}</div>
+          <div style="font-size: 13px; font-weight: 700; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">{{ it.label }}</div>
         </button>
       </sc-for>
     </div>
@@ -135,38 +149,42 @@ button{font-family:inherit;cursor:pointer}
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#161512","options":["#161512","#7a4e0f","#1f7a4d","#2b5fd9"]},"$preview":{"width":390,"height":844}}'>
-const ITEM_NAMES = ['項目一', '項目二', '項目三', '項目四', '項目五', '項目六', '項目七', '項目八', '項目九'];
-const CRITERIA = [
-  { score: 1, label: '未達成', desc: '明顯未達要求，需立即改善' },
-  { score: 2, label: '待加強', desc: '部分達成，仍有明顯落差' },
-  { score: 3, label: '普通', desc: '達到基本要求' },
-  { score: 4, label: '良好', desc: '表現穩定，超出基本要求' },
-  { score: 5, label: '優異', desc: '表現卓越，超越預期' },
-];
-const QUESTIONS = [
-  { id: 'Q1', text: '[問題一敘述]' },
-  { id: 'Q2', text: '[問題二敘述]' },
-  { id: 'Q3', text: '[問題三敘述]' },
-  { id: 'Q4', text: '[問題四敘述]' },
-  { id: 'Q5', text: '[問題五敘述]' },
-];
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwNkZFG97TRdrB1NKqWFWasuMOMYn-Hf6b4M6UOZFK59mwM9DO0-qnWYa96n9ZPhiVuwA/exec';
 
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { screen: 'select', fillerCode: '', selectedItem: null, answers: {} };
+    this.state = { screen: 'select', fillerCode: '', selectedItem: null, answers: {}, config: null, loadError: null };
+  }
+  componentDidMount() {
+    this.loadConfig();
+  }
+  loadConfig() {
+    this.setState({ config: null, loadError: null });
+    fetch(CONFIG_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then((data) => this.setState({ config: data }))
+      .catch((err) => this.setState({ loadError: (err && err.message) || String(err) }));
   }
   renderVals() {
     const accent = this.props.accent ?? '#161512';
     const screen = this.state.screen;
-    const codes = ['A01', 'A02', 'A03', 'A04', 'A05'].map((v) => ({ value: v, label: v }));
-    const items = ITEM_NAMES.map((label, idx) => ({
-      label,
+    const config = this.state.config;
+    const loaded = !!config;
+    const codes = loaded ? config.codes : [];
+    const configItems = loaded ? config.items : [];
+    const items = configItems.map((it, idx) => ({
+      label: it.name.replace(/^SCENE\s*/i, ''),
       pick: () => this.setState({ selectedItem: idx, screen: 'criteria', answers: {} }),
     }));
-    const itemName = this.state.selectedItem !== null ? ITEM_NAMES[this.state.selectedItem] : '';
+    const selected = this.state.selectedItem !== null ? configItems[this.state.selectedItem] : null;
+    const itemName = selected ? selected.name : '';
+    const itemQuestions = selected ? selected.questions : [];
     const answers = this.state.answers;
-    const questions = QUESTIONS.map((q) => {
+    const questions = itemQuestions.map((q) => {
       const current = answers[q.id];
       const options = [1, 2, 3, 4, 5].map((n) => {
         const on = current === n;
@@ -179,23 +197,28 @@ class Component extends DCLogic {
       });
       return { id: q.id, text: q.text, options };
     });
-    const answeredCount = QUESTIONS.filter((q) => answers[q.id] != null).length;
-    const totalCount = QUESTIONS.length;
-    const ready = answeredCount === totalCount;
+    const answeredCount = itemQuestions.filter((q) => answers[q.id] != null).length;
+    const totalCount = itemQuestions.length;
+    const ready = totalCount > 0 && answeredCount === totalCount;
     return {
+      exerciseName: loaded ? config.exerciseName : '',
       codes,
       items,
       itemName,
-      criteria: CRITERIA,
+      criteria: loaded ? config.criteria : [],
       questions,
       answeredCount,
       totalCount,
       fillerCode: this.state.fillerCode,
       setCode: (e) => this.setState({ fillerCode: e && e.target ? e.target.value : '' }),
-      showSelect: screen === 'select',
-      showCriteria: screen === 'criteria',
-      showSurvey: screen === 'survey',
-      showDone: screen === 'done',
+      showLoading: !loaded && !this.state.loadError,
+      showLoadError: !!this.state.loadError,
+      loadError: this.state.loadError || '',
+      retryLoad: () => this.loadConfig(),
+      showSelect: loaded && screen === 'select',
+      showCriteria: loaded && screen === 'criteria',
+      showSurvey: loaded && screen === 'survey',
+      showDone: loaded && screen === 'done',
       backToSelect: () => this.setState({ screen: 'select' }),
       backToCriteria: () => this.setState({ screen: 'criteria' }),
       goSurvey: () => this.setState({ screen: 'survey' }),
