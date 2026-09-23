@@ -51,6 +51,9 @@ button{font-family:inherit;cursor:pointer}
       </select>
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#161512" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none;"><path d="M6 9l6 6 6-6"></path></svg>
     </div>
+    <sc-if value="{{ showCodeHint }}" hint-placeholder-val="{{ false }}">
+    <div style="font-size: 13px; font-weight: 700; color: #b00020;">請先選擇填寫人員代號</div>
+    </sc-if>
   </div>
 
   <div style="display: flex; flex-direction: column; gap: 12px; padding: 8px 24px 24px; box-sizing: border-box; flex-grow: 1; overflow: auto;">
@@ -129,7 +132,10 @@ button{font-family:inherit;cursor:pointer}
   </div>
 
   <div style="padding: 12px 24px 28px; box-sizing: border-box; background: #f7f5ee; border-top: 2px solid #e6e0cf; flex-shrink: 0;">
-    <button type="button" onClick="{{ submit }}" disabled="{{ submitDisabled }}" style="{{ submitStyle }}">送出評核（{{ answeredCount }}/{{ totalCount }}）</button>
+    <sc-if value="{{ showSubmitError }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-bottom: 10px; padding: 12px 14px; background: #fdeaea; border: 2px solid #f0bcbc; border-radius: 14px; font-size: 13px; line-height: 1.5; color: #b00020;">送出失敗，評分未寫入。請確認網路後再按一次送出。（{{ submitError }}）</div>
+    </sc-if>
+    <button type="button" onClick="{{ submit }}" disabled="{{ submitDisabled }}" style="{{ submitStyle }}">{{ submitLabel }}</button>
   </div>
 
 </div>
@@ -150,11 +156,13 @@ button{font-family:inherit;cursor:pointer}
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#161512","options":["#161512","#7a4e0f","#1f7a4d","#2b5fd9"]},"$preview":{"width":390,"height":844}}'>
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwNkZFG97TRdrB1NKqWFWasuMOMYn-Hf6b4M6UOZFK59mwM9DO0-qnWYa96n9ZPhiVuwA/exec';
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
 
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { screen: 'select', fillerCode: '', selectedItem: null, answers: {}, config: null, loadError: null };
+    this.state = { screen: 'select', fillerCode: '', selectedItem: null, answers: {}, config: null, loadError: null, codeHint: false, submitting: false, submitError: null };
+    this.submissionId = null;
   }
   componentDidMount() {
     this.loadConfig();
@@ -169,6 +177,53 @@ class Component extends DCLogic {
       .then((data) => this.setState({ config: data }))
       .catch((err) => this.setState({ loadError: (err && err.message) || String(err) }));
   }
+  postSubmission(payload) {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 20000) : null;
+    return fetch(RECORD_URL, {
+      method: 'POST',
+      // text/plain 避免觸發 CORS preflight，Apps Script 不回應 OPTIONS。
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      signal: controller ? controller.signal : undefined,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        if (!data || !data.ok) throw new Error((data && data.error) || '寫入失敗');
+        return data;
+      })
+      .finally(() => { if (timer) clearTimeout(timer); });
+  }
+  postWithRetry(payload, attempt) {
+    return this.postSubmission(payload).catch((err) => {
+      if (attempt >= 3) throw err;
+      return new Promise((r) => setTimeout(r, 800 * attempt)).then(() => this.postWithRetry(payload, attempt + 1));
+    });
+  }
+  submitScores() {
+    const item = this.state.config.items[this.state.selectedItem];
+    const answers = this.state.answers;
+    if (!this.submissionId) {
+      this.submissionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+    const payload = {
+      submissionId: this.submissionId,
+      fillerCode: this.state.fillerCode,
+      itemName: item.name,
+      answers: item.questions.map((q) => ({ id: q.id, score: answers[q.id] })),
+    };
+    this.setState({ submitting: true, submitError: null });
+    this.postWithRetry(payload, 1)
+      .then(() => {
+        this.submissionId = null;
+        this.setState({ submitting: false, screen: 'done' });
+      })
+      .catch((err) => this.setState({ submitting: false, submitError: (err && err.message) || String(err) }));
+  }
   renderVals() {
     const accent = this.props.accent ?? '#161512';
     const screen = this.state.screen;
@@ -178,7 +233,11 @@ class Component extends DCLogic {
     const configItems = loaded ? config.items : [];
     const items = configItems.map((it, idx) => ({
       label: it.name.replace(/^SCENE\s*/i, ''),
-      pick: () => this.setState({ selectedItem: idx, screen: 'criteria', answers: {} }),
+      pick: () => {
+        if (!this.state.fillerCode) return this.setState({ codeHint: true });
+        this.submissionId = null;
+        this.setState({ selectedItem: idx, screen: 'criteria', answers: {}, submitError: null });
+      },
     }));
     const selected = this.state.selectedItem !== null ? configItems[this.state.selectedItem] : null;
     const itemName = selected ? selected.name : '';
@@ -199,7 +258,8 @@ class Component extends DCLogic {
     });
     const answeredCount = itemQuestions.filter((q) => answers[q.id] != null).length;
     const totalCount = itemQuestions.length;
-    const ready = totalCount > 0 && answeredCount === totalCount;
+    const ready = totalCount > 0 && answeredCount === totalCount && !!this.state.fillerCode;
+    const canSubmit = ready && !this.state.submitting;
     return {
       exerciseName: loaded ? config.exerciseName : '',
       codes,
@@ -210,7 +270,8 @@ class Component extends DCLogic {
       answeredCount,
       totalCount,
       fillerCode: this.state.fillerCode,
-      setCode: (e) => this.setState({ fillerCode: e && e.target ? e.target.value : '' }),
+      setCode: (e) => this.setState({ fillerCode: e && e.target ? e.target.value : '', codeHint: false }),
+      showCodeHint: this.state.codeHint && !this.state.fillerCode,
       showLoading: !loaded && !this.state.loadError,
       showLoadError: !!this.state.loadError,
       loadError: this.state.loadError || '',
@@ -222,11 +283,19 @@ class Component extends DCLogic {
       backToSelect: () => this.setState({ screen: 'select' }),
       backToCriteria: () => this.setState({ screen: 'criteria' }),
       goSurvey: () => this.setState({ screen: 'survey' }),
-      submitDisabled: !ready,
+      submitDisabled: !canSubmit,
+      submitLabel: this.state.submitting
+        ? '送出中…'
+        : (this.state.submitError ? '重新送出' : '送出評核（' + answeredCount + '/' + totalCount + '）'),
       submitStyle: 'width: 100%; height: 58px; border: 0; border-radius: 29px; font-size: 17px; font-weight: 900; background: ' +
-        (ready ? accent : '#d8d2bf') + '; color: ' + (ready ? '#ffffff' : '#8a867c') + ';',
-      submit: () => { if (ready) this.setState({ screen: 'done' }); },
-      reset: () => this.setState({ screen: 'select', selectedItem: null, answers: {} }),
+        (canSubmit ? accent : '#d8d2bf') + '; color: ' + (canSubmit ? '#ffffff' : '#8a867c') + ';',
+      showSubmitError: !!this.state.submitError && !this.state.submitting,
+      submitError: this.state.submitError || '',
+      submit: () => { if (canSubmit) this.submitScores(); },
+      reset: () => {
+        this.submissionId = null;
+        this.setState({ screen: 'select', selectedItem: null, answers: {}, submitError: null });
+      },
     };
   }
 }
