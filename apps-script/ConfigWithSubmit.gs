@@ -31,7 +31,14 @@ function doGet(e) {
     if (!e.parameter.key || e.parameter.key !== ANALYSIS_KEY) {
       return jsonOut_({ error: 'unauthorized' });
     }
-    return jsonOut_(buildAnalysis_());
+    // buildAnalysis_ 常見的失敗原因是 指標 分頁還沒補上 評核潛能/4S 元素 兩欄
+    // （或欄名對不上）；包起來讓 Analysis.html 至少能顯示清楚的錯誤訊息，
+    // 而不是 Apps Script 未捕捉例外時丟出的那種通用 HTML 錯誤頁。
+    try {
+      return jsonOut_(buildAnalysis_());
+    } catch (err) {
+      return jsonOut_({ error: String((err && err.message) || err) });
+    }
   }
   var ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
   return jsonOut_({
