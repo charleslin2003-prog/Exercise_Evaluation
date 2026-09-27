@@ -133,7 +133,17 @@ function appendSubmission_(body) {
       return row;
     });
 
-    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, header.length).setValues(rows);
+    var startRow = sheet.getLastRow() + 1;
+    // Google Sheets 對「1-1」「2-1」這種帶數字和連字號的字串，就算是透過
+    // setValues() 寫入（不是手動貼上），一樣可能自動誤判成日期，寫進去之後
+    // 讀出來就變成一整串日期字串（不是原本的問題ID）。寫入前把這幾個文字欄
+    // 的儲存格格式強制設成「純文字」('@')，之後就不會再被誤判——這一步要在
+    // setValues 之前做，格式要先套用到目標儲存格上。
+    var textCols = ['演習名稱', '項目名稱', '問題ID', '指標代號', '人員代號'];
+    textCols.forEach(function (h) {
+      sheet.getRange(startRow, col[h] + 1, rows.length, 1).setNumberFormat('@');
+    });
+    sheet.getRange(startRow, 1, rows.length, header.length).setValues(rows);
     SpreadsheetApp.flush();
     if (cacheKey) cache.put(cacheKey, '1', 21600);
     return { ok: true, rows: rows.length, duplicate: false };
