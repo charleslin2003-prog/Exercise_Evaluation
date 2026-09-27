@@ -55,25 +55,51 @@ function readCriteria_(ss) {
   return out;
 }
 
+// 項目與問題表支援任意層數分組：標頭裡有幾欄「層1」「層2」...就分幾層
+// （例如 階段->情境 兩層），沒有「層N」欄位時退回舊版單層行為，直接用
+// 「項目名稱」當唯一分組欄，回傳格式與舊版 { name, questions }[] 完全相同
+// （這正是目前 10/3 案例試算表的狀態，改動不需要動試算表）。
+// 有分組的節點回傳 { name, children }，最底層（葉節點）回傳 { name, questions }。
 function readItems_(ss) {
   var values = ss.getSheetByName('項目與問題').getDataRange().getValues();
   var header = values[0];
-  var nameCol = header.indexOf('項目名稱');
+  var groupCols = [];
+  for (var lvl = 1; ; lvl++) {
+    var at = header.indexOf('層' + lvl);
+    if (at === -1) break;
+    groupCols.push(at);
+  }
+  if (!groupCols.length) {
+    var nameCol = header.indexOf('項目名稱');
+    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1');
+    groupCols = [nameCol];
+  }
   var idCol = header.indexOf('問題ID');
   var textCol = header.indexOf('問題內容');
-  var order = [];
-  var map = {};
+
+  var root = { children: [], index: {} };
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    var name = row[nameCol];
-    if (!name) continue;
-    if (!map[name]) {
-      map[name] = [];
-      order.push(name);
+    if (!row[groupCols[0]]) continue;
+    var cursor = root;
+    for (var g = 0; g < groupCols.length; g++) {
+      var key = String(row[groupCols[g]] || '');
+      if (!key) break;
+      if (!cursor.index[key]) {
+        var node = { name: key, children: [], index: {} };
+        cursor.index[key] = node;
+        cursor.children.push(node);
+      }
+      cursor = cursor.index[key];
     }
-    map[name].push({ id: String(row[idCol] || ''), text: String(row[textCol] || '') });
+    cursor.questions = cursor.questions || [];
+    cursor.questions.push({ id: String(row[idCol] || ''), text: String(row[textCol] || '') });
   }
-  return order.map(function (name) {
-    return { name: name, questions: map[name] };
+  return stripGroupInternals_(root.children);
+}
+
+function stripGroupInternals_(nodes) {
+  return nodes.map(function (n) {
+    return n.questions ? { name: n.name, questions: n.questions } : { name: n.name, children: stripGroupInternals_(n.children) };
   });
 }

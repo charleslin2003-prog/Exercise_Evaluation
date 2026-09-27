@@ -35,6 +35,7 @@ button{font-family:inherit;cursor:pointer}
 <sc-if value="{{ showSelect }}" hint-placeholder-val="{{ true }}">
 <div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
 
+  <sc-if value="{{ showRootPick }}" hint-placeholder-val="{{ true }}">
   <div style="display: flex; flex-direction: column; gap: 4px; padding: 40px 24px 18px; box-sizing: border-box;">
     <div style="font-size: 13px; font-weight: 700; color: #8a5a1e; letter-spacing: 1px;">演習名稱</div>
     <div style="font-size: 25px; font-weight: 900; line-height: 1.3;">{{ exerciseName }}</div>
@@ -55,13 +56,23 @@ button{font-family:inherit;cursor:pointer}
     <div style="font-size: 13px; font-weight: 700; color: #b00020;">請先選擇填寫人員代號</div>
     </sc-if>
   </div>
+  </sc-if>
 
-  <div style="display: flex; flex-direction: column; gap: 12px; padding: 8px 24px 24px; box-sizing: border-box; flex-grow: 1; overflow: auto;">
-    <div style="font-size: 15px; font-weight: 700; color: #161512;">選擇評核項目</div>
-    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+  <sc-if value="{{ showLevelPick }}" hint-placeholder-val="{{ false }}">
+  <div style="display: flex; align-items: center; gap: 4px; padding: 14px 12px; box-sizing: border-box; flex-shrink: 0;">
+    <button type="button" onClick="{{ levelBack }}" aria-label="返回" style="width: 56px; height: 56px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: #161512; flex-shrink: 0;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+    </button>
+    <div style="font-size: 18px; font-weight: 900; flex-grow: 1; text-align: center; padding-right: 56px;">{{ levelTitle }}</div>
+  </div>
+  </sc-if>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; padding: 8px 24px 24px; box-sizing: border-box; flex-grow: 1; min-height: 0; overflow: hidden;">
+    <div style="font-size: 15px; font-weight: 700; color: #161512;">{{ levelLabel }}</div>
+    <div style="{{ gridStyle }}">
       <sc-for list="{{ items }}" as="it" hint-placeholder-count="9">
-        <button type="button" onClick="{{ it.pick }}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; aspect-ratio: 1; padding: 10px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 16px; color: #161512;">
-          <div style="width: 42px; height: 42px; border-radius: 10px; background: #f0e2be; display: flex; align-items: center; justify-content: center; color: #7a4e0f;">
+        <button type="button" onClick="{{ it.pick }}" style="{{ it.style }}">
+          <div style="width: 42px; height: 42px; border-radius: 10px; background: #f0e2be; display: flex; align-items: center; justify-content: center; color: #7a4e0f; flex-shrink: 0;">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
           </div>
           <div style="font-size: 13px; font-weight: 700; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">{{ it.label }}</div>
@@ -119,7 +130,7 @@ button{font-family:inherit;cursor:pointer}
     <sc-for list="{{ questions }}" as="q" hint-placeholder-count="5">
       <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 16px;">
         <div style="display: flex; align-items: flex-start; gap: 10px;">
-          <div style="font-size: 13px; font-weight: 900; color: #7a4e0f; padding-top: 2px;">{{ q.id }}</div>
+          <div style="font-size: 13px; font-weight: 900; color: #7a4e0f; padding-top: 2px; white-space: nowrap; flex-shrink: 0;">{{ q.id }}</div>
           <div style="font-size: 16px; font-weight: 700; line-height: 1.4;">{{ q.text }}</div>
         </div>
         <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px;">
@@ -158,10 +169,37 @@ button{font-family:inherit;cursor:pointer}
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwNkZFG97TRdrB1NKqWFWasuMOMYn-Hf6b4M6UOZFK59mwM9DO0-qnWYa96n9ZPhiVuwA/exec';
 const RECORD_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
 
+// config.items 是一棵樹：分組節點是 { name, children }，葉節點（真正的評核項目）
+// 是 { name, questions }。層數由後端依試算表的「層N」欄位決定，可以是 1 層
+// （葉節點直接出現在根陣列，即今天的 SCENE 案例）或多層（例如 階段->情境）。
+// path 是一個 index 堆疊：從根陣列開始，每往下鑽一層就 push 一個 index。
+// 走到底（node.questions 存在）就是目前選中的評核項目。
+function nodeChildrenAt(root, path) {
+  let level = root;
+  for (const idx of path) level = (level[idx] && level[idx].children) || [];
+  return level;
+}
+function nodeAt(root, path) {
+  let node = null, level = root;
+  for (const idx of path) { node = level[idx]; level = (node && node.children) || []; }
+  return node;
+}
+// 依目前可用的畫面寬高，反推「幾欄幾列排列可以讓每個格子的最短邊最大」，
+// 保證 n 個項目一定塞得下（不滑動），同時盡量放大（夠大）。
+function gridDims(n, w, h) {
+  let best = { cols: Math.max(n, 1), rows: 1, size: 0 };
+  for (let cols = 1; cols <= Math.max(n, 1); cols++) {
+    const rows = Math.ceil(n / cols);
+    const size = Math.min(w / cols, h / rows);
+    if (size > best.size) best = { cols, rows, size };
+  }
+  return best;
+}
+
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { screen: 'select', fillerCode: '', selectedItem: null, answers: {}, config: null, loadError: null, codeHint: false, submitting: false, submitError: null };
+    this.state = { screen: 'select', fillerCode: '', path: [], answers: {}, config: null, loadError: null, codeHint: false, submitting: false, submitError: null };
     this.submissionId = null;
   }
   componentDidMount() {
@@ -205,7 +243,7 @@ class Component extends DCLogic {
     });
   }
   submitScores() {
-    const item = this.state.config.items[this.state.selectedItem];
+    const item = nodeAt(this.state.config.items, this.state.path);
     const answers = this.state.answers;
     if (!this.submissionId) {
       this.submissionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -230,16 +268,43 @@ class Component extends DCLogic {
     const config = this.state.config;
     const loaded = !!config;
     const codes = loaded ? config.codes : [];
-    const configItems = loaded ? config.items : [];
-    const items = configItems.map((it, idx) => ({
-      label: it.name.replace(/^SCENE\s*/i, ''),
-      pick: () => {
-        if (!this.state.fillerCode) return this.setState({ codeHint: true });
-        this.submissionId = null;
-        this.setState({ selectedItem: idx, screen: 'criteria', answers: {}, submitError: null });
-      },
-    }));
-    const selected = this.state.selectedItem !== null ? configItems[this.state.selectedItem] : null;
+    const rootItems = loaded ? config.items : [];
+    const path = this.state.path;
+    const atRoot = path.length === 0;
+    const currentLevel = loaded ? nodeChildrenAt(rootItems, path) : [];
+    // 兩種畫面尺寸估算（根層有標題+代號選單，子層只有一條返回列），
+    // 用來反推網格欄列數，兩層都不需要滑動。
+    const box = atRoot ? { w: 342, h: 520 } : { w: 342, h: 640 };
+    const dims = gridDims(currentLevel.length, box.w, box.h);
+    // CSS Grid 的欄軌是整個網格共用的，最後一列剩下的項目數如果不能整除欄數
+    // （例如 5 個項目排 2 欄，最後一列只剩 1 個），沒辦法用整數欄位精準置中
+    // 半格空隙。改用 flex-wrap + justify-content:center：每一「列」在
+    // flexbox 裡是獨立的一行，會各自置中，不管欄數、剩幾個都自動置中，不用
+    // 再手動算欄位。項目改用固定寬高（而不是 1fr）撐出跟原本網格一樣的格子
+    // 大小。
+    const gap = 12;
+    const cellW = (box.w - gap * (dims.cols - 1)) / dims.cols;
+    const cellH = (box.h - gap * (dims.rows - 1)) / dims.rows;
+    const itemBtnStyle = 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: ' + cellW + 'px; height: ' + cellH + 'px; flex: 0 0 auto; padding: 10px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 16px; color: #161512; box-sizing: border-box;';
+    const items = currentLevel.map((it, idx) => {
+      return {
+        label: atRoot ? it.name.replace(/^SCENE\s*/i, '') : it.name,
+        pick: () => {
+          if (!this.state.fillerCode) return this.setState({ codeHint: true });
+          const nextPath = path.concat(idx);
+          if (it.questions) {
+            this.submissionId = null;
+            this.setState({ path: nextPath, screen: 'criteria', answers: {}, submitError: null });
+          } else {
+            this.setState({ path: nextPath });
+          }
+        },
+        style: itemBtnStyle,
+      };
+    });
+    const currentGroup = atRoot ? null : nodeAt(rootItems, path);
+    const pointedNode = path.length ? nodeAt(rootItems, path) : null;
+    const selected = pointedNode && pointedNode.questions ? pointedNode : null;
     const itemName = selected ? selected.name : '';
     const itemQuestions = selected ? selected.questions : [];
     const answers = this.state.answers;
@@ -264,6 +329,12 @@ class Component extends DCLogic {
       exerciseName: loaded ? config.exerciseName : '',
       codes,
       items,
+      showRootPick: atRoot,
+      showLevelPick: !atRoot,
+      levelTitle: currentGroup ? currentGroup.name : '',
+      levelLabel: atRoot ? '選擇評核項目' : '選擇項目',
+      gridStyle: 'display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: ' + gap + 'px; flex-grow: 1; min-height: 0; overflow: hidden;',
+      levelBack: () => this.setState({ path: path.slice(0, -1) }),
       itemName,
       criteria: loaded ? config.criteria : [],
       questions,
@@ -280,7 +351,7 @@ class Component extends DCLogic {
       showCriteria: loaded && screen === 'criteria',
       showSurvey: loaded && screen === 'survey',
       showDone: loaded && screen === 'done',
-      backToSelect: () => this.setState({ screen: 'select' }),
+      backToSelect: () => this.setState({ screen: 'select', path: path.slice(0, -1) }),
       backToCriteria: () => this.setState({ screen: 'criteria' }),
       goSurvey: () => this.setState({ screen: 'survey' }),
       submitDisabled: !canSubmit,
@@ -294,7 +365,7 @@ class Component extends DCLogic {
       submit: () => { if (canSubmit) this.submitScores(); },
       reset: () => {
         this.submissionId = null;
-        this.setState({ screen: 'select', selectedItem: null, answers: {}, submitError: null });
+        this.setState({ screen: 'select', path: [], answers: {}, submitError: null });
       },
     };
   }
