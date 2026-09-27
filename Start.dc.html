@@ -36,82 +36,41 @@ button{font-family:inherit;cursor:pointer}
 <sc-if value="{{ showSelect }}" hint-placeholder-val="{{ true }}">
 <div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
 
-  <sc-if value="{{ showRootPick }}" hint-placeholder-val="{{ true }}">
-  <div style="display: flex; flex-direction: column; gap: 4px; padding: 40px 24px 18px; box-sizing: border-box;">
+  <div style="display: flex; flex-direction: column; gap: 4px; padding: 24px 24px 14px; box-sizing: border-box; flex-shrink: 0;">
     <div style="font-size: 13px; font-weight: 700; color: #8a5a1e; letter-spacing: 1px;">演習名稱</div>
-    <div style="font-size: 25px; font-weight: 900; line-height: 1.3;">{{ exerciseName }}</div>
+    <div style="font-size: 22px; font-weight: 900; line-height: 1.3;">{{ exerciseName }}</div>
   </div>
 
-  <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 24px 18px; box-sizing: border-box;">
-    <label for="fillerCode" style="font-size: 15px; font-weight: 700; color: #161512;">填寫人員代號</label>
-    <div style="position: relative;">
-      <select id="fillerCode" onChange="{{ setCode }}" value="{{ fillerCode }}" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 44px 0 16px; font-size: 17px; font-weight: 500; color: #161512; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; appearance: none; outline: none;">
+  <div style="display: flex; align-items: center; gap: 10px; padding: 0 24px 10px; box-sizing: border-box; flex-shrink: 0;">
+    <label for="fillerCode" style="font-size: 14px; font-weight: 700; color: #161512; flex-shrink: 0; white-space: nowrap;">評核官代號：</label>
+    <div style="position: relative; flex-grow: 1;">
+      <select id="fillerCode" onChange="{{ setCode }}" value="{{ fillerCode }}" style="width: 100%; box-sizing: border-box; height: 44px; padding: 0 40px 0 14px; font-size: 15px; font-weight: 500; color: #161512; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 12px; appearance: none; outline: none;">
         <option value="">請選擇代號</option>
         <sc-for list="{{ codes }}" as="c" hint-placeholder-count="5">
           <option value="{{ c.value }}">{{ c.label }}</option>
         </sc-for>
       </select>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#161512" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); pointer-events: none;"><path d="M6 9l6 6 6-6"></path></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#161512" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none;"><path d="M6 9l6 6 6-6"></path></svg>
     </div>
-    <sc-if value="{{ showCodeHint }}" hint-placeholder-val="{{ false }}">
-    <div style="font-size: 13px; font-weight: 700; color: #b00020;">請先選擇填寫人員代號</div>
-    </sc-if>
   </div>
+  <sc-if value="{{ showCodeHint }}" hint-placeholder-val="{{ false }}">
+  <div style="font-size: 13px; font-weight: 700; color: #b00020; padding: 0 24px 10px; box-sizing: border-box; flex-shrink: 0;">請先選擇評核官代號</div>
   </sc-if>
 
-  <sc-if value="{{ showLevelPick }}" hint-placeholder-val="{{ false }}">
-  <div style="display: flex; align-items: center; gap: 4px; padding: 14px 12px; box-sizing: border-box; flex-shrink: 0;">
-    <button type="button" onClick="{{ levelBack }}" aria-label="返回" style="width: 56px; height: 56px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: #161512; flex-shrink: 0;">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
-    </button>
-    <div style="font-size: 18px; font-weight: 900; flex-grow: 1; text-align: center; padding-right: 56px;">{{ levelTitle }}</div>
-  </div>
-  </sc-if>
-
-  <div style="display: flex; flex-direction: column; gap: 12px; padding: 8px 24px 24px; box-sizing: border-box; flex-grow: 1; min-height: 0; overflow: hidden;">
-    <div style="font-size: 15px; font-weight: 700; color: #161512;">{{ levelLabel }}</div>
-    <div style="{{ gridStyle }}">
-      <sc-for list="{{ items }}" as="it" hint-placeholder-count="9">
-        <button type="button" onClick="{{ it.pick }}" style="{{ it.style }}">
-          <div style="width: 42px; height: 42px; border-radius: 10px; background: #f0e2be; display: flex; align-items: center; justify-content: center; color: #7a4e0f; flex-shrink: 0;">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 4px 24px 24px; box-sizing: border-box; flex-grow: 1; min-height: 0; overflow: auto;">
+    <div style="font-size: 15px; font-weight: 700; color: #161512;">選擇評核項目</div>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+        <button type="button" onClick="{{ r.pick }}" style="{{ r.rowStyle }}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="{{ r.chevronStyle }}"><path d="M9 6l6 6-6 6"></path></svg>
+          <div style="{{ r.leafIconStyle }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="{{ r.checkSvgStyle }}"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+            <span style="{{ r.numStyle }}">{{ r.iconText }}</span>
           </div>
-          <div style="font-size: 13px; font-weight: 700; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">{{ it.label }}</div>
+          <div style="{{ r.labelStyle }}">{{ r.label }}</div>
         </button>
       </sc-for>
     </div>
-  </div>
-
-</div>
-</sc-if>
-
-<sc-if value="{{ showCriteria }}" hint-placeholder-val="{{ false }}">
-<div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
-
-  <div style="display: flex; align-items: center; gap: 4px; padding: 14px 12px; box-sizing: border-box; flex-shrink: 0;">
-    <button type="button" onClick="{{ backToSelect }}" aria-label="返回" style="width: 56px; height: 56px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: #161512; flex-shrink: 0;">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
-    </button>
-    <div style="font-size: 18px; font-weight: 900; flex-grow: 1; text-align: center; padding-right: 56px;">{{ itemName }}</div>
-  </div>
-
-  <div style="display: flex; flex-direction: column; gap: 20px; padding: 4px 24px 20px; box-sizing: border-box; flex-grow: 1; overflow: auto;">
-    <div style="font-size: 21px; font-weight: 900;">評分標準說明</div>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <sc-for list="{{ criteria }}" as="c" hint-placeholder-count="5">
-        <div style="display: flex; align-items: flex-start; gap: 14px; padding: 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 16px;">
-          <div style="width: 44px; height: 44px; border-radius: 22px; background: #161512; color: #ffffff; font-size: 19px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{{ c.score }}</div>
-          <div style="display: flex; flex-direction: column; gap: 2px; padding-top: 4px;">
-            <div style="font-size: 16px; font-weight: 700;">{{ c.label }}</div>
-            <div style="font-size: 14px; line-height: 1.5; color: #3a382f;">{{ c.desc }}</div>
-          </div>
-        </div>
-      </sc-for>
-    </div>
-  </div>
-
-  <div style="padding: 12px 24px 28px; box-sizing: border-box; background: #f7f5ee; border-top: 2px solid #e6e0cf; flex-shrink: 0;">
-    <button type="button" onClick="{{ goSurvey }}" style="width: 100%; height: 58px; border: 0; border-radius: 29px; font-size: 18px; font-weight: 900; background: #161512; color: #ffffff;">開始評分</button>
   </div>
 
 </div>
@@ -121,19 +80,35 @@ button{font-family:inherit;cursor:pointer}
 <div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
 
   <div style="display: flex; align-items: center; gap: 4px; padding: 14px 12px; box-sizing: border-box; flex-shrink: 0; border-bottom: 2px solid #e6e0cf;">
-    <button type="button" onClick="{{ backToCriteria }}" aria-label="返回" style="width: 56px; height: 56px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: #161512; flex-shrink: 0;">
+    <button type="button" onClick="{{ backToSelect }}" aria-label="返回" style="width: 56px; height: 56px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: #161512; flex-shrink: 0;">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
     </button>
     <div style="font-size: 18px; font-weight: 900; flex-grow: 1; text-align: center; padding-right: 56px;">{{ itemName }}</div>
   </div>
 
-  <div style="display: flex; flex-direction: column; gap: 16px; padding: 18px 20px 20px; box-sizing: border-box; flex-grow: 1; overflow: auto;">
+  <div style="display: flex; flex-direction: column; gap: 16px; padding: 14px 20px 20px; box-sizing: border-box; flex-grow: 1; overflow: auto;">
     <sc-for list="{{ questions }}" as="q" hint-placeholder-count="5">
       <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 16px;">
         <div style="display: flex; align-items: flex-start; gap: 10px;">
           <div style="font-size: 13px; font-weight: 900; color: #7a4e0f; padding-top: 2px; white-space: nowrap; flex-shrink: 0;">{{ q.id }}</div>
           <div style="font-size: 16px; font-weight: 700; line-height: 1.4;">{{ q.text }}</div>
         </div>
+
+        <button type="button" onClick="{{ q.toggleCriteria }}" style="{{ q.criteriaToggleStyle }}">{{ q.criteriaToggleLabel }}</button>
+        <sc-if value="{{ q.showCriteria }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <sc-for list="{{ q.criteria }}" as="c" hint-placeholder-count="5">
+            <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #faf7ee; border: 2px solid #e6e0cf; border-radius: 14px;">
+              <div style="width: 34px; height: 34px; border-radius: 17px; background: #161512; color: #ffffff; font-size: 15px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{{ c.score }}</div>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="font-size: 14px; font-weight: 700;">{{ c.label }}</div>
+                <div style="font-size: 13px; line-height: 1.5; color: #3a382f;">{{ c.desc }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+
         <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px;">
           <sc-for list="{{ q.options }}" as="o" hint-placeholder-count="5">
             <button type="button" onClick="{{ o.pick }}" style="{{ o.style }}">{{ o.n }}</button>
@@ -172,35 +147,51 @@ const RECORD_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRr
 
 // config.items 是一棵樹：分組節點是 { name, children }，葉節點（真正的評核項目）
 // 是 { name, questions }。層數由後端依試算表的「層N」欄位決定，可以是 1 層
-// （葉節點直接出現在根陣列，即今天的 SCENE 案例）或多層（例如 階段->情境）。
-// path 是一個 index 堆疊：從根陣列開始，每往下鑽一層就 push 一個 index。
-// 走到底（node.questions 存在）就是目前選中的評核項目。
-function nodeChildrenAt(root, path) {
-  let level = root;
-  for (const idx of path) level = (level[idx] && level[idx].children) || [];
-  return level;
-}
+// （葉節點直接出現在根陣列）或多層（例如 階段->情境）。
+// path 是一個 index 堆疊：從根陣列開始，每往下鑽一層就 push 一個 index，只在
+// 「目前正在評分哪個項目」時用得到（survey/done 畫面的 itemName/questions）；
+// 選擇畫面本身改用手風琴展開，不再靠 path 導覽。
 function nodeAt(root, path) {
   let node = null, level = root;
   for (const idx of path) { node = level[idx]; level = (node && node.children) || []; }
   return node;
 }
-// 依目前可用的畫面寬高，反推「幾欄幾列排列可以讓每個格子的最短邊最大」，
-// 保證 n 個項目一定塞得下（不滑動），同時盡量放大（夠大）。
-function gridDims(n, w, h) {
-  let best = { cols: Math.max(n, 1), rows: 1, size: 0 };
-  for (let cols = 1; cols <= Math.max(n, 1); cols++) {
-    const rows = Math.ceil(n / cols);
-    const size = Math.min(w / cols, h / rows);
-    if (size > best.size) best = { cols, rows, size };
-  }
-  return best;
+// 把樹攤平成「目前看得到的列」：分組節點永遠是一列（不論展開與否都顯示），
+// 展開時緊接著遞迴放入它的子節點；葉節點永遠是一列。openGroupKey 是目前唯一
+// 展開中的分組 path 字串（例如 "0"），同時間只會有一個，開新的會自動蓋掉舊的
+// ——這裡假設樹只有一層「分組」深度（今天的 階段->情境 案例），如果之後樹深
+// 到 3 層以上，同一時間只能展開一條路徑上的分組，需要另外設計。
+function flattenRows(nodes, path, depth, openGroupKey, out) {
+  nodes.forEach((node, idx) => {
+    const fullPath = path.concat(idx);
+    if (node.questions) {
+      out.push({ kind: 'leaf', label: node.name, depth, path: fullPath });
+    } else if (node.children) {
+      const key = fullPath.join('-');
+      const isOpen = key === openGroupKey;
+      out.push({ kind: 'group', label: node.name, depth, path: fullPath, key, isOpen });
+      if (isOpen) flattenRows(node.children, fullPath, depth + 1, openGroupKey, out);
+    }
+  });
+  return out;
 }
 
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { screen: 'select', fillerCode: '', path: [], answers: {}, config: null, loadError: null, codeHint: false, submitting: false, submitError: null };
+    this.state = {
+      screen: 'select',
+      fillerCode: '',
+      path: [],
+      openGroupKey: null,
+      criteriaOpenIds: {},
+      answers: {},
+      config: null,
+      loadError: null,
+      codeHint: false,
+      submitting: false,
+      submitError: null,
+    };
     this.submissionId = null;
   }
   componentDidMount() {
@@ -271,44 +262,60 @@ class Component extends DCLogic {
     const codes = loaded ? config.codes : [];
     const rootItems = loaded ? config.items : [];
     const path = this.state.path;
-    const atRoot = path.length === 0;
-    const currentLevel = loaded ? nodeChildrenAt(rootItems, path) : [];
-    // 兩種畫面尺寸估算（根層有標題+代號選單，子層只有一條返回列），
-    // 用來反推網格欄列數，兩層都不需要滑動。
-    const box = atRoot ? { w: 342, h: 520 } : { w: 342, h: 640 };
-    const dims = gridDims(currentLevel.length, box.w, box.h);
-    // CSS Grid 的欄軌是整個網格共用的，最後一列剩下的項目數如果不能整除欄數
-    // （例如 5 個項目排 2 欄，最後一列只剩 1 個），沒辦法用整數欄位精準置中
-    // 半格空隙。改用 flex-wrap + justify-content:center：每一「列」在
-    // flexbox 裡是獨立的一行，會各自置中，不管欄數、剩幾個都自動置中，不用
-    // 再手動算欄位。項目改用固定寬高（而不是 1fr）撐出跟原本網格一樣的格子
-    // 大小。
-    const gap = 12;
-    const cellW = (box.w - gap * (dims.cols - 1)) / dims.cols;
-    const cellH = (box.h - gap * (dims.rows - 1)) / dims.rows;
-    const itemBtnStyle = 'display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: ' + cellW + 'px; height: ' + cellH + 'px; flex: 0 0 auto; padding: 10px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 16px; color: #161512; box-sizing: border-box;';
-    const items = currentLevel.map((it, idx) => {
+    const openGroupKey = this.state.openGroupKey;
+
+    const rawRows = loaded ? flattenRows(rootItems, [], 0, openGroupKey, []) : [];
+    // 葉節點（情境）的「層2」欄位若填成「SCENE 01：情境簡要名稱」這種格式，
+    // 這裡會把場景編號跟簡要名稱拆開：編號放圖示徽章，簡要名稱當作列表文字。
+    // 沒有用「：」分隔的舊格式（純「SCENE 01」或非 SCENE 開頭的名稱，例如
+    // 「總結評核」）就照舊只去掉 SCENE 前綴、用勾選圖示，不受影響。
+    const sceneRe = /^SCENE\s*(\d+)\s*[:：]\s*(.+)$/i;
+    const baseRowStyle = 'display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; box-sizing: border-box; color: #161512; text-align: left;';
+    const rows = rawRows.map((r) => {
+      const isGroup = r.kind === 'group';
+      const indent = r.depth * 18;
+      let label = r.label;
+      let iconText = '';
+      if (!isGroup) {
+        const m = sceneRe.exec(r.label);
+        if (m) {
+          iconText = m[1].length < 2 ? '0' + m[1] : m[1];
+          label = m[2].trim();
+        } else {
+          label = r.label.replace(/^SCENE\s*/i, '');
+        }
+      }
       return {
-        label: atRoot ? it.name.replace(/^SCENE\s*/i, '') : it.name,
+        label,
+        iconText,
         pick: () => {
-          if (!this.state.fillerCode) return this.setState({ codeHint: true });
-          const nextPath = path.concat(idx);
-          if (it.questions) {
-            this.submissionId = null;
-            this.setState({ path: nextPath, screen: 'criteria', answers: {}, submitError: null });
+          if (isGroup) {
+            this.setState({ openGroupKey: r.isOpen ? null : r.key });
           } else {
-            this.setState({ path: nextPath });
+            if (!this.state.fillerCode) return this.setState({ codeHint: true });
+            this.submissionId = null;
+            this.setState({ path: r.path, screen: 'survey', answers: {}, submitError: null, criteriaOpenIds: {} });
           }
         },
-        style: itemBtnStyle,
+        rowStyle: baseRowStyle + ' width: calc(100% - ' + indent + 'px); margin-left: ' + indent + 'px;' +
+          (isGroup ? ' height: 52px; font-weight: 800;' : ' min-height: 52px; padding-top: 10px; padding-bottom: 10px;'),
+        chevronStyle: 'width: 18px; height: 18px; flex-shrink: 0; transition: transform .15s ease; transform: rotate(' + (isGroup && r.isOpen ? 90 : 0) + 'deg); display: ' + (isGroup ? 'block' : 'none') + ';',
+        leafIconStyle: 'width: 30px; height: 30px; border-radius: 8px; background: #f0e2be; align-items: center; justify-content: center; color: #7a4e0f; flex-shrink: 0; display: ' + (isGroup ? 'none' : 'flex') + ';',
+        checkSvgStyle: 'display: ' + (iconText ? 'none' : 'block') + ';',
+        numStyle: 'font-size: 12px; font-weight: 900; display: ' + (iconText ? 'block' : 'none') + ';',
+        labelStyle: isGroup
+          ? 'font-size: 16px; font-weight: 800; flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'
+          : 'font-size: 15px; font-weight: 700; flex-grow: 1; line-height: 1.35;',
       };
     });
-    const currentGroup = atRoot ? null : nodeAt(rootItems, path);
+
     const pointedNode = path.length ? nodeAt(rootItems, path) : null;
     const selected = pointedNode && pointedNode.questions ? pointedNode : null;
     const itemName = selected ? selected.name : '';
     const itemQuestions = selected ? selected.questions : [];
     const answers = this.state.answers;
+    const criteriaOpenIds = this.state.criteriaOpenIds;
+    const criteriaList = loaded ? config.criteria : [];
     const questions = itemQuestions.map((q) => {
       const current = answers[q.id];
       const options = [1, 2, 3, 4, 5].map((n) => {
@@ -320,7 +327,21 @@ class Component extends DCLogic {
             (on ? accent : '#d8d2bf') + '; background: ' + (on ? accent : '#ffffff') + '; color: ' + (on ? '#ffffff' : '#161512') + ';',
         };
       });
-      return { id: q.id, text: q.text, options };
+      // 評分標準說明改成每一題各自一顆開關、就地展開（不再是整頁共用一顆固定
+      // 按鈕），這樣捲到清單底下的題目時，點開說明會直接出現在那一題底下，
+      // 不用捲回頂端找按鈕。
+      const criteriaShown = !!criteriaOpenIds[q.id];
+      return {
+        id: q.id,
+        text: q.text,
+        options,
+        criteria: criteriaList,
+        showCriteria: criteriaShown,
+        toggleCriteria: () => this.setState({ criteriaOpenIds: { ...criteriaOpenIds, [q.id]: !criteriaShown } }),
+        criteriaToggleLabel: (criteriaShown ? '▾ ' : '▸ ') + '評分標準說明',
+        criteriaToggleStyle: 'align-self: flex-start; padding: 6px 12px; border: 2px solid #d8d2bf; border-radius: 10px; background: ' +
+          (criteriaShown ? '#f0e2be' : '#ffffff') + '; color: #161512; font-size: 13px; font-weight: 700;',
+      };
     });
     const answeredCount = itemQuestions.filter((q) => answers[q.id] != null).length;
     const totalCount = itemQuestions.length;
@@ -329,15 +350,8 @@ class Component extends DCLogic {
     return {
       exerciseName: loaded ? config.exerciseName : '',
       codes,
-      items,
-      showRootPick: atRoot,
-      showLevelPick: !atRoot,
-      levelTitle: currentGroup ? currentGroup.name : '',
-      levelLabel: atRoot ? '選擇評核項目' : '選擇項目',
-      gridStyle: 'display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: ' + gap + 'px; flex-grow: 1; min-height: 0; overflow: hidden;',
-      levelBack: () => this.setState({ path: path.slice(0, -1) }),
+      rows,
       itemName,
-      criteria: loaded ? config.criteria : [],
       questions,
       answeredCount,
       totalCount,
@@ -349,12 +363,9 @@ class Component extends DCLogic {
       loadError: this.state.loadError || '',
       retryLoad: () => this.loadConfig(),
       showSelect: loaded && screen === 'select',
-      showCriteria: loaded && screen === 'criteria',
       showSurvey: loaded && screen === 'survey',
       showDone: loaded && screen === 'done',
-      backToSelect: () => this.setState({ screen: 'select', path: path.slice(0, -1) }),
-      backToCriteria: () => this.setState({ screen: 'criteria' }),
-      goSurvey: () => this.setState({ screen: 'survey' }),
+      backToSelect: () => this.setState({ screen: 'select' }),
       submitDisabled: !canSubmit,
       submitLabel: this.state.submitting
         ? '送出中…'
@@ -366,7 +377,7 @@ class Component extends DCLogic {
       submit: () => { if (canSubmit) this.submitScores(); },
       reset: () => {
         this.submissionId = null;
-        this.setState({ screen: 'select', path: [], answers: {}, submitError: null });
+        this.setState({ screen: 'select', path: [], answers: {}, submitError: null, criteriaOpenIds: {} });
       },
     };
   }
