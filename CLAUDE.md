@@ -107,8 +107,8 @@ Two deployed Apps Script `/exec` URLs are hardcoded as `const`s near the top of 
 `Start.dc.html` already):
 
 ```
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwNkZFG97TRdrB1NKqWFWasuMOMYn-Hf6b4M6UOZFK59mwM9DO0-qnWYa96n9ZPhiVuwA/exec';
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec';
 ```
 
 `Component.loadConfig()` fetches `CONFIG_URL` (`doGet`) on mount and stores the result
@@ -132,10 +132,11 @@ breaks `RECORD_URL` in `Start.dc.html` until updated to match.
 
 | Sheet | Columns (header row) | Read as |
 |---|---|---|
-| `演習資訊` | key/value rows, no fixed header — code scans column A for a `演習名稱` row and reads column B of that row | `exerciseName: string` |
+| `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `演習名稱`/`演習主題`/`演習日期` rows and reads column B of each | `exerciseName`, `exerciseTopic`, `exerciseDate: string` (topic/date are optional; empty string if the row isn't present) |
 | `人員代號` | `代號` | `codes: { value, label }[]` (dropdown options, `value === label`) |
 | `評分標準` | `分數`, `標籤`, `說明` | `criteria: { score: number, label: string, desc: string }[]`, one row per score (1–5) |
 | `項目與問題` | `層1`, `層2`, … (any number, in order) **or** `項目名稱` as a fallback single grouping column; plus `問題ID`, `問題內容` | `items`: a tree, nesting depth = however many `層N` columns exist |
+| `對應指標` (`INDICATOR_SHEET_NAME`) | `問題ID`, `問題`, `問題所屬指標`, `評核潛能`, `4S 元素` | Read-only lookup, not part of `doGet`'s JSON payload — read separately by `readIndicatorMap_`/`readIndicatorFull_` (see "Analysis endpoint" below). Lives here because it's config data (defines potential/4S/indicator per question), not a record of a submission — despite `ConfigWithSubmit.gs`'s indicator-reading code being physically closer to the submission-handling code in the file |
 
 `readItems_` (identical in `Config.gs` and `ConfigWithSubmit.gs`) scans the header row for
 `層1`, `層2`, ... in order and treats those as the grouping columns, one tree level each —
@@ -152,10 +153,18 @@ back as `{ name, children: [...] }`. For a 1-column sheet this produces the exac
 
 ### Record spreadsheet (`RECORD_SPREADSHEET_ID`) — read/written by `doPost`
 
-| Sheet | Columns (header row, `RECORD_HEADERS`/`INDICATOR_HEADERS`) | Role |
+This spreadsheet holds **only** the write target — no config/lookup sheets live here.
+
+| Sheet | Columns (header row, `RECORD_HEADERS`) | Role |
 |---|---|---|
 | `評核紀錄` (`RECORD_SHEET_NAME`) | `演習名稱`, `項目名稱`, `問題ID`, `指標代號`, `分數`, `人員代號`, `送出時間` | Write target — `appendSubmission_` appends one row per answered question per submission (columns matched by header text via `indexOf`, not fixed position, so header order can change freely) |
-| `指標` (`INDICATOR_SHEET_NAME`) | `問題ID`, `問題`, `問題所屬指標`, `評核潛能`, `4S 元素` | Read-only lookup. `讀IndicatorMap_` (writing path) only uses the first three columns to fill `指標代號` when writing to `評核紀錄`; `readIndicatorFull_` (analysis path) also reads `評核潛能` (`回應`/`監測`/`預期`/`學習`/one containing `覆蓋率`) and `4S 元素` (free-text label, grouped dynamically — not hardcoded to specific strings) |
+
+`readIndicatorMap_` (writing path) only uses the first three `INDICATOR_HEADERS` columns to
+fill `指標代號` when writing to `評核紀錄`; `readIndicatorFull_` (analysis path) also reads
+`評核潛能` (`回應`/`監測`/`預期`/`學習`/one containing `覆蓋率`) and `4S 元素` (free-text
+label, grouped dynamically — not hardcoded to specific strings). Both read from
+`CONFIG_SPREADSHEET_ID`'s `對應指標` sheet (see the config spreadsheet table above), **not**
+from this record spreadsheet.
 
 `doPost` (`appendSubmission_`) is idempotent: the client sends a `submissionId`
 generated once per submit attempt (`Start.dc.html`'s `submissionId` state), cached via
@@ -177,7 +186,7 @@ changes, the same way `RECORD_URL` must be kept in sync after a redeploy.
 
 `buildAnalysis_` reads every row currently in `評核紀錄`, keeping the *last* row per
 `(問題ID, 人員代號)` pair (a re-submission for the same question by the same code
-overwrites the earlier one), joins each `問題ID` against `指標` (`readIndicatorFull_`)
+overwrites the earlier one), joins each `問題ID` against `對應指標` (`readIndicatorFull_`)
 for potential/4S/indicator/question text, and against `項目與問題` (via
 `readItems_`/`indexQuestionsByStage_`) for the top-level stage name and leaf item
 name. Rows are split into `analysisRows` (potential `回應`/`監測`/`預期`) and
@@ -194,7 +203,7 @@ the dropped `學習` rows), matching the scope the client's reference mockup use
 verified against that mockup's known output numbers (`icc2k=0.6858`, `within1=0.9846`
 on its 26-row simulated dataset) while building this.
 
-If `項目與問題` or `指標` structure changes (e.g. more `層N` levels, renamed
+If `項目與問題` or `對應指標` structure changes (e.g. more `層N` levels, renamed
 columns), `indexQuestionsByStage_`/`readIndicatorFull_` need matching updates — same
 "don't hand-parse by position" rule as the rest of this file.
 
