@@ -142,8 +142,8 @@ button{font-family:inherit;cursor:pointer}
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#161512","options":["#161512","#7a4e0f","#1f7a4d","#2b5fd9"]},"$preview":{"width":390,"height":844}}'>
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwNkZFG97TRdrB1NKqWFWasuMOMYn-Hf6b4M6UOZFK59mwM9DO0-qnWYa96n9ZPhiVuwA/exec';
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec';
 
 // config.items 是一棵樹：分組節點是 { name, children }，葉節點（真正的評核項目）
 // 是 { name, questions }。層數由後端依試算表的「層N」欄位決定，可以是 1 層
@@ -269,7 +269,8 @@ class Component extends DCLogic {
     // 這裡會把場景編號跟簡要名稱拆開：編號放圖示徽章，簡要名稱當作列表文字。
     // 沒有用「：」分隔的舊格式（純「SCENE 01」或非 SCENE 開頭的名稱，例如
     // 「總結評核」）就照舊只去掉 SCENE 前綴、用勾選圖示，不受影響。
-    const sceneRe = /^SCENE\s*(\d+)\s*[:：]\s*(.+)$/i;
+    // 場景編號允許「02-03」這種合併場次的連字號格式（不只單一數字）。
+    const sceneRe = /^SCENE\s*([\d-]+)\s*[:：]\s*(.+)$/i;
     const baseRowStyle = 'display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; box-sizing: border-box; color: #161512; text-align: left;';
     const rows = rawRows.map((r) => {
       const isGroup = r.kind === 'group';
@@ -300,7 +301,7 @@ class Component extends DCLogic {
         rowStyle: baseRowStyle + ' width: calc(100% - ' + indent + 'px); margin-left: ' + indent + 'px;' +
           (isGroup ? ' height: 52px; font-weight: 800;' : ' min-height: 52px; padding-top: 10px; padding-bottom: 10px;'),
         chevronStyle: 'width: 18px; height: 18px; flex-shrink: 0; transition: transform .15s ease; transform: rotate(' + (isGroup && r.isOpen ? 90 : 0) + 'deg); display: ' + (isGroup ? 'block' : 'none') + ';',
-        leafIconStyle: 'width: 30px; height: 30px; border-radius: 8px; background: #f0e2be; align-items: center; justify-content: center; color: #7a4e0f; flex-shrink: 0; display: ' + (isGroup ? 'none' : 'flex') + ';',
+        leafIconStyle: 'min-width: 30px; height: 30px; padding: 0 4px; border-radius: 8px; background: #f0e2be; align-items: center; justify-content: center; color: #7a4e0f; flex-shrink: 0; box-sizing: border-box; display: ' + (isGroup ? 'none' : 'flex') + ';',
         checkSvgStyle: 'display: ' + (iconText ? 'none' : 'block') + ';',
         numStyle: 'font-size: 12px; font-weight: 900; display: ' + (iconText ? 'block' : 'none') + ';',
         labelStyle: isGroup

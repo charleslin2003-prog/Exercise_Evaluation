@@ -11,10 +11,12 @@ var RECORD_SPREADSHEET_ID = '1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM';
 var RECORD_SHEET_NAME = '評核紀錄';
 var RECORD_HEADERS = ['演習名稱', '項目名稱', '問題ID', '指標代號', '分數', '人員代號', '送出時間'];
 
-// 問題ID -> 指標代號 對照表，跟紀錄表放在同一個試算表。多了「評核潛能」
-// 「4S 元素」兩欄供分析頁彙總用（讀取用 readIndicatorFull_，寫入 評核紀錄
-// 用的 readIndicatorMap_ 仍只取前三欄，不受影響）。
-var INDICATOR_SHEET_NAME = '指標';
+// 問題ID -> 指標代號 對照表，跟「演習評核_設定」放在同一個試算表（是設定
+// 資料的一部分，不是送出後才產生的紀錄，所以歸在 CONFIG_SPREADSHEET_ID 底
+// 下，不是 RECORD_SPREADSHEET_ID）。多了「評核潛能」「4S 元素」兩欄供分析
+// 頁彙總用（讀取用 readIndicatorFull_，寫入 評核紀錄 用的 readIndicatorMap_
+// 仍只取前三欄，不受影響）。
+var INDICATOR_SHEET_NAME = '對應指標';
 var INDICATOR_HEADERS = ['問題ID', '問題', '問題所屬指標', '評核潛能', '4S 元素'];
 
 // 分析頁（Analysis.html）用的存取金鑰：Analysis.html 是一個不公開連結、
@@ -41,8 +43,11 @@ function doGet(e) {
     }
   }
   var ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
+  var info = readExerciseInfo_(ss);
   return jsonOut_({
-    exerciseName: readExerciseName_(ss),
+    exerciseName: info.name,
+    exerciseTopic: info.topic,
+    exerciseDate: info.date,
     codes: readCodes_(ss),
     criteria: readCriteria_(ss),
     items: readItems_(ss),
@@ -110,8 +115,8 @@ function appendSubmission_(body) {
     if (at === -1) throw new Error('紀錄表缺少欄位：' + RECORD_HEADERS[i]);
     col[RECORD_HEADERS[i]] = at;
   }
-  var exerciseName = readExerciseName_(configSs);
-  var indicatorByQuestionId = readIndicatorMap_(recordSs);
+  var exerciseName = readExerciseInfo_(configSs).name;
+  var indicatorByQuestionId = readIndicatorMap_(configSs);
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -205,9 +210,9 @@ function readIndicatorFull_(ss) {
 function buildAnalysis_() {
   var configSs = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
   var recordSs = SpreadsheetApp.openById(RECORD_SPREADSHEET_ID);
-  var exerciseName = readExerciseName_(configSs);
+  var exerciseInfo = readExerciseInfo_(configSs);
   var stageIndex = indexQuestionsByStage_(readItems_(configSs));
-  var indicatorFull = readIndicatorFull_(recordSs);
+  var indicatorFull = readIndicatorFull_(configSs);
 
   var sheet = recordSs.getSheetByName(RECORD_SHEET_NAME);
   if (!sheet) throw new Error('找不到工作表：' + RECORD_SHEET_NAME);
@@ -249,6 +254,10 @@ function buildAnalysis_() {
 
   var analysisRows = rows.filter(function (r) { return r.potential === '回應' || r.potential === '監測' || r.potential === '預期'; });
   var coverageRows = rows.filter(function (r) { return r.potential.indexOf('覆蓋率') !== -1; });
+  // 學習潛能的題目不納入三項潛能/4S 統計（跟業主參考 Demo 的排除規則一致），
+  // 但排序視圖（Analysis.html 的「排序視圖」分頁）需要看到它，所以另外整組
+  // 吐出來，不算進 stats。
+  var learningRows = rows.filter(function (r) { return r.potential === '學習'; });
 
   // 一致性統計（ICC / within1）沿用業主參考 Demo 的範圍：三項潛能 + 覆蓋率
   // 一起算，反映評核官整體評分習慣，不只侷限在三項潛能題目。
@@ -275,12 +284,15 @@ function buildAnalysis_() {
 
   return {
     meta: {
-      exerciseName: exerciseName,
+      exerciseName: exerciseInfo.name,
+      exerciseTopic: exerciseInfo.topic,
+      exerciseDate: exerciseInfo.date,
       generatedAt: new Date().toISOString(),
       evaluatorCodes: Object.keys(codeSet).sort(),
     },
     analysisRows: analysisRows,
     coverageRows: coverageRows,
+    learningRows: learningRows,
     stats: stats,
   };
 }
@@ -389,12 +401,20 @@ function indexChildren_(nodes, stageName, out) {
   });
 }
 
-function readExerciseName_(ss) {
+// 演習資訊 是 key/value 列，A 欄放標籤、B 欄放值，沒有固定標頭列，逐列掃描
+// A 欄比對標籤文字。演習主題/演習日期是選填的，沒填就回空字串，前端據此決
+// 定要不要顯示那個徽章。
+function readExerciseInfo_(ss) {
   var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
+  var info = { name: '', topic: '', date: '' };
   for (var i = 0; i < values.length; i++) {
-    if (values[i][0] === '演習名稱') return String(values[i][1] || '');
+    var key = values[i][0];
+    var val = String(values[i][1] || '');
+    if (key === '演習名稱') info.name = val;
+    else if (key === '演習主題') info.topic = val;
+    else if (key === '演習日期') info.date = val;
   }
-  return '';
+  return info;
 }
 
 function readCodes_(ss) {
@@ -430,25 +450,39 @@ function readCriteria_(ss) {
 
 // 項目與問題表支援任意層數分組：標頭裡有幾欄「層1」「層2」...就分幾層
 // （例如 階段->情境 兩層），沒有「層N」欄位時退回舊版單層行為，直接用
-// 「項目名稱」當唯一分組欄，回傳格式與舊版 { name, questions }[] 完全相同
-// （這正是目前 10/3 案例試算表的狀態，改動不需要動試算表）。
+// 「項目名稱」當唯一分組欄，回傳格式與舊版 { name, questions }[] 完全相同。
+// 前兩層另外接受具名欄位當別名：「層1」也可以叫「情境階段」、「層2」也可以
+// 叫「演練單元」（比對順序：先找「層N」，找不到才找別名）；深度 3 層以上
+// 只認「層N」，沒有具名別名。問題ID/問題內容兩欄同理，也接受「評核題號」
+// 「評核題目」這種別名。
 // 有分組的節點回傳 { name, children }，最底層（葉節點）回傳 { name, questions }。
+var GROUP_HEADER_ALIASES_ = [['情境階段'], ['演練單元']];
+var ID_HEADER_ALIASES_ = ['問題ID', '評核題號'];
+var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'];
+function findHeaderCol_(header, names) {
+  for (var i = 0; i < names.length; i++) {
+    var at = header.indexOf(names[i]);
+    if (at !== -1) return at;
+  }
+  return -1;
+}
 function readItems_(ss) {
   var values = ss.getSheetByName('項目與問題').getDataRange().getValues();
   var header = values[0];
   var groupCols = [];
   for (var lvl = 1; ; lvl++) {
     var at = header.indexOf('層' + lvl);
+    if (at === -1 && GROUP_HEADER_ALIASES_[lvl - 1]) at = findHeaderCol_(header, GROUP_HEADER_ALIASES_[lvl - 1]);
     if (at === -1) break;
     groupCols.push(at);
   }
   if (!groupCols.length) {
     var nameCol = header.indexOf('項目名稱');
-    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1');
+    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1/情境階段');
     groupCols = [nameCol];
   }
-  var idCol = header.indexOf('問題ID');
-  var textCol = header.indexOf('問題內容');
+  var idCol = findHeaderCol_(header, ID_HEADER_ALIASES_);
+  var textCol = findHeaderCol_(header, TEXT_HEADER_ALIASES_);
 
   var root = { children: [], index: {} };
   for (var i = 1; i < values.length; i++) {
