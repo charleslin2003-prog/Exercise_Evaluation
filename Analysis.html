@@ -86,19 +86,20 @@ function svgIso3D(byPS, s4Keys) {
   // 有畫出來的長條對不上、擠在一起很難讀；每根長條自己標自己最單純可靠。
   const shortS4 = (s4) => { const m = /\(([^)]+)\)/.exec(s4); return m ? m[1] : s4; };
 
-  // 同一潛能列裡最低分那格標紅框 + ▼，但至少要有 2 格都有資料才有「比較」的
-  // 意義；只有 1 格的話那格必定「最低」，標了反而誤導，所以跳過。
-  const rowMin = {};
-  potentials.forEach((p) => {
+  // 同一個 4S 類別裡（固定 Y，比較 X 軸的三項潛能），分數最低的那個潛能標
+  // 最淺色 + 紅框。至少要有 2 個潛能都有資料才有「比較」的意義；只有 1 個
+  // 潛能有資料的話它必定「最低」，標了反而誤導，所以跳過。
+  const colMin = {};
+  s4Keys.forEach((s4) => {
     let best = null, count = 0;
-    s4Keys.forEach((k) => {
-      const o = (byPS[p] && byPS[p][k]) || { n: 0 };
+    potentials.forEach((p) => {
+      const o = (byPS[p] && byPS[p][s4]) || { n: 0 };
       if (o.n > 0) {
         count++;
-        if (best === null || o.mean < best.mean) best = { key: k, mean: o.mean };
+        if (best === null || o.mean < best.mean) best = { key: p, mean: o.mean };
       }
     });
-    rowMin[p] = count >= 2 ? best.key : null;
+    colMin[s4] = count >= 2 ? best.key : null;
   });
 
   const groundCorners = [];
@@ -114,16 +115,19 @@ function svgIso3D(byPS, s4Keys) {
 
   let bars = '';
   potentials.forEach((p, ri) => {
-    const color = POTENTIAL_COLORS[p] || '#147d83';
-    const topColor = shade(color, 30), leftColor = shade(color, -24);
+    const baseColor = POTENTIAL_COLORS[p] || '#147d83';
     s4Keys.forEach((s4, ci) => {
       const o = (byPS[p] && byPS[p][s4]) || { n: 0 };
       if (!o.n) return;
+      const flagged = colMin[s4] === p;
+      // 被標記的長條整體換成淺色版（三面都從淺色底色再分別算明暗），不是只
+      // 加框——淺色本身就是「這組裡分數最低」的視覺提示。
+      const color = flagged ? shade(baseColor, 46) : baseColor;
+      const topColor = shade(color, 30), leftColor = shade(color, -24);
       const h = o.mean * barScale;
       const atTop = (p2) => `${(ox + p2.x).toFixed(1)},${(oy + p2.y - h).toFixed(1)}`;
       const A = proj(ci + inset, ri + inset), B = proj(ci + 1 - inset, ri + inset);
       const C = proj(ci + 1 - inset, ri + 1 - inset), D = proj(ci + inset, ri + 1 - inset);
-      const flagged = rowMin[p] === s4;
       const stroke = flagged ? ' stroke="#c0392b" stroke-width="2.2"' : '';
       bars += `<polygon points="${atGround(A)} ${atGround(D)} ${atTop(D)} ${atTop(A)}" fill="${leftColor}"${stroke}/>`;
       bars += `<polygon points="${atGround(A)} ${atGround(B)} ${atTop(B)} ${atTop(A)}" fill="${color}"${stroke}/>`;
