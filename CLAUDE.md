@@ -51,7 +51,7 @@ Google Apps Script backend on load and posts scored answers back to it on submit
   access control is that its URL (this file's hosted path) isn't shared with
   evaluators, plus the `ANALYSIS_KEY` query param (see "Analysis endpoint" below).
   Tabs (`.tab`/`.panel`, plain show/hide, no routing): 綜合評比 (overview),
-  三項潛能雷達圖, 演習覆蓋率, 4S 分析, 排序視圖, 評核官明細, 統計方法. See
+  4S 分析, 三項潛能雷達圖, 演習覆蓋率, 排序視圖, 評核官明細, 統計方法. See
   "Analysis.html UI structure" below for what each tab renders and from which
   `DATA` fields.
 - `assets/imdl-logo.jpg` — logo shown in `Analysis.html`'s header (replaces the
@@ -248,16 +248,6 @@ re-invoked manually.
   劣勢前三 (top/bottom-3 across all potentials + coverage combined, ranked by
   mean, each row showing stage/goal + potential/s4 + score) and 評核一致性
   (ICC(2,k) + within-1 text).
-- **三項潛能雷達圖 (`#radars`)** — one `svgRadar` per potential (回應/監測/預期),
-  axes sorted clockwise from lowest to highest score (sorting happens inside
-  `svgRadar()` itself, so every caller gets it for free). Each radar card is
-  followed by a separate card (not nested inside the same `.chartbox`, so the
-  chart's own height stays fixed regardless of table length) holding a
-  `radarTable()` — indicator/question/score, sorted ascending, built from the
-  same per-row data as the chart.
-- **演習覆蓋率 (`#coverage`)** — coverage radar (`svgRadar`) plus a
-  `radarTable()` in place of what used to be a plain bar list.
-  覆蓋率指標摘要 card shows that table.
 - **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category,
   stacked by 演練單元/SCENE short code (the `SCENE ` prefix stripped off
   `itemName`), segments ordered by natural code sort (`A1 < A2 < B < ... < F`).
@@ -275,6 +265,18 @@ re-invoked manually.
   `情境編號對照表` (`#s4ScenarioTable`), mapping each short code to its full
   `goal`/測試情境 text (or the raw `itemName` if `goal` is empty), with a color
   swatch per row matching the chart segment color.
+- **三項潛能雷達圖 (`#radars`)** — one `svgRadar` per potential (回應/監測/預期),
+  axes sorted clockwise from lowest to highest score (sorting happens inside
+  `svgRadar()` itself, so every caller gets it for free). Each radar card is
+  followed by a separate card (not nested inside the same `.chartbox`, so the
+  chart's own height stays fixed regardless of table length) holding a
+  `radarTable()` — 情境編號 (`shortScene(itemName)`, the `SCENE ` prefix
+  stripped, shared with the 4S 分析 tab's code scheme) / 指標 / 具體評核題目 /
+  分數, sorted ascending by score, built from the same per-row data as the
+  chart.
+- **演習覆蓋率 (`#coverage`)** — coverage radar (`svgRadar`) plus a
+  `radarTable()` in place of what used to be a plain bar list.
+  覆蓋率指標摘要 card shows that table.
 - **排序視圖 (`#ranking`)** — 依潛能分類 and 表現優劣排序 tables; the only tab
   that includes `learningRows` (labelled accordingly), everything else excludes
   學習 entirely.
