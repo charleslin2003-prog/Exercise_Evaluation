@@ -60,86 +60,81 @@ function barsSVG(items){if(!items.length) return '<div class="small">尚無資�
 const POTENTIAL_COLORS = { '回應': '#147d83', '監測': '#274c67', '預期': '#2f7d5b' };
 const S4_PREFERRED_ORDER = ['Space (空間)', 'Staff (人員)', 'Stuff (物資)', 'System (系統)'];
 
-function shade(hex, percent) {
-  const num = parseInt(hex.slice(1), 16);
-  let r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
-  const amt = Math.round(2.55 * percent);
-  r = Math.min(255, Math.max(0, r + amt));
-  g = Math.min(255, Math.max(0, g + amt));
-  b = Math.min(255, Math.max(0, b + amt));
-  return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
-}
+function mixHex(hex,target,t){const h=hex.replace('#',''),th=target.replace('#','');const r1=parseInt(h.substr(0,2),16),g1=parseInt(h.substr(2,2),16),b1=parseInt(h.substr(4,2),16);const r2=parseInt(th.substr(0,2),16),g2=parseInt(th.substr(2,2),16),b2=parseInt(th.substr(4,2),16);const r=Math.round(r1+(r2-r1)*t),g=Math.round(g1+(g2-g1)*t),b=Math.round(b1+(b2-b1)*t);return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('')}
 
-// 等角（isometric）3D 長條圖：3 種潛能（深度軸，往左上收）x 實際出現過的 4S
-// 類別（寬度軸，往右上收），每格一根立方體長條，高度對應平均分。每個潛能
-// 列裡分數最低的那一格額外標紅框 + ▼，提示該潛能在哪個 4S 面向最弱——不是
-// 用固定及格線判斷（同樣是 3.x 分，不同列會有不同格被標記，因為標的是
-// 「這一列裡最低」，不是「低於某個絕對值」。
+// 等角投影手繪立體長條圖：X 軸=三項潛能，Y 軸=實際出現過的 4S 類別，柱高=
+// 平均分。座標軸標籤標在最前排兩條底邊上（不是黏在每根柱子正上方）：左邊
+// 那條（j 固定在最後一排、i 變化）標潛能類別，右邊那條（i 固定在最後一類、
+// j 變化）標 4S，兩條線在圖形最前方（螢幕最下方）的頂點交會。每個潛能
+// （每一列）裡分數最低的那一格改用較淡色調＋紅框凸顯，不用 ▼ 符號。
 function svgIso3D(byPS, s4Keys) {
-  if (!s4Keys.length) return '<div class="small">尚無資料</div>';
   const potentials = ['回應', '監測', '預期'];
-  const tileW = 76, tileH = 38, barScale = 24, inset = 0.18;
-  const cols = s4Keys.length, rows = potentials.length;
-  const proj = (c, r) => ({ x: (c - r) * (tileW / 2), y: -(c + r) * (tileH / 2) });
-  // 短 4S 標籤直接印在每根長條自己正上方（跟長條綁在一起），不是沿著格線
-  // 邊緣另外排一排軸標籤——資料稀疏時（很多格沒資料）邊緣標籤的位置會跟實際
-  // 有畫出來的長條對不上、擠在一起很難讀；每根長條自己標自己最單純可靠。
-  const shortS4 = (s4) => { const m = /\(([^)]+)\)/.exec(s4); return m ? m[1] : s4; };
-
-  // 同一個 4S 類別裡（固定 Y，比較 X 軸的三項潛能），分數最低的那個潛能標
-  // 最淺色 + 紅框。至少要有 2 個潛能都有資料才有「比較」的意義；只有 1 個
-  // 潛能有資料的話它必定「最低」，標了反而誤導，所以跳過。
-  const colMin = {};
-  s4Keys.forEach((s4) => {
-    let best = null, count = 0;
-    potentials.forEach((p) => {
-      const o = (byPS[p] && byPS[p][s4]) || { n: 0 };
-      if (o.n > 0) {
-        count++;
-        if (best === null || o.mean < best.mean) best = { key: p, mean: o.mean };
-      }
-    });
-    colMin[s4] = count >= 2 ? best.key : null;
+  const cats = potentials.map(p => ({ label: p, color: POTENTIAL_COLORS[p] || '#147d83' }));
+  const nCat = cats.length, nGroup = s4Keys.length;
+  if (!nGroup) return '<div class="small">尚無資料</div>';
+  const matrix = cats.map(c => s4Keys.map(s4 => {
+    const o = (byPS[c.label] && byPS[c.label][s4]) || null;
+    return o && o.n ? o.mean : null;
+  }));
+  const cosA=Math.cos(Math.PI/6),sinA=.5;
+  const xDir=[cosA,sinA],yDir=[-cosA,sinA];
+  const cellW=90,cellD=90,barW=54,maxH=180,hb=barW/2;
+  const boxes=[],pts=[];
+  for(let i=0;i<nCat;i++){
+    for(let j=0;j<nGroup;j++){
+      const v=matrix[i][j];
+      const bx=i*cellW*xDir[0]+j*cellD*yDir[0], by=i*cellW*xDir[1]+j*cellD*yDir[1];
+      const h=v==null?0:v/5*maxH;
+      const A=[bx-hb*xDir[0]-hb*yDir[0], by-hb*xDir[1]-hb*yDir[1]];
+      const B=[bx+hb*xDir[0]-hb*yDir[0], by+hb*xDir[1]-hb*yDir[1]];
+      const C=[bx+hb*xDir[0]+hb*yDir[0], by+hb*xDir[1]+hb*yDir[1]];
+      const D=[bx-hb*xDir[0]+hb*yDir[0], by-hb*xDir[1]+hb*yDir[1]];
+      const A2=[A[0],A[1]-h],B2=[B[0],B[1]-h],C2=[C[0],C[1]-h],D2=[D[0],D[1]-h];
+      [A,B,C,D,A2,B2,C2,D2].forEach(p=>pts.push(p));
+      boxes.push({i,j,v,A,B,C,D,A2,B2,C2,D2,depth:i+j});
+    }
+  }
+  const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+  const pad=56;
+  const minX=Math.min(...xs)-pad,maxX=Math.max(...xs)+pad,minY=Math.min(...ys)-pad-16,maxY=Math.max(...ys)+pad;
+  const W=maxX-minX,H=maxY-minY;
+  boxes.sort((a,b)=>a.depth-b.depth);
+  // 每個潛能（每一列）裡分數最低的那格改用較淡色調，跟同一列其他較飽和的
+  // 柱子拉出對比，一眼就能挑出這個潛能裡最弱的 S 要素。
+  const minJByCat=cats.map((c,i)=>{
+    let minJ=-1,minV=Infinity;
+    for(let j=0;j<nGroup;j++){const v=matrix[i][j];if(v!=null&&v<minV){minV=v;minJ=j;}}
+    return minJ;
   });
-
-  const groundCorners = [];
-  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) groundCorners.push(proj(c, r));
-  const maxBarH = 5 * barScale;
-  const xs = groundCorners.map((p) => p.x);
-  const ys = groundCorners.map((p) => p.y - maxBarH).concat(groundCorners.map((p) => p.y));
-  const minX = Math.min(...xs) - 40, maxX = Math.max(...xs) + 40;
-  const minY = Math.min(...ys) - 48, maxY = Math.max(...ys) + 20;
-  const W = maxX - minX, H = maxY - minY;
-  const ox = -minX, oy = -minY;
-  const atGround = (p) => `${(ox + p.x).toFixed(1)},${(oy + p.y).toFixed(1)}`;
-
-  let bars = '';
-  potentials.forEach((p, ri) => {
-    const baseColor = POTENTIAL_COLORS[p] || '#147d83';
-    s4Keys.forEach((s4, ci) => {
-      const o = (byPS[p] && byPS[p][s4]) || { n: 0 };
-      if (!o.n) return;
-      const flagged = colMin[s4] === p;
-      // 被標記的長條整體換成淺色版（三面都從淺色底色再分別算明暗），不是只
-      // 加框——淺色本身就是「這組裡分數最低」的視覺提示。
-      const color = flagged ? shade(baseColor, 46) : baseColor;
-      const topColor = shade(color, 30), leftColor = shade(color, -24);
-      const h = o.mean * barScale;
-      const atTop = (p2) => `${(ox + p2.x).toFixed(1)},${(oy + p2.y - h).toFixed(1)}`;
-      const A = proj(ci + inset, ri + inset), B = proj(ci + 1 - inset, ri + inset);
-      const C = proj(ci + 1 - inset, ri + 1 - inset), D = proj(ci + inset, ri + 1 - inset);
-      const stroke = flagged ? ' stroke="#c0392b" stroke-width="2.2"' : '';
-      bars += `<polygon points="${atGround(A)} ${atGround(D)} ${atTop(D)} ${atTop(A)}" fill="${leftColor}"${stroke}/>`;
-      bars += `<polygon points="${atGround(A)} ${atGround(B)} ${atTop(B)} ${atTop(A)}" fill="${color}"${stroke}/>`;
-      bars += `<polygon points="${atTop(A)} ${atTop(B)} ${atTop(C)} ${atTop(D)}" fill="${topColor}"${stroke}/>`;
-      const cx = ox + (A.x + B.x + C.x + D.x) / 4, topY = oy + (A.y + B.y + C.y + D.y) / 4 - h;
-      let ty = topY - 8;
-      if (flagged) { bars += `<text x="${cx.toFixed(1)}" y="${(ty - 13).toFixed(1)}" text-anchor="middle" font-size="12" fill="#c0392b">▼</text>`; }
-      bars += `<text x="${cx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="800" fill="${flagged ? '#c0392b' : '#18323a'}">${o.mean.toFixed(1)}</text>`;
-      bars += `<text x="${cx.toFixed(1)}" y="${(ty + 13).toFixed(1)}" text-anchor="middle" font-size="9" fill="#7b9198">${esc(shortS4(s4))}</text>`;
-    });
+  let s=`<svg class="iso3dSvg" viewBox="${minX} ${minY} ${W} ${H}" role="img" aria-label="三項潛能 4S 立體圖" style="width:100%;height:auto;min-height:300px">`;
+  boxes.forEach(b=>{
+    const c=cats[b.i];
+    if(b.v==null){
+      s+=`<polygon points="${[b.A,b.B,b.C,b.D].map(p=>p.join(',')).join(' ')}" fill="#eef3f4" stroke="#d8e4e7"/>`;
+      return;
+    }
+    const isWeak=b.j===minJByCat[b.i];
+    const top=isWeak?mixHex(c.color,'#ffffff',.85):mixHex(c.color,'#ffffff',.45);
+    const left=isWeak?mixHex(c.color,'#ffffff',.62):mixHex(c.color,'#000000',.12);
+    const right=isWeak?mixHex(c.color,'#ffffff',.42):mixHex(c.color,'#000000',.34);
+    const weakStroke=isWeak?' stroke="#a84646" stroke-width="2"':'';
+    s+=`<polygon points="${[b.D,b.C,b.C2,b.D2].map(p=>p.join(',')).join(' ')}" fill="${left}"${weakStroke}/>`;
+    s+=`<polygon points="${[b.B,b.C,b.C2,b.B2].map(p=>p.join(',')).join(' ')}" fill="${right}"${weakStroke}/>`;
+    s+=`<polygon points="${[b.A2,b.B2,b.C2,b.D2].map(p=>p.join(',')).join(' ')}" fill="${top}" stroke="${isWeak?'#a84646':'rgba(255,255,255,.5)'}"/>`;
+    const cx=(b.A2[0]+b.C2[0])/2, cy=(b.A2[1]+b.C2[1])/2;
+    s+=`<text x="${cx}" y="${cy-6}" text-anchor="middle" font-size="11" font-weight="800" fill="${isWeak?'#a84646':'#18323a'}">${b.v.toFixed(1)}</text>`;
   });
-  return `<svg viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" style="width:100%;height:auto;min-height:300px">${bars}</svg>`;
+  cats.forEach((c,i)=>{
+    const b=boxes.find(x=>x.i===i&&x.j===nGroup-1);
+    if(!b) return;
+    s+=`<text x="${b.D[0]-8}" y="${b.D[1]+4}" text-anchor="end" font-size="11" fill="#48636c">${esc(c.label)}</text>`;
+  });
+  s4Keys.forEach((g,j)=>{
+    const b=boxes.find(x=>x.i===nCat-1&&x.j===j);
+    if(!b) return;
+    s+=`<text x="${b.B[0]+8}" y="${b.B[1]+4}" text-anchor="start" font-size="11" fill="#48636c">${esc(g)}</text>`;
+  });
+  return s+'</svg>';
 }
 
 function svgCoverageGauge(value) {
@@ -196,7 +191,8 @@ function init(){
   evSel.innerHTML = '<option value="mean">全部平均</option>' + DATA.meta.evaluatorCodes.map(c=>`<option value="${esc(c)}">評核官 ${esc(c)}</option>`).join('');
 
   const S=DATA.stats;
-  document.getElementById('kpis').innerHTML=[['三項潛能總平均',fmt(S.overall.mean),`SD ${fmt(S.overall.sd)}`],['演習覆蓋率',fmt(S.coverage.mean),`SD ${fmt(S.coverage.sd)}`],['評核官一致性 ICC',S.icc2k==null?'—':fmt(S.icc2k),'ICC(2,k)'],['相差 ≤1 分一致率',S.within1==null?'—':(S.within1*100).toFixed(1)+'%','任兩位評核官'],['納入核心題數',DATA.analysisRows.length,'排除學習潛能']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
+  const itemCount=new Set([...DATA.analysisRows,...DATA.coverageRows].map(r=>r.itemName)).size;
+  document.getElementById('kpis').innerHTML=[['Headline','—','（待補文案）'],['Narratives','—','（待補文案）'],['評核官一致性 ICC',S.icc2k==null?'—':fmt(S.icc2k),'ICC(2,k)'],['評核人數',DATA.meta.evaluatorCodes.length,'已送出評分'],['項目數',itemCount,'已評核項目']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
 
   renderIso3D();
   renderCoverageGauge();
