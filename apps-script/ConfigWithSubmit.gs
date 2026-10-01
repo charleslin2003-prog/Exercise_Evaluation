@@ -329,6 +329,18 @@ function buildAnalysis_() {
     stats.s4[label] = summarize_(flattenScores_(analysisRows.filter(function (r) { return r.s4 === label; })));
   });
 
+  // 潛能 x 4S 交叉統計，給 Analysis.html 的立體圖用（12 格：3 潛能 x 實際出現
+  // 過的 4S 類別）。某個組合如果完全沒有對應題目，summarize_([]) 會回傳
+  // n:0/mean:null，前端看到 n===0 就跳過那一格不畫。
+  stats.potentialByS4 = {};
+  ['回應', '監測', '預期'].forEach(function (p) {
+    stats.potentialByS4[p] = {};
+    Object.keys(s4Labels).forEach(function (label) {
+      var pool = analysisRows.filter(function (r) { return r.potential === p && r.s4 === label; });
+      stats.potentialByS4[p][label] = summarize_(flattenScores_(pool));
+    });
+  });
+
   var codeSet = {};
   rows.forEach(function (r) { r.scores.forEach(function (s) { codeSet[s.code] = true; }); });
 
