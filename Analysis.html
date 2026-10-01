@@ -62,6 +62,15 @@ const S4_PREFERRED_ORDER = ['Space (空間)', 'Staff (人員)', 'Stuff (物資)'
 
 function mixHex(hex,target,t){const h=hex.replace('#',''),th=target.replace('#','');const r1=parseInt(h.substr(0,2),16),g1=parseInt(h.substr(2,2),16),b1=parseInt(h.substr(4,2),16);const r2=parseInt(th.substr(0,2),16),g2=parseInt(th.substr(2,2),16),b2=parseInt(th.substr(4,2),16);const r=Math.round(r1+(r2-r1)*t),g=Math.round(g1+(g2-g1)*t),b=Math.round(b1+(b2-b1)*t);return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('')}
 
+// 粗估文字寬度：中日韓全形字當一個 fontSize 寬、其餘（英數/符號/半形括號）
+// 當 0.56 倍寬——svg 沒有量測文字的機制，這個比例是手動抓的近似值，目的
+// 只是讓 viewBox 邊界算得出「大概多寬」，不是要精準排版。
+function estTextW(str, size) {
+  let w = 0;
+  for (const ch of str) w += /[　-鿿＀-￯]/.test(ch) ? size : size * 0.56;
+  return w;
+}
+
 // 等角投影手繪立體長條圖：X 軸=三項潛能，Y 軸=實際出現過的 4S 類別，柱高=
 // 平均分。座標軸標籤標在最前排兩條底邊上（不是黏在每根柱子正上方）：左邊
 // 那條（j 固定在最後一排、i 變化）標潛能類別，右邊那條（i 固定在最後一類、
@@ -94,8 +103,23 @@ function svgIso3D(byPS, s4Keys) {
       boxes.push({i,j,v,A,B,C,D,A2,B2,C2,D2,depth:i+j});
     }
   }
-  const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
-  const pad=56;
+  // 軸標籤的錨點＋估算文字寬度也要算進邊界框，不然字一長（例如「Space
+  // (空間)」這種中英混排）就會超出只靠柱子幾何角點算出來的 viewBox 被裁掉。
+  const potentialLabelPts = cats.map((c, i) => {
+    const b = boxes.find(x => x.i === i && x.j === nGroup - 1);
+    if (!b) return null;
+    const x = b.D[0] - 8, y = b.D[1] + 4, w = estTextW(c.label, 11);
+    return [[x - w, y], [x, y]];
+  }).filter(Boolean).flat();
+  const s4LabelPts = s4Keys.map((g, j) => {
+    const b = boxes.find(x => x.i === nCat - 1 && x.j === j);
+    if (!b) return null;
+    const x = b.B[0] + 8, y = b.B[1] + 4, w = estTextW(g, 11);
+    return [[x, y], [x + w, y]];
+  }).filter(Boolean).flat();
+  const xs=pts.map(p=>p[0]).concat(potentialLabelPts.map(p=>p[0]), s4LabelPts.map(p=>p[0]));
+  const ys=pts.map(p=>p[1]).concat(potentialLabelPts.map(p=>p[1]), s4LabelPts.map(p=>p[1]));
+  const pad=32;
   const minX=Math.min(...xs)-pad,maxX=Math.max(...xs)+pad,minY=Math.min(...ys)-pad-16,maxY=Math.max(...ys)+pad;
   const W=maxX-minX,H=maxY-minY;
   boxes.sort((a,b)=>a.depth-b.depth);
