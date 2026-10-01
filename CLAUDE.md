@@ -268,9 +268,8 @@ re-invoked manually.
   per-scenario means. Each segment's **width**, however, is that scenario's
   share of the sum of all per-scenario means for that S4 (`scenario mean / sum
   of means`), scaled against the bar's total — i.e. width shows relative
-  contribution, not an absolute score. Segment label text is `code pct%` (e.g.
-  `D2 37%`), not the scenario's actual mean — to read a scenario's real score,
-  use the `情境編號對照表` below the chart or the radar-tab legend tables. Bars
+  contribution, while the segment label text (`code raw-mean`, e.g. `D2 3.7`)
+  shows the scenario's actual (unscaled) average score. Bars
   are sorted by their total (the 4S average) descending, largest first. The
   `情境編號對照表` card (`#s4ScenarioTable`) maps each short code to its full
   `goal`/測試情境 text (or the raw `itemName` if `goal` is empty), with a color
