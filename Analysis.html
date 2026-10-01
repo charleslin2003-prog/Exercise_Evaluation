@@ -78,18 +78,27 @@ function shade(hex, percent) {
 function svgIso3D(byPS, s4Keys) {
   if (!s4Keys.length) return '<div class="small">尚無資料</div>';
   const potentials = ['回應', '監測', '預期'];
-  const tileW = 70, tileH = 34, barScale = 24, inset = 0.16;
+  const tileW = 76, tileH = 38, barScale = 24, inset = 0.18;
   const cols = s4Keys.length, rows = potentials.length;
   const proj = (c, r) => ({ x: (c - r) * (tileW / 2), y: -(c + r) * (tileH / 2) });
+  // 短 4S 標籤直接印在每根長條自己正上方（跟長條綁在一起），不是沿著格線
+  // 邊緣另外排一排軸標籤——資料稀疏時（很多格沒資料）邊緣標籤的位置會跟實際
+  // 有畫出來的長條對不上、擠在一起很難讀；每根長條自己標自己最單純可靠。
+  const shortS4 = (s4) => { const m = /\(([^)]+)\)/.exec(s4); return m ? m[1] : s4; };
 
+  // 同一潛能列裡最低分那格標紅框 + ▼，但至少要有 2 格都有資料才有「比較」的
+  // 意義；只有 1 格的話那格必定「最低」，標了反而誤導，所以跳過。
   const rowMin = {};
   potentials.forEach((p) => {
-    let best = null;
+    let best = null, count = 0;
     s4Keys.forEach((k) => {
       const o = (byPS[p] && byPS[p][k]) || { n: 0 };
-      if (o.n > 0 && (best === null || o.mean < best.mean)) best = { key: k, mean: o.mean };
+      if (o.n > 0) {
+        count++;
+        if (best === null || o.mean < best.mean) best = { key: k, mean: o.mean };
+      }
     });
-    rowMin[p] = best ? best.key : null;
+    rowMin[p] = count >= 2 ? best.key : null;
   });
 
   const groundCorners = [];
@@ -97,13 +106,13 @@ function svgIso3D(byPS, s4Keys) {
   const maxBarH = 5 * barScale;
   const xs = groundCorners.map((p) => p.x);
   const ys = groundCorners.map((p) => p.y - maxBarH).concat(groundCorners.map((p) => p.y));
-  const minX = Math.min(...xs) - 56, maxX = Math.max(...xs) + 70;
-  const minY = Math.min(...ys) - 36, maxY = Math.max(...ys) + 56;
+  const minX = Math.min(...xs) - 40, maxX = Math.max(...xs) + 40;
+  const minY = Math.min(...ys) - 48, maxY = Math.max(...ys) + 20;
   const W = maxX - minX, H = maxY - minY;
   const ox = -minX, oy = -minY;
   const atGround = (p) => `${(ox + p.x).toFixed(1)},${(oy + p.y).toFixed(1)}`;
 
-  let bars = '', labels = '';
+  let bars = '';
   potentials.forEach((p, ri) => {
     const color = POTENTIAL_COLORS[p] || '#147d83';
     const topColor = shade(color, 30), leftColor = shade(color, -24);
@@ -119,18 +128,14 @@ function svgIso3D(byPS, s4Keys) {
       bars += `<polygon points="${atGround(A)} ${atGround(D)} ${atTop(D)} ${atTop(A)}" fill="${leftColor}"${stroke}/>`;
       bars += `<polygon points="${atGround(A)} ${atGround(B)} ${atTop(B)} ${atTop(A)}" fill="${color}"${stroke}/>`;
       bars += `<polygon points="${atTop(A)} ${atTop(B)} ${atTop(C)} ${atTop(D)}" fill="${topColor}"${stroke}/>`;
-      const cx = ox + (A.x + B.x + C.x + D.x) / 4, cy = oy + (A.y + B.y + C.y + D.y) / 4 - h;
-      if (flagged) bars += `<text x="${cx.toFixed(1)}" y="${(cy - 20).toFixed(1)}" text-anchor="middle" font-size="12" fill="#c0392b">▼</text>`;
-      bars += `<text x="${cx.toFixed(1)}" y="${(cy - 8).toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="800" fill="${flagged ? '#c0392b' : '#18323a'}">${o.mean.toFixed(1)}</text>`;
+      const cx = ox + (A.x + B.x + C.x + D.x) / 4, topY = oy + (A.y + B.y + C.y + D.y) / 4 - h;
+      let ty = topY - 8;
+      if (flagged) { bars += `<text x="${cx.toFixed(1)}" y="${(ty - 13).toFixed(1)}" text-anchor="middle" font-size="12" fill="#c0392b">▼</text>`; }
+      bars += `<text x="${cx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="800" fill="${flagged ? '#c0392b' : '#18323a'}">${o.mean.toFixed(1)}</text>`;
+      bars += `<text x="${cx.toFixed(1)}" y="${(ty + 13).toFixed(1)}" text-anchor="middle" font-size="9" fill="#7b9198">${esc(shortS4(s4))}</text>`;
     });
-    const lp = proj(-0.3, ri + 0.5);
-    labels += `<text x="${(ox + lp.x).toFixed(1)}" y="${(oy + lp.y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#48636c">${esc(p)}</text>`;
   });
-  s4Keys.forEach((s4, ci) => {
-    const lp = proj(ci + 0.5, rows + 0.25);
-    labels += `<text x="${(ox + lp.x).toFixed(1)}" y="${(oy + lp.y + 4).toFixed(1)}" text-anchor="start" font-size="11" fill="#48636c">${esc(s4)}</text>`;
-  });
-  return `<svg viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" style="width:100%;height:auto;min-height:300px">${bars}${labels}</svg>`;
+  return `<svg viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" style="width:100%;height:auto;min-height:300px">${bars}</svg>`;
 }
 
 function svgCoverageGauge(value) {
