@@ -25,7 +25,7 @@
 <div id="stateArea"></div>
 <div id="app" style="display:none">
 <div class="tabs"><button class="tab active" data-tab="overview">綜合評比</button><button class="tab" data-tab="radars">三項潛能雷達圖</button><button class="tab" data-tab="coverage">演習覆蓋率</button><button class="tab" data-tab="s4">4S 分析</button><button class="tab" data-tab="ranking">排序視圖</button><button class="tab" data-tab="detail">評核官明細</button><button class="tab" data-tab="method">統計方法</button></div>
-<section id="overview" class="panel active"><div class="grid kpis" id="kpis"></div><div class="grid cols2" style="margin-top:16px"><div class="card"><div class="sec">演習展現出之整備能力</div><div style="display:flex;gap:20px;align-items:stretch;flex-wrap:wrap"><div style="flex:1;min-width:280px" id="iso3dChart"></div><div style="width:140px;flex-shrink:0;border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div style="font-size:12px;font-weight:800">演習覆蓋率</div><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div class="card"><div class="sec">重點項目</div><div class="insights" id="insights"></div></div></div></section>
+<section id="overview" class="panel active"><div class="grid kpis" id="kpis"></div><div class="card" style="margin-top:16px"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div></section>
 <section id="radars" class="panel"><div class="grid cols3" id="radarGrid"></div></section>
 <section id="coverage" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">演習覆蓋率雷達圖</div><div id="coverageRadar"></div></div><div class="card"><div class="sec">覆蓋率指標摘要</div><div id="coverageBars"></div><div class="note" style="margin-top:14px">覆蓋率評分維持原表 1–5 級尺度；此處以所有評核官平均分呈現。較低分代表該面向雖可能已被演到，但實際呈現、證據或閉環程度較不足。</div></div></div></section>
 <section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S 平均分數直方圖</div><div id="s4BarsChart"></div></div><div class="card"><div class="sec">4S 統計摘要</div><div id="s4Summary"></div><div class="note" style="margin-top:14px">4S 分析僅納入回應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div></div></section>
@@ -215,20 +215,13 @@ function init(){
   evSel.innerHTML = '<option value="mean">全部平均</option>' + DATA.meta.evaluatorCodes.map(c=>`<option value="${esc(c)}">評核官 ${esc(c)}</option>`).join('');
 
   const totalEvaluated=DATA.analysisRows.length+DATA.coverageRows.length+(DATA.learningRows||[]).length;
-  document.getElementById('kpis').innerHTML=[['主題','—','（待補文案）'],['說明','—','（待補文案）'],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分'],['總評數',totalEvaluated,'所有已送出評分']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
+  document.getElementById('kpis').innerHTML=[['主題',esc(DATA.meta.exerciseTopic||'—'),''],['說明',esc(DATA.meta.exerciseDesc||'—'),''],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分'],['總評數',totalEvaluated,'所有已送出評分']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
 
   renderIso3D();
   renderCoverageGauge();
 
-  if (DATA.analysisRows.length) {
-    const S=DATA.stats;
-    let core=[...DATA.analysisRows,...DATA.coverageRows].sort((a,b)=>a.mean-b.mean);let weak=core.slice(0,3), strong=[...core].sort((a,b)=>b.mean-a.mean).slice(0,3);
-    const fmtRow=x=>`${esc(x.goal||x.stage)}・${esc(x.potential)}/${esc(x.s4)}，${x.mean.toFixed(1)}`;
-    const listify=arr=>arr.length?`<ol style="margin:6px 0 0 18px;padding:0">${arr.map(x=>`<li>${fmtRow(x)}</li>`).join('')}</ol>`:'尚無資料';
-    document.getElementById('insights').innerHTML=`<div class="insight"><b>優勢前三</b>${listify(strong)}</div><div class="insight"><b>劣勢前三</b>${listify(weak)}</div><div class="insight"><b>評核一致性</b>ICC(2,k)=${S.icc2k==null?'資料不足':S.icc2k.toFixed(2)}；評核官任兩人相差不超過 1 分的比例為 ${S.within1==null?'—':(S.within1*100).toFixed(1)+'%'}。</div>`;
-  } else {
-    document.getElementById('insights').innerHTML = '<div class="insight">尚無已送出的評分資料。</div>';
-  }
+  let overviewS4Items=Object.entries(DATA.stats.s4).map(([k,v])=>({label:k,value:v.mean,n:v.n}));
+  document.getElementById('overviewS4Chart').innerHTML=barsSVG(overviewS4Items);
   renderRadars();renderCoverage();renderS4();renderDetail();renderRanking();
 }
 // 指標欄位是「回應1 (職責與自我組織)」這種「代號 + 括號說明」格式，表格裡只

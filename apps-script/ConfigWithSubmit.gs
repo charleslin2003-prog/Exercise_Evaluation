@@ -70,6 +70,7 @@ function doGet(e) {
     exerciseName: info.name,
     exerciseTopic: info.topic,
     exerciseDate: info.date,
+    exerciseDesc: info.desc,
     codes: readCodes_(ss),
     criteria: readCriteria_(ss),
     items: readItems_(ss),
@@ -351,6 +352,7 @@ function buildAnalysis_() {
       exerciseName: exerciseInfo.name,
       exerciseTopic: exerciseInfo.topic,
       exerciseDate: exerciseInfo.date,
+      exerciseDesc: exerciseInfo.desc,
       generatedAt: new Date().toISOString(),
       evaluatorCodes: Object.keys(codeSet).sort(),
     },
@@ -480,14 +482,15 @@ function formatCellValue_(val) {
 }
 function readExerciseInfo_(ss) {
   var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
-  var info = { org: '', name: '', topic: '', date: '' };
+  var info = { org: '', name: '', topic: '', date: '', desc: '' };
   for (var i = 0; i < values.length; i++) {
     var key = values[i][0];
     var val = formatCellValue_(values[i][1]);
     if (key === '機構名稱') info.org = val;
     else if (key === '演習名稱') info.name = val;
-    else if (key === '演習主題') info.topic = val;
+    else if (key === '演習主題' || key === '主題') info.topic = val;
     else if (key === '演習日期') info.date = val;
+    else if (key === '說明') info.desc = val;
   }
   return info;
 }
