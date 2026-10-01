@@ -1,23 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeEditorTabs">
-    <option name="activeSessionId" value="8c5a4220-4d25-47b8-a51a-ae54f373e4ae" />
+    <option name="activeSessionId" value="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" />
     <option name="openSessionIds">
       <list>
         <option value="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" />
-        <option value="8c5a4220-4d25-47b8-a51a-ae54f373e4ae" />
       </list>
     </option>
     <option name="sessionPaths">
       <map>
         <entry key="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" value="/sessions/234924fa-7491-42cb-b47d-b7220bf9ea0b" />
-        <entry key="8c5a4220-4d25-47b8-a51a-ae54f373e4ae" value="/sessions/new" />
       </map>
     </option>
     <option name="sessionTitles">
       <map>
         <entry key="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" value="$USER_HOME$/charles_OneDrive/OneDrive/文件/萬芳醫院急救站" />
-        <entry key="8c5a4220-4d25-47b8-a51a-ae54f373e4ae" value="Claude Code" />
       </map>
     </option>
   </component>
