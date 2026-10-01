@@ -165,7 +165,7 @@ function flattenRows(nodes, path, depth, openGroupKey, out) {
   nodes.forEach((node, idx) => {
     const fullPath = path.concat(idx);
     if (node.questions) {
-      out.push({ kind: 'leaf', label: node.name, depth, path: fullPath });
+      out.push({ kind: 'leaf', label: node.name, goal: node.goal || '', depth, path: fullPath });
     } else if (node.children) {
       const key = fullPath.join('-');
       const isOpen = key === openGroupKey;
@@ -265,12 +265,13 @@ class Component extends DCLogic {
     const openGroupKey = this.state.openGroupKey;
 
     const rawRows = loaded ? flattenRows(rootItems, [], 0, openGroupKey, []) : [];
-    // 葉節點（情境）的「層2」欄位若填成「SCENE 01：情境簡要名稱」這種格式，
-    // 這裡會把場景編號跟簡要名稱拆開：編號放圖示徽章，簡要名稱當作列表文字。
-    // 沒有用「：」分隔的舊格式（純「SCENE 01」或非 SCENE 開頭的名稱，例如
-    // 「總結評核」）就照舊只去掉 SCENE 前綴、用勾選圖示，不受影響。
-    // 場景編號允許「02-03」這種合併場次的連字號格式（不只單一數字）。
-    const sceneRe = /^SCENE\s*([\d-]+)\s*[:：]\s*(.+)$/i;
+    // 葉節點（情境）的圖示徽章永遠從「演練單元」開頭的「SCENE 01」（也接受
+    // 「02-03」這種合併場次的連字號格式）抓數字；列表文字優先用設定表另一欄
+    // 「測試情境與目標」(leaf.goal，readItems_ 讀出來的)，沒有的話才退回舊的
+    // 「SCENE 01：說明」冒號格式，兩者都沒有就顯示去掉 SCENE 前綴後的原文字
+    // （例如非 SCENE 開頭的「總結評核」維持不變）。
+    const sceneNumRe = /^SCENE\s*([\d-]+)/i;
+    const sceneColonRe = /^SCENE\s*[\d-]+\s*[:：]\s*(.+)$/i;
     const baseRowStyle = 'display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; box-sizing: border-box; color: #161512; text-align: left;';
     const rows = rawRows.map((r) => {
       const isGroup = r.kind === 'group';
@@ -278,12 +279,13 @@ class Component extends DCLogic {
       let label = r.label;
       let iconText = '';
       if (!isGroup) {
-        const m = sceneRe.exec(r.label);
-        if (m) {
-          iconText = m[1].length < 2 ? '0' + m[1] : m[1];
-          label = m[2].trim();
+        const numMatch = sceneNumRe.exec(r.label);
+        if (numMatch) iconText = numMatch[1].length < 2 ? '0' + numMatch[1] : numMatch[1];
+        if (r.goal) {
+          label = r.goal;
         } else {
-          label = r.label.replace(/^SCENE\s*/i, '');
+          const colonMatch = sceneColonRe.exec(r.label);
+          label = colonMatch ? colonMatch[1].trim() : r.label.replace(/^SCENE\s*/i, '');
         }
       }
       return {

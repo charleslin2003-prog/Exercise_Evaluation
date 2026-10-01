@@ -9,15 +9,36 @@ var CONFIG_SPREADSHEET_ID = '1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk';
 // 紀錄表是另一個試算表，把這裡改成該檔案的 ID。
 var RECORD_SPREADSHEET_ID = '1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM';
 var RECORD_SHEET_NAME = '評核紀錄';
-var RECORD_HEADERS = ['演習名稱', '項目名稱', '問題ID', '指標代號', '分數', '人員代號', '送出時間'];
+// 評核紀錄 的欄位分成「必要」跟「選填」兩類。必要欄（問題ID/分數/人員代號/
+// 送出時間）一定要存在，缺了就丟錯；選填欄視實際表格有沒有那一欄決定要不要
+// 寫，沒有就跳過，不會報錯——這是因為業主已經把表格從舊版（演習名稱/項目
+// 名稱/問題ID/指標代號/分數/人員代號/送出時間）換成新版（情境階段/演練單元/
+// 評核題號/分數/人員代號/送出時間），拿掉了演習名稱/指標代號、把項目名稱拆
+// 成情境階段+演練單元兩欄。兩種表格都要能動，用別名 + 選填解決，不要求哪
+// 一種格式。
+var RECORD_ID_ALIASES_ = ['問題ID', '評核題號'];
+var RECORD_SCORE_ALIASES_ = ['分數'];
+var RECORD_CODE_ALIASES_ = ['人員代號'];
+var RECORD_TIME_ALIASES_ = ['送出時間'];
+var RECORD_EXERCISE_ALIASES_ = ['演習名稱'];
+var RECORD_ITEM_ALIASES_ = ['項目名稱'];
+var RECORD_STAGE_ALIASES_ = ['情境階段'];
+var RECORD_SCENE_ALIASES_ = ['演練單元'];
+var RECORD_INDICATOR_ALIASES_ = ['指標代號'];
 
 // 問題ID -> 指標代號 對照表，跟「演習評核_設定」放在同一個試算表（是設定
 // 資料的一部分，不是送出後才產生的紀錄，所以歸在 CONFIG_SPREADSHEET_ID 底
 // 下，不是 RECORD_SPREADSHEET_ID）。多了「評核潛能」「4S 元素」兩欄供分析
 // 頁彙總用（讀取用 readIndicatorFull_，寫入 評核紀錄 用的 readIndicatorMap_
-// 仍只取前三欄，不受影響）。
+// 仍只取前三種欄位，不受影響）。每欄都接受多種欄名別名（見
+// INDICATOR_*_ALIASES_，跟 readItems_ 的 findHeaderCol_ 共用同一套「開頭比
+// 對」邏輯），因為業主的試算表常直接沿用原始 Excel 欄名而不是這裡的精簡欄名。
 var INDICATOR_SHEET_NAME = '對應指標';
-var INDICATOR_HEADERS = ['問題ID', '問題', '問題所屬指標', '評核潛能', '4S 元素'];
+var INDICATOR_ID_ALIASES_ = ['問題ID', '評核題號'];
+var INDICATOR_TEXT_ALIASES_ = ['問題', '具體評核題目'];
+var INDICATOR_TAG_ALIASES_ = ['問題所屬指標', '單一指標對應'];
+var INDICATOR_POTENTIAL_ALIASES_ = ['評核潛能'];
+var INDICATOR_S4_ALIASES_ = ['4S 元素', '單一 4S 元素'];
 
 // 分析頁（Analysis.html）用的存取金鑰：Analysis.html 是一個不公開連結、
 // 不會被 Start.dc.html 引用到的獨立頁面，但因為 CONFIG_URL/RECORD_URL 兩個
@@ -89,7 +110,8 @@ function appendSubmission_(body) {
   if (validCodes.indexOf(String(body.fillerCode || '')) === -1) {
     throw new Error('未知的人員代號：' + body.fillerCode);
   }
-  var item = findLeafByName_(readItems_(configSs), body.itemName);
+  var items = readItems_(configSs);
+  var item = findLeafByName_(items, body.itemName);
   if (!item) throw new Error('未知的項目名稱：' + body.itemName);
   var validQuestionIds = item.questions.map(function (q) { return q.id; });
   answers.forEach(function (a) {
@@ -110,14 +132,28 @@ function appendSubmission_(body) {
   var sheet = recordSs.getSheetByName(RECORD_SHEET_NAME);
   if (!sheet) throw new Error('找不到工作表：' + RECORD_SHEET_NAME);
   var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var col = {};
-  for (var i = 0; i < RECORD_HEADERS.length; i++) {
-    var at = header.indexOf(RECORD_HEADERS[i]);
-    if (at === -1) throw new Error('紀錄表缺少欄位：' + RECORD_HEADERS[i]);
-    col[RECORD_HEADERS[i]] = at;
+
+  // 必要欄：缺了就直接報錯。選填欄：找不到就是 -1，寫入時直接跳過那一欄，
+  // 不報錯——業主的表格現在是「情境階段/演練單元」版本（拿掉了演習名稱/
+  // 項目名稱/指標代號），但舊版「演習名稱/項目名稱/指標代號」格式也要能繼續
+  // 動，所以這幾欄當選填處理。
+  var idCol = findHeaderCol_(header, RECORD_ID_ALIASES_);
+  var scoreCol = findHeaderCol_(header, RECORD_SCORE_ALIASES_);
+  var codeCol = findHeaderCol_(header, RECORD_CODE_ALIASES_);
+  var timeCol = findHeaderCol_(header, RECORD_TIME_ALIASES_);
+  if (idCol === -1 || scoreCol === -1 || codeCol === -1 || timeCol === -1) {
+    throw new Error('紀錄表缺少欄位：' + RECORD_ID_ALIASES_.join('/') + ' / ' +
+      RECORD_SCORE_ALIASES_.join('/') + ' / ' + RECORD_CODE_ALIASES_.join('/') + ' / ' + RECORD_TIME_ALIASES_.join('/'));
   }
-  var exerciseName = readExerciseInfo_(configSs).name;
-  var indicatorByQuestionId = readIndicatorMap_(configSs);
+  var exerciseCol = findHeaderCol_(header, RECORD_EXERCISE_ALIASES_);
+  var itemCol = findHeaderCol_(header, RECORD_ITEM_ALIASES_);
+  var stageCol = findHeaderCol_(header, RECORD_STAGE_ALIASES_);
+  var sceneCol = findHeaderCol_(header, RECORD_SCENE_ALIASES_);
+  var indicatorCol = findHeaderCol_(header, RECORD_INDICATOR_ALIASES_);
+
+  var exerciseName = exerciseCol !== -1 ? readExerciseInfo_(configSs).name : '';
+  var indicatorByQuestionId = indicatorCol !== -1 ? readIndicatorMap_(configSs) : null;
+  var stageIndex = (stageCol !== -1 || sceneCol !== -1) ? indexQuestionsByStage_(items) : null;
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -129,13 +165,15 @@ function appendSubmission_(body) {
       var row = [];
       for (var j = 0; j < header.length; j++) row.push('');
       var questionId = String(a.id || '');
-      row[col['演習名稱']] = sanitizeCell_(exerciseName);
-      row[col['項目名稱']] = sanitizeCell_(body.itemName);
-      row[col['問題ID']] = sanitizeCell_(questionId);
-      row[col['指標代號']] = sanitizeCell_(indicatorByQuestionId[questionId] || '');
-      row[col['分數']] = Number(a.score);
-      row[col['人員代號']] = sanitizeCell_(body.fillerCode);
-      row[col['送出時間']] = now;
+      if (exerciseCol !== -1) row[exerciseCol] = sanitizeCell_(exerciseName);
+      if (itemCol !== -1) row[itemCol] = sanitizeCell_(body.itemName);
+      if (stageCol !== -1) row[stageCol] = sanitizeCell_((stageIndex[questionId] || {}).stage || '');
+      if (sceneCol !== -1) row[sceneCol] = sanitizeCell_((stageIndex[questionId] || {}).itemName || body.itemName);
+      row[idCol] = sanitizeCell_(questionId);
+      if (indicatorCol !== -1) row[indicatorCol] = sanitizeCell_(indicatorByQuestionId[questionId] || '');
+      row[scoreCol] = Number(a.score);
+      row[codeCol] = sanitizeCell_(body.fillerCode);
+      row[timeCol] = now;
       return row;
     });
 
@@ -145,9 +183,9 @@ function appendSubmission_(body) {
     // 讀出來就變成一整串日期字串（不是原本的問題ID）。寫入前把這幾個文字欄
     // 的儲存格格式強制設成「純文字」('@')，之後就不會再被誤判——這一步要在
     // setValues 之前做，格式要先套用到目標儲存格上。
-    var textCols = ['演習名稱', '項目名稱', '問題ID', '指標代號', '人員代號'];
-    textCols.forEach(function (h) {
-      sheet.getRange(startRow, col[h] + 1, rows.length, 1).setNumberFormat('@');
+    var textColIndexes = [idCol, codeCol, exerciseCol, itemCol, stageCol, sceneCol, indicatorCol].filter(function (c) { return c !== -1; });
+    textColIndexes.forEach(function (c) {
+      sheet.getRange(startRow, c + 1, rows.length, 1).setNumberFormat('@');
     });
     sheet.getRange(startRow, 1, rows.length, header.length).setValues(rows);
     SpreadsheetApp.flush();
@@ -163,10 +201,10 @@ function readIndicatorMap_(ss) {
   if (!sheet) throw new Error('找不到工作表：' + INDICATOR_SHEET_NAME);
   var values = sheet.getDataRange().getValues();
   var header = values[0];
-  var idCol = header.indexOf(INDICATOR_HEADERS[0]);
-  var indicatorCol = header.indexOf(INDICATOR_HEADERS[2]);
+  var idCol = findHeaderCol_(header, INDICATOR_ID_ALIASES_);
+  var indicatorCol = findHeaderCol_(header, INDICATOR_TAG_ALIASES_);
   if (idCol === -1 || indicatorCol === -1) {
-    throw new Error(INDICATOR_SHEET_NAME + ' 缺少欄位：' + INDICATOR_HEADERS[0] + ' 或 ' + INDICATOR_HEADERS[2]);
+    throw new Error(INDICATOR_SHEET_NAME + ' 缺少欄位：' + INDICATOR_ID_ALIASES_.join('/') + ' 或 ' + INDICATOR_TAG_ALIASES_.join('/'));
   }
   var map = {};
   for (var i = 1; i < values.length; i++) {
@@ -183,13 +221,16 @@ function readIndicatorFull_(ss) {
   if (!sheet) throw new Error('找不到工作表：' + INDICATOR_SHEET_NAME);
   var values = sheet.getDataRange().getValues();
   var header = values[0];
-  var idCol = header.indexOf(INDICATOR_HEADERS[0]);
-  var textCol = header.indexOf(INDICATOR_HEADERS[1]);
-  var indicatorCol = header.indexOf(INDICATOR_HEADERS[2]);
-  var potentialCol = header.indexOf(INDICATOR_HEADERS[3]);
-  var s4Col = header.indexOf(INDICATOR_HEADERS[4]);
+  var idCol = findHeaderCol_(header, INDICATOR_ID_ALIASES_);
+  var textCol = findHeaderCol_(header, INDICATOR_TEXT_ALIASES_);
+  var indicatorCol = findHeaderCol_(header, INDICATOR_TAG_ALIASES_);
+  var potentialCol = findHeaderCol_(header, INDICATOR_POTENTIAL_ALIASES_);
+  var s4Col = findHeaderCol_(header, INDICATOR_S4_ALIASES_);
   if ([idCol, textCol, indicatorCol, potentialCol, s4Col].indexOf(-1) !== -1) {
-    throw new Error(INDICATOR_SHEET_NAME + ' 缺少欄位：' + INDICATOR_HEADERS.join(' / '));
+    throw new Error(INDICATOR_SHEET_NAME + ' 缺少欄位：' +
+      INDICATOR_ID_ALIASES_.join('/') + ' / ' + INDICATOR_TEXT_ALIASES_.join('/') + ' / ' +
+      INDICATOR_TAG_ALIASES_.join('/') + ' / ' + INDICATOR_POTENTIAL_ALIASES_.join('/') + ' / ' +
+      INDICATOR_S4_ALIASES_.join('/'));
   }
   var map = {};
   for (var i = 1; i < values.length; i++) {
@@ -219,17 +260,25 @@ function buildAnalysis_() {
   if (!sheet) throw new Error('找不到工作表：' + RECORD_SHEET_NAME);
   var values = sheet.getDataRange().getValues();
   var header = values[0];
-  var col = {};
-  RECORD_HEADERS.forEach(function (h) { col[h] = header.indexOf(h); });
+  var idCol = findHeaderCol_(header, RECORD_ID_ALIASES_);
+  var codeCol = findHeaderCol_(header, RECORD_CODE_ALIASES_);
+  var scoreCol = findHeaderCol_(header, RECORD_SCORE_ALIASES_);
+  if (idCol === -1 || codeCol === -1 || scoreCol === -1) {
+    throw new Error(RECORD_SHEET_NAME + ' 缺少欄位：' + RECORD_ID_ALIASES_.join('/') + ' / ' +
+      RECORD_CODE_ALIASES_.join('/') + ' / ' + RECORD_SCORE_ALIASES_.join('/'));
+  }
+  // 項目名稱/演練單元其中一個存在就拿來當 fallback（優先用 stageIndex 現查
+  // 的結果，這欄只在該題已經從 項目與問題 移除時墊底用）。
+  var itemFallbackCol = findHeaderCol_(header, RECORD_ITEM_ALIASES_.concat(RECORD_SCENE_ALIASES_));
 
   var byQuestion = {};
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    var id = String(row[col['問題ID']] || '');
-    var code = String(row[col['人員代號']] || '');
-    var score = Number(row[col['分數']]);
+    var id = String(row[idCol] || '');
+    var code = String(row[codeCol] || '');
+    var score = Number(row[scoreCol]);
     if (!id || !code || isNaN(score)) continue;
-    if (!byQuestion[id]) byQuestion[id] = { itemName: String(row[col['項目名稱']] || ''), byCode: {} };
+    if (!byQuestion[id]) byQuestion[id] = { itemName: itemFallbackCol !== -1 ? String(row[itemFallbackCol] || '') : '', byCode: {} };
     byQuestion[id].byCode[code] = score;
   }
 
@@ -406,12 +455,21 @@ function indexChildren_(nodes, stageName, out) {
 // 演習資訊 是 key/value 列，A 欄放標籤、B 欄放值，沒有固定標頭列，逐列掃描
 // A 欄比對標籤文字。機構名稱/演習主題/演習日期都是選填的，沒填就回空字串，
 // 前端據此決定要不要顯示（標題/徽章）。
+// 儲存格如果被 Sheets 判讀成日期型別（例如「演習日期」欄填了看起來像日期的
+// 值），values[i][1] 拿到的會是真正的 Date 物件，直接 String() 會變成
+// 「Sat Oct 03 2026 15:00:00 GMT+0800 (台北標準時間)」這種不是給人看的格式；
+// 統一格式化成 yyyy/MM/dd。純文字欄位（機構名稱/演習名稱/演習主題）不會是
+// Date，這個判斷對它們無影響。
+function formatCellValue_(val) {
+  if (val instanceof Date) return Utilities.formatDate(val, 'Asia/Taipei', 'yyyy/MM/dd');
+  return String(val == null ? '' : val);
+}
 function readExerciseInfo_(ss) {
   var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
   var info = { org: '', name: '', topic: '', date: '' };
   for (var i = 0; i < values.length; i++) {
     var key = values[i][0];
-    var val = String(values[i][1] || '');
+    var val = formatCellValue_(values[i][1]);
     if (key === '機構名稱') info.org = val;
     else if (key === '演習名稱') info.name = val;
     else if (key === '演習主題') info.topic = val;
@@ -462,10 +520,26 @@ function readCriteria_(ss) {
 var GROUP_HEADER_ALIASES_ = [['情境階段'], ['演練單元']];
 var ID_HEADER_ALIASES_ = ['問題ID', '評核題號'];
 var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'];
+// 選填欄：每個葉節點（最底層分組，例如 SCENE）的簡要說明，取自這一欄的第一
+// 筆值，掛在葉節點的 goal 上，給 Start.dc.html 選擇畫面當作該情境的列表文字
+// 用（配合數字徽章顯示）。沒有這欄就是空字串，前端會退回原本只顯示編號。
+var GOAL_HEADER_ALIASES_ = ['測試情境與目標', '測試情境'];
+// 找標頭列裡符合任一別名的欄位：先找「完全相等」，全部欄位都找過一輪都沒
+// 命中，才退而求其次找「開頭比對」。一定要先做完整的完全相等再做開頭比對
+// （不能同一欄位內兩種比對一起做），不然像「問題」這個別名會在完全相等版
+// 找到「問題」欄之前，就先用開頭比對誤中「問題ID」欄（因為「問題ID」也是
+// 「問題」開頭）。開頭比對是為了因應像「單一指標對應\n(RAG / 覆蓋率)」這種
+// 欄名後面接不固定補充文字或換行的情況。
 function findHeaderCol_(header, names) {
-  for (var i = 0; i < names.length; i++) {
-    var at = header.indexOf(names[i]);
-    if (at !== -1) return at;
+  for (var i = 0; i < header.length; i++) {
+    var cell = String(header[i] || '');
+    if (names.indexOf(cell) !== -1) return i;
+  }
+  for (var j = 0; j < header.length; j++) {
+    var cell2 = String(header[j] || '');
+    for (var k = 0; k < names.length; k++) {
+      if (cell2.indexOf(names[k]) === 0) return j;
+    }
   }
   return -1;
 }
@@ -486,6 +560,7 @@ function readItems_(ss) {
   }
   var idCol = findHeaderCol_(header, ID_HEADER_ALIASES_);
   var textCol = findHeaderCol_(header, TEXT_HEADER_ALIASES_);
+  var goalCol = findHeaderCol_(header, GOAL_HEADER_ALIASES_);
 
   var root = { children: [], index: {} };
   for (var i = 1; i < values.length; i++) {
@@ -496,12 +571,13 @@ function readItems_(ss) {
       var key = String(row[groupCols[g]] || '');
       if (!key) break;
       if (!cursor.index[key]) {
-        var node = { name: key, children: [], index: {} };
+        var node = { name: key, children: [], index: {}, goal: '' };
         cursor.index[key] = node;
         cursor.children.push(node);
       }
       cursor = cursor.index[key];
     }
+    if (goalCol !== -1 && !cursor.goal) cursor.goal = String(row[goalCol] || '');
     cursor.questions = cursor.questions || [];
     cursor.questions.push({ id: String(row[idCol] || ''), text: String(row[textCol] || '') });
   }
@@ -510,7 +586,7 @@ function readItems_(ss) {
 
 function stripGroupInternals_(nodes) {
   return nodes.map(function (n) {
-    return n.questions ? { name: n.name, questions: n.questions } : { name: n.name, children: stripGroupInternals_(n.children) };
+    return n.questions ? { name: n.name, questions: n.questions, goal: n.goal || '' } : { name: n.name, children: stripGroupInternals_(n.children) };
   });
 }
 

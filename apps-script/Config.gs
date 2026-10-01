@@ -23,12 +23,21 @@ function doGet(e) {
 // 演習資訊 是 key/value 列，A 欄放標籤、B 欄放值，沒有固定標頭列，逐列掃描
 // A 欄比對標籤文字。機構名稱/演習主題/演習日期都是選填的，沒填就回空字串，
 // 前端據此決定要不要顯示（標題/徽章）。
+// 儲存格如果被 Sheets 判讀成日期型別（例如「演習日期」欄填了看起來像日期的
+// 值），values[i][1] 拿到的會是真正的 Date 物件，直接 String() 會變成
+// 「Sat Oct 03 2026 15:00:00 GMT+0800 (台北標準時間)」這種不是給人看的格式；
+// 統一格式化成 yyyy/MM/dd。純文字欄位（機構名稱/演習名稱/演習主題）不會是
+// Date，這個判斷對它們無影響。
+function formatCellValue_(val) {
+  if (val instanceof Date) return Utilities.formatDate(val, 'Asia/Taipei', 'yyyy/MM/dd');
+  return String(val == null ? '' : val);
+}
 function readExerciseInfo_(ss) {
   var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
   var info = { org: '', name: '', topic: '', date: '' };
   for (var i = 0; i < values.length; i++) {
     var key = values[i][0];
-    var val = String(values[i][1] || '');
+    var val = formatCellValue_(values[i][1]);
     if (key === '機構名稱') info.org = val;
     else if (key === '演習名稱') info.name = val;
     else if (key === '演習主題') info.topic = val;
@@ -79,10 +88,24 @@ function readCriteria_(ss) {
 var GROUP_HEADER_ALIASES_ = [['情境階段'], ['演練單元']];
 var ID_HEADER_ALIASES_ = ['問題ID', '評核題號'];
 var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'];
+// 選填欄：每個葉節點（最底層分組，例如 SCENE）的簡要說明，取自這一欄的第一
+// 筆值，掛在葉節點的 goal 上，給 Start.dc.html 選擇畫面當作該情境的列表文字
+// 用（配合數字徽章顯示）。沒有這欄就是空字串，前端會退回原本只顯示編號。
+var GOAL_HEADER_ALIASES_ = ['測試情境與目標', '測試情境'];
+// 找標頭列裡符合任一別名的欄位：先找「完全相等」，全部欄位都找過一輪都沒
+// 命中，才退而求其次找「開頭比對」（因應欄名後面接不固定補充文字或換行的
+// 情況）。一定要先做完整的完全相等再做開頭比對，不然像「問題」這個別名會
+// 在找到「問題」欄之前，就先用開頭比對誤中「問題ID」欄。
 function findHeaderCol_(header, names) {
-  for (var i = 0; i < names.length; i++) {
-    var at = header.indexOf(names[i]);
-    if (at !== -1) return at;
+  for (var i = 0; i < header.length; i++) {
+    var cell = String(header[i] || '');
+    if (names.indexOf(cell) !== -1) return i;
+  }
+  for (var j = 0; j < header.length; j++) {
+    var cell2 = String(header[j] || '');
+    for (var k = 0; k < names.length; k++) {
+      if (cell2.indexOf(names[k]) === 0) return j;
+    }
   }
   return -1;
 }
@@ -103,6 +126,7 @@ function readItems_(ss) {
   }
   var idCol = findHeaderCol_(header, ID_HEADER_ALIASES_);
   var textCol = findHeaderCol_(header, TEXT_HEADER_ALIASES_);
+  var goalCol = findHeaderCol_(header, GOAL_HEADER_ALIASES_);
 
   var root = { children: [], index: {} };
   for (var i = 1; i < values.length; i++) {
@@ -113,12 +137,13 @@ function readItems_(ss) {
       var key = String(row[groupCols[g]] || '');
       if (!key) break;
       if (!cursor.index[key]) {
-        var node = { name: key, children: [], index: {} };
+        var node = { name: key, children: [], index: {}, goal: '' };
         cursor.index[key] = node;
         cursor.children.push(node);
       }
       cursor = cursor.index[key];
     }
+    if (goalCol !== -1 && !cursor.goal) cursor.goal = String(row[goalCol] || '');
     cursor.questions = cursor.questions || [];
     cursor.questions.push({ id: String(row[idCol] || ''), text: String(row[textCol] || '') });
   }
@@ -127,6 +152,6 @@ function readItems_(ss) {
 
 function stripGroupInternals_(nodes) {
   return nodes.map(function (n) {
-    return n.questions ? { name: n.name, questions: n.questions } : { name: n.name, children: stripGroupInternals_(n.children) };
+    return n.questions ? { name: n.name, questions: n.questions, goal: n.goal || '' } : { name: n.name, children: stripGroupInternals_(n.children) };
   });
 }
