@@ -215,7 +215,7 @@ function init(){
   evSel.innerHTML = '<option value="mean">全部平均</option>' + DATA.meta.evaluatorCodes.map(c=>`<option value="${esc(c)}">評核官 ${esc(c)}</option>`).join('');
 
   const totalEvaluated=DATA.analysisRows.length+DATA.coverageRows.length+(DATA.learningRows||[]).length;
-  document.getElementById('kpis').innerHTML=[['主題',esc(DATA.meta.exerciseTopic||'—'),'',''],['說明',esc(DATA.meta.exerciseDesc||'—'),'','font-size:14.5px'],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分',''],['總評數',totalEvaluated,'所有已送出評分','']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val" style="${x[3]}">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
+  document.getElementById('kpis').innerHTML=[['主題',esc(DATA.meta.exerciseTopic||'—'),'',''],['說明',esc(DATA.meta.exerciseDesc||'—'),'','font-size:14.5px'],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分',''],['評核總數',totalEvaluated,'所有已送出評分','']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val" style="${x[3]}">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
 
   renderIso3D();
   renderCoverageGauge();
