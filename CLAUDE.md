@@ -46,12 +46,18 @@ Google Apps Script backend on load and posts scored answers back to it on submit
   Edit this when changing what data is loaded, how submissions are recorded, or how
   the analysis aggregation works. See "Backend / data architecture" below.
 - `Analysis.html` — standalone (non-DC) dashboard page for reviewing aggregated
-  results after evaluators submit: KPI overview, per-potential/4S radar and bar
-  charts, a per-question detail table (scoped to all evaluators or one), CSV export,
-  and a methodology tab. Fetches `RECORD_URL?action=analysis&key=ANALYSIS_KEY` on
-  load. Deliberately not linked from `Start.dc.html` or anywhere else — the only
+  results after evaluators submit. Fetches `RECORD_URL?action=analysis&key=ANALYSIS_KEY`
+  on load. Deliberately not linked from `Start.dc.html` or anywhere else — the only
   access control is that its URL (this file's hosted path) isn't shared with
   evaluators, plus the `ANALYSIS_KEY` query param (see "Analysis endpoint" below).
+  Tabs (`.tab`/`.panel`, plain show/hide, no routing): 綜合評比 (overview),
+  三項潛能雷達圖, 演習覆蓋率, 4S 分析, 排序視圖, 評核官明細, 統計方法. See
+  "Analysis.html UI structure" below for what each tab renders and from which
+  `DATA` fields.
+- `assets/imdl-logo.jpg` — logo shown in `Analysis.html`'s header (replaces the
+  original "EMERGENCY EXERCISE EVALUATION DASHBOARD" eyebrow text). Not part of the
+  evaluation-system design itself, just branding; swap the file (keep the same path)
+  to change it.
 
 ## Running / viewing
 
@@ -132,10 +138,10 @@ breaks `RECORD_URL` in `Start.dc.html` until updated to match.
 
 | Sheet | Columns (header row) | Read as |
 |---|---|---|
-| `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `演習名稱`/`演習主題`/`演習日期` rows and reads column B of each | `exerciseName`, `exerciseTopic`, `exerciseDate: string` (topic/date are optional; empty string if the row isn't present) |
+| `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `機構名稱`/`演習名稱`/`演習主題` (or `主題`)/`演習日期`/`說明` rows and reads column B of each | `orgName`, `exerciseName`, `exerciseTopic`, `exerciseDate`, `exerciseDesc: string` (all optional; empty string if the row isn't present). `exerciseTopic` accepts either `演習主題` or the shorter `主題` as the label — both land in the same field. `exerciseDesc` (`說明`) backs `Analysis.html`'s "說明" KPI card. |
 | `人員代號` | `代號` | `codes: { value, label }[]` (dropdown options, `value === label`) |
 | `評分標準` | `分數`, `標籤`, `說明` | `criteria: { score: number, label: string, desc: string }[]`, one row per score (1–5) |
-| `項目與問題` | `層1`, `層2`, … (any number, in order) **or** `項目名稱` as a fallback single grouping column; plus `問題ID`, `問題內容` | `items`: a tree, nesting depth = however many `層N` columns exist |
+| `項目與問題` | `層1`, `層2`, … (any number, in order; `層1`/`層2` also accept the named aliases `情境階段`/`演練單元`) **or** `項目名稱` as a fallback single grouping column; plus `問題ID` (or `評核題號`), `問題內容` (or `評核題目`/`具體評核題目`), and an optional `測試情境與目標`/`測試情境` column | `items`: a tree, nesting depth = however many `層N` columns exist. Each leaf node also carries `goal` — the first non-blank value of the 測試情境 column under that leaf (empty string if the column doesn't exist). `goal` drives `Start.dc.html`'s picker list text and is also surfaced per-question in the analysis payload (see `buildAnalysis_` below) as the preferred label over the raw stage name. |
 | `對應指標` (`INDICATOR_SHEET_NAME`) | `問題ID`, `問題`, `問題所屬指標`, `評核潛能`, `4S 元素` | Read-only lookup, not part of `doGet`'s JSON payload — read separately by `readIndicatorMap_`/`readIndicatorFull_` (see "Analysis endpoint" below). Lives here because it's config data (defines potential/4S/indicator per question), not a record of a submission — despite `ConfigWithSubmit.gs`'s indicator-reading code being physically closer to the submission-handling code in the file |
 
 `readItems_` (identical in `Config.gs` and `ConfigWithSubmit.gs`) scans the header row for
@@ -149,17 +155,17 @@ last non-blank grouping value landed on. A node with rows appended under it come
 back as `{ name, children: [...] }`. For a 1-column sheet this produces the exact same flat
 `{ name, questions }[]` shape as before — the tree format is a superset, not a breaking change.
 
-`doGet` merges all four into one JSON payload: `{ exerciseName, codes, criteria, items }`.
+`doGet` merges all four into one JSON payload: `{ orgName, exerciseName, exerciseTopic, exerciseDate, exerciseDesc, codes, criteria, items }`.
 
 ### Record spreadsheet (`RECORD_SPREADSHEET_ID`) — read/written by `doPost`
 
 This spreadsheet holds **only** the write target — no config/lookup sheets live here.
 
-| Sheet | Columns (header row, `RECORD_HEADERS`) | Role |
+| Sheet | Columns (header row) | Role |
 |---|---|---|
-| `評核紀錄` (`RECORD_SHEET_NAME`) | `演習名稱`, `項目名稱`, `問題ID`, `指標代號`, `分數`, `人員代號`, `送出時間` | Write target — `appendSubmission_` appends one row per answered question per submission (columns matched by header text via `indexOf`, not fixed position, so header order can change freely) |
+| `評核紀錄` (`RECORD_SHEET_NAME`) | Required: `問題ID` (or `評核題號`), `分數`, `人員代號`, `送出時間`. Optional: `演習名稱`, `項目名稱`, `情境階段`, `演練單元`, `指標代號` | Write target — `appendSubmission_` appends one row per answered question per submission, matching columns by header text via `findHeaderCol_` (alias-then-prefix matching, not fixed position). Missing optional columns are silently skipped on write, not errors — this is how the sheet can be the old 7-column `演習名稱`/`項目名稱`/`指標代號` shape or the newer `情境階段`/`演練單元` shape (no `演習名稱`/`項目名稱`/`指標代號`) without code changes. `情境階段`/`演練單元` are filled per-question from `indexQuestionsByStage_(items)`, not from the client's submitted `itemName` directly. |
 
-`readIndicatorMap_` (writing path) only uses the first three `INDICATOR_HEADERS` columns to
+`readIndicatorMap_` (writing path) only uses the first three `INDICATOR_*_ALIASES_` columns to
 fill `指標代號` when writing to `評核紀錄`; `readIndicatorFull_` (analysis path) also reads
 `評核潛能` (`回應`/`監測`/`預期`/`學習`/one containing `覆蓋率`) and `4S 元素` (free-text
 label, grouped dynamically — not hardcoded to specific strings). Both read from
@@ -178,20 +184,25 @@ any evaluator's phone can read them from page source — a plain `?action=analys
 query param on the same `/exec` URL would **not** be hidden from evaluators. Access
 control instead relies on an `ANALYSIS_KEY` constant defined in
 `ConfigWithSubmit.gs`, which `doGet` requires as a `key` query param before returning
-analysis data; `Analysis.html` is the only place that embeds this key. Both copies of
-`ANALYSIS_KEY` must be replaced with the same private random string before relying on
-this for real — the checked-in placeholder (`REPLACE_WITH_RANDOM_SECRET`) is not a
-secret. Keep `Analysis.html`'s key in sync with `ConfigWithSubmit.gs` any time either
-changes, the same way `RECORD_URL` must be kept in sync after a redeploy.
+analysis data; `Analysis.html` is the only place that embeds this key. Both copies
+are already set to the same generated random string (not the original
+`REPLACE_WITH_RANDOM_SECRET` placeholder) — if you ever rotate it, both copies must
+be updated together and `ConfigWithSubmit.gs` redeployed, the same way `RECORD_URL`
+must be kept in sync after a redeploy.
 
 `buildAnalysis_` reads every row currently in `評核紀錄`, keeping the *last* row per
 `(問題ID, 人員代號)` pair (a re-submission for the same question by the same code
 overwrites the earlier one), joins each `問題ID` against `對應指標` (`readIndicatorFull_`)
 for potential/4S/indicator/question text, and against `項目與問題` (via
-`readItems_`/`indexQuestionsByStage_`) for the top-level stage name and leaf item
-name. Rows are split into `analysisRows` (potential `回應`/`監測`/`預期`) and
-`coverageRows` (potential containing `覆蓋率`); `學習` rows are dropped entirely, per
-the same exclusion the client's earlier mockup dashboard used. `stats` includes
+`readItems_`/`indexQuestionsByStage_`) for the top-level stage name, leaf item name,
+and `goal` (測試情境). Every row in the returned payload (`analysisRows`,
+`coverageRows`, `learningRows` alike) carries `{ questionId, stage, itemName, goal,
+potential, s4, indicator, question, scores, mean, sd }`. Rows are split into
+`analysisRows` (potential `回應`/`監測`/`預期`) and `coverageRows` (potential
+containing `覆蓋率`); `學習` rows are **not** dropped — they come back as a third,
+separate `learningRows` array, excluded from `stats` (so they don't pollute the
+three-potential/4S aggregates) but still available for `Analysis.html`'s 排序視圖
+tab, which is the one place that shows them. `stats` includes
 per-potential and per-4S-label summaries (n/mean/sd/min/max), plus `icc2k`
 (Shrout–Fleiss ICC(2,k), computed only over the evaluator-code intersection common to
 every `analysisRows` row — returns `null` if fewer than 2 common raters or fewer than
@@ -201,15 +212,75 @@ doesn't require a rectangular matrix like `icc2k` does). Both are computed over
 `analysisRows` **and** `coverageRows` combined (`consistencyRows` — everything except
 the dropped `學習` rows), matching the scope the client's reference mockup used —
 verified against that mockup's known output numbers (`icc2k=0.6858`, `within1=0.9846`
-on its 26-row simulated dataset) while building this.
+on its 26-row simulated dataset) while building this. `stats.potentialByS4` is a
+potential × 4S-label cross-tab (`summarize_` output per cell, `n:0`/`mean:null` for
+empty combinations) feeding `Analysis.html`'s isometric 3D bar chart on the overview
+tab — everything else in `stats` is one-dimensional.
 
 If `項目與問題` or `對應指標` structure changes (e.g. more `層N` levels, renamed
 columns), `indexQuestionsByStage_`/`readIndicatorFull_` need matching updates — same
 "don't hand-parse by position" rule as the rest of this file.
 
-If sheet/column names change on the spreadsheet side, update the matching constants at
-the top of `ConfigWithSubmit.gs` (`RECORD_SHEET_NAME`, `RECORD_HEADERS`,
-`INDICATOR_SHEET_NAME`, `INDICATOR_HEADERS`, etc.) — don't hand-parse by position. Keep
-the POST payload shape (`submissionId`, `fillerCode`, `itemName`, `answers: [{ id, score }]`)
-in sync between `Start.dc.html`'s `submitScores()` and `ConfigWithSubmit.gs`'s
-`appendSubmission_` if either side changes.
+If sheet/column names change on the spreadsheet side, update the matching alias
+constants at the top of `ConfigWithSubmit.gs` (`RECORD_SHEET_NAME`,
+`RECORD_*_ALIASES_`, `INDICATOR_SHEET_NAME`, `INDICATOR_*_ALIASES_`, `GOAL_HEADER_ALIASES_`,
+etc.) — don't hand-parse by position. Keep the POST payload shape (`submissionId`,
+`fillerCode`, `itemName`, `answers: [{ id, score }]`) in sync between `Start.dc.html`'s
+`submitScores()` and `ConfigWithSubmit.gs`'s `appendSubmission_` if either side changes.
+
+## Analysis.html UI structure
+
+All rendering is plain DOM string-building off one in-memory `DATA` object (the
+`action=analysis` JSON payload) assigned once on load — no framework, no React (unlike
+`Start.dc.html`/`support.js`). Each tab has a `render*()` function called from `init()`
+and re-run as needed; there's no reactive binding, so any UI update after `DATA`
+changes (there currently isn't one — the page loads once) would need its `render*()`
+re-invoked manually.
+
+- **綜合評比 (overview, `#overview`)** — `kpis` grid: 主題/說明 (from
+  `DATA.meta.exerciseTopic`/`exerciseDesc`, falling back to `—`), 評核官人數,
+  評核總數 (`analysisRows + coverageRows + learningRows` counts combined). Below
+  that, one card holds three aligned sections in a `1fr 140px 1fr` title row +
+  content row: 綜合能力柱狀圖 (the isometric 3D potential × 4S bar chart,
+  `svgIso3D`/`renderIso3D`), 演習覆蓋率 (gauge, `svgCoverageGauge`), and 4S整備
+  表現直方圖 (`barsSVG` — the simple, non-stacked 4S average; not the same chart
+  as the 4S 分析 tab's stacked one). A separate 重點項目 card lists 優勢前三/
+  劣勢前三 (top/bottom-3 across all potentials + coverage combined, ranked by
+  mean, each row showing stage/goal + potential/s4 + score) and 評核一致性
+  (ICC(2,k) + within-1 text).
+- **三項潛能雷達圖 (`#radars`)** — one `svgRadar` per potential (回應/監測/預期),
+  axes sorted clockwise from lowest to highest score (sorting happens inside
+  `svgRadar()` itself, so every caller gets it for free). Each radar card is
+  followed by a separate card (not nested inside the same `.chartbox`, so the
+  chart's own height stays fixed regardless of table length) holding a
+  `radarTable()` — indicator/question/score, sorted ascending, built from the
+  same per-row data as the chart.
+- **演習覆蓋率 (`#coverage`)** — coverage radar (`svgRadar`) plus a
+  `radarTable()` in place of what used to be a plain bar list.
+  覆蓋率指標摘要 card shows that table.
+- **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category,
+  stacked by 演練單元/SCENE short code (the `SCENE ` prefix stripped off
+  `itemName`), segments ordered by natural code sort (`A1 < A2 < B < ... < F`).
+  Segment colors come from an HSL spectrum (`hue = 0..300°` across the sorted
+  code list, not a discrete palette) so adjacent codes read as adjacent hues.
+  Bar **length** is the real 4S average (`DATA.stats.s4[s4].mean` — the same
+  number shown in 4S 統計摘要), so it's always ~1–5; it is *not* a sum of the
+  per-scenario means. Each segment's **width**, however, is that scenario's
+  share of the sum of all per-scenario means for that S4 (`scenario mean / sum
+  of means`), scaled against the bar's total — i.e. width shows relative
+  contribution, not an absolute score. Segment label text is `code pct%` (e.g.
+  `D2 37%`), not the scenario's actual mean — to read a scenario's real score,
+  use the `情境編號對照表` below the chart or the radar-tab legend tables. Bars
+  are sorted by their total (the 4S average) descending, largest first. The
+  `情境編號對照表` card (`#s4ScenarioTable`) maps each short code to its full
+  `goal`/測試情境 text (or the raw `itemName` if `goal` is empty), with a color
+  swatch per row matching the chart segment color. 4S 統計摘要 (simple
+  per-label mean/SD bars) is unchanged from before this chart existed.
+- **排序視圖 (`#ranking`)** — 依潛能分類 and 表現優劣排序 tables; the only tab
+  that includes `learningRows` (labelled accordingly), everything else excludes
+  學習 entirely.
+- **評核官明細 (`#detail`)** — per-question detail table with scope/evaluator
+  filters and CSV export; the controls row also shows an `ICC(2,k) = …` badge
+  (`#iccBadge`, right-aligned via `margin-left:auto` since `.controls` is flex).
+- **統計方法 (`#method`)** — static prose, not data-driven; update by hand if the
+  stats computation in `buildAnalysis_` changes.

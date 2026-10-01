@@ -20,6 +20,22 @@ components and styling system rather than copy wholesale.
 Serve the folder (e.g. `python3 -m http.server`) and open `Start.dc.html`;
 some browsers block the scripts over file://.
 
+## 設定試算表填寫說明（演習資訊）
+
+「演習評核_設定」試算表的「演習資訊」工作表是 key/value 列（A 欄標籤、B 欄
+值），沒有固定標頭列，逐列掃描比對：
+
+| A 欄（標籤） | 讀到哪個欄位 | 用途 |
+|---|---|---|
+| 機構名稱 | `orgName` | `Analysis.html` 頁首大標題（「萬芳醫院｜演習評核分析平台」的機構名部分） |
+| 演習名稱 | `exerciseName` | 內部識別用，沒有主題時當標題備用 |
+| 演習主題 或 主題 | `exerciseTopic` | 兩種標籤文字都讀得到，填哪個都可以；`Analysis.html` 頁首徽章與「主題」KPI 卡 |
+| 演習日期 | `exerciseDate` | 頁首徽章；儲存格是日期型別也會自動格式化成 `yyyy/MM/dd`，不會變成一長串英文日期字串 |
+| 說明 | `exerciseDesc` | `Analysis.html`「說明」KPI 卡 |
+
+這五列都是選填，沒填就是空字串，前端會顯示 `—` 或整個不顯示該區塊（視欄位而
+定）。改這張表不用重新部署 Apps Script，跟下面「項目與問題」一樣即時生效。
+
 ## 設定試算表填寫說明（項目與問題）
 
 畫面上「選擇評核項目」要出現什麼、分幾層選，全部由 `演習評核_設定` 試算表裡
@@ -66,6 +82,22 @@ some browsers block the scripts over file://.
   否則會被視為同一個項目、問題會合併在一起。
 - 改這張表不需要重新部署 Apps Script，`doGet` 每次都會重新讀取試算表最新內
   容；但如果連 `.gs` 程式檔本身也改了，才需要照 `CLAUDE.md` 裡的步驟重新部署。
+
+### 選填欄：測試情境
+
+不管單層還多層，都可以多加一欄 `測試情境與目標`（或簡稱 `測試情境`），每個最
+底層分組（SCENE）填一次簡短描述即可（同一個 SCENE 底下其他列留空也沒關係，
+程式只取第一筆非空值）：
+
+| 層1 | 層2 | 測試情境 | 問題ID | 問題內容 |
+|---|---|---|---|---|
+| 急救站防護與初期建立 | SCENE A1 | 急救站整體介紹與韌性醫療定位 | 1-1 | 問題內容一 |
+| 急救站防護與初期建立 | SCENE A1 |  | 1-2 | 問題內容二 |
+
+這欄沒填也完全沒問題（不會報錯，程式會自動退回用 SCENE 名稱）。填了的話：
+`Start.dc.html` 選擇畫面的項目列表文字會優先顯示這段說明而不是單純的編號；
+`Analysis.html`「4S 分析」頁的「情境編號對照表」也會用這欄內容對照每個 SCENE
+短代號（例如「A1」）代表的完整測試情境。
 
 ## 設定試算表填寫說明（對應指標，給分析頁 `Analysis.html` 用）
 
