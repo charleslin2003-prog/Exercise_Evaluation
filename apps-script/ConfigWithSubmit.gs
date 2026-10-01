@@ -284,7 +284,7 @@ function buildAnalysis_() {
 
   var rows = Object.keys(byQuestion).map(function (id) {
     var meta = indicatorFull[id] || { question: '', indicator: '', potential: '', s4: '' };
-    var stageInfo = stageIndex[id] || { stage: '', itemName: byQuestion[id].itemName };
+    var stageInfo = stageIndex[id] || { stage: '', itemName: byQuestion[id].itemName, goal: '' };
     var codes = Object.keys(byQuestion[id].byCode).sort();
     var scores = codes.map(function (c) { return { code: c, score: byQuestion[id].byCode[c] }; });
     var vals = scores.map(function (s) { return s.score; });
@@ -292,6 +292,7 @@ function buildAnalysis_() {
       questionId: id,
       stage: stageInfo.stage,
       itemName: stageInfo.itemName || byQuestion[id].itemName,
+      goal: stageInfo.goal || '',
       potential: meta.potential,
       s4: meta.s4,
       indicator: meta.indicator,
@@ -440,13 +441,14 @@ function within1_(rows) {
   return total ? agree / total : null;
 }
 
-// 問題ID -> {stage, itemName}：stage 取第一層分組名稱，itemName 取該問題
-// 所屬葉節點（最底層）的名稱，跟 評核紀錄 的「項目名稱」欄一致。
+// 問題ID -> {stage, itemName, goal}：stage 取第一層分組名稱，itemName 取該
+// 問題所屬葉節點（最底層）的名稱，跟 評核紀錄 的「項目名稱」欄一致；goal 是
+// 該葉節點（SCENE）的「測試情境與目標」簡述，readItems_ 已經掛在葉節點上。
 function indexQuestionsByStage_(nodes) {
   var out = {};
   nodes.forEach(function (root) {
     if (root.questions) {
-      root.questions.forEach(function (q) { out[q.id] = { stage: root.name, itemName: root.name }; });
+      root.questions.forEach(function (q) { out[q.id] = { stage: root.name, itemName: root.name, goal: root.goal || '' }; });
     } else if (root.children) {
       indexChildren_(root.children, root.name, out);
     }
@@ -457,7 +459,7 @@ function indexQuestionsByStage_(nodes) {
 function indexChildren_(nodes, stageName, out) {
   nodes.forEach(function (n) {
     if (n.questions) {
-      n.questions.forEach(function (q) { out[q.id] = { stage: stageName, itemName: n.name }; });
+      n.questions.forEach(function (q) { out[q.id] = { stage: stageName, itemName: n.name, goal: n.goal || '' }; });
     } else if (n.children) {
       indexChildren_(n.children, stageName, out);
     }

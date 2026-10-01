@@ -223,9 +223,9 @@ function init(){
   if (DATA.analysisRows.length) {
     const S=DATA.stats;
     let core=[...DATA.analysisRows,...DATA.coverageRows].sort((a,b)=>a.mean-b.mean);let weak=core.slice(0,3), strong=[...core].sort((a,b)=>b.mean-a.mean).slice(0,3);
-    const fmtRow=x=>`${esc(x.stage)}・${esc(x.potential)}/${esc(x.s4)}，${x.mean.toFixed(1)}`;
+    const fmtRow=x=>`${esc(x.goal||x.stage)}・${esc(x.potential)}/${esc(x.s4)}，${x.mean.toFixed(1)}`;
     const listify=arr=>arr.length?`<ol style="margin:6px 0 0 18px;padding:0">${arr.map(x=>`<li>${fmtRow(x)}</li>`).join('')}</ol>`:'尚無資料';
-    document.getElementById('insights').innerHTML=`<div class="insight"><b>優勢前三指標</b>${listify(strong)}</div><div class="insight"><b>劣勢前三指標</b>${listify(weak)}</div><div class="insight"><b>評核一致性</b>ICC(2,k)=${S.icc2k==null?'資料不足':S.icc2k.toFixed(2)}；評核官任兩人相差不超過 1 分的比例為 ${S.within1==null?'—':(S.within1*100).toFixed(1)+'%'}。</div>`;
+    document.getElementById('insights').innerHTML=`<div class="insight"><b>優勢前三</b>${listify(strong)}</div><div class="insight"><b>劣勢前三</b>${listify(weak)}</div><div class="insight"><b>評核一致性</b>ICC(2,k)=${S.icc2k==null?'資料不足':S.icc2k.toFixed(2)}；評核官任兩人相差不超過 1 分的比例為 ${S.within1==null?'—':(S.within1*100).toFixed(1)+'%'}。</div>`;
   } else {
     document.getElementById('insights').innerHTML = '<div class="insight">尚無已送出的評分資料。</div>';
   }
