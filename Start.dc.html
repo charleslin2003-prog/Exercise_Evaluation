@@ -265,13 +265,13 @@ class Component extends DCLogic {
     const openGroupKey = this.state.openGroupKey;
 
     const rawRows = loaded ? flattenRows(rootItems, [], 0, openGroupKey, []) : [];
-    // 葉節點（情境）的圖示徽章永遠從「演練單元」開頭的「SCENE 01」（也接受
-    // 「02-03」這種合併場次的連字號格式）抓數字；列表文字優先用設定表另一欄
-    // 「測試情境與目標」(leaf.goal，readItems_ 讀出來的)，沒有的話才退回舊的
-    // 「SCENE 01：說明」冒號格式，兩者都沒有就顯示去掉 SCENE 前綴後的原文字
+    // 葉節點（情境）的圖示徽章永遠從「演練單元」開頭的「SCENE A1」（也接受純數字
+    // 「SCENE 01」、「02-03」合併場次的連字號格式）抓情境編號；列表文字優先用設定表
+    // 另一欄「測試情境與目標」(leaf.goal，readItems_ 讀出來的)，沒有的話才退回舊的
+    // 「SCENE A1：說明」冒號格式，兩者都沒有就顯示去掉 SCENE 前綴後的原文字
     // （例如非 SCENE 開頭的「總結評核」維持不變）。
-    const sceneNumRe = /^SCENE\s*([\d-]+)/i;
-    const sceneColonRe = /^SCENE\s*[\d-]+\s*[:：]\s*(.+)$/i;
+    const sceneNumRe = /^SCENE\s*([A-Z]?[\d-]+|[A-Z])\b/i;
+    const sceneColonRe = /^SCENE\s*[A-Z0-9-]+\s*[:：]\s*(.+)$/i;
     const baseRowStyle = 'display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; box-sizing: border-box; color: #161512; text-align: left;';
     const rows = rawRows.map((r) => {
       const isGroup = r.kind === 'group';
@@ -280,7 +280,7 @@ class Component extends DCLogic {
       let iconText = '';
       if (!isGroup) {
         const numMatch = sceneNumRe.exec(r.label);
-        if (numMatch) iconText = numMatch[1].length < 2 ? '0' + numMatch[1] : numMatch[1];
+        if (numMatch) iconText = numMatch[1].toUpperCase();
         if (r.goal) {
           label = r.goal;
         } else {

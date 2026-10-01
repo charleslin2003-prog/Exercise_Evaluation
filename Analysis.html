@@ -19,12 +19,11 @@
   </div>
   <div class="title" id="orgTitle">讀取中…</div>
   <div class="pills" id="infoPills"></div>
-  <div class="notice">⚠ 本頁資料為評核官實際送出之評分，網址未對外公開，請勿轉傳給非授權人員。</div>
 </div></header>
 <div class="wrap">
 <div id="stateArea"></div>
 <div id="app" style="display:none">
-<div class="tabs"><button class="tab active" data-tab="overview">綜合評比</button><button class="tab" data-tab="s4">4S 分析</button><button class="tab" data-tab="radars">三項潛能雷達圖</button><button class="tab" data-tab="coverage">演習覆蓋率</button><button class="tab" data-tab="ranking">排序視圖</button><button class="tab" data-tab="detail">評核官明細</button><button class="tab" data-tab="method">統計方法</button></div>
+<div class="tabs"><button class="tab active" data-tab="overview">綜合評比</button><button class="tab" data-tab="s4">4S 分析</button><button class="tab" data-tab="radars">三項潛能雷達圖</button><button class="tab" data-tab="coverage">演習覆蓋率</button><button class="tab" data-tab="method">統計方法</button></div>
 <section id="overview" class="panel active"><div class="grid kpis" id="kpis"></div><div class="card" style="margin-top:16px"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec" style="text-align:center">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec" style="text-align:center">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div></section>
 <section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S 平均分數直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（1–5）；橫條內依情境編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該情境占所有情境平均分的比重，段內文字為編號與該情境平均分。情境編號對照表見右方。4S 分析僅納入回應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div><div class="card"><div class="sec">情境編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
 <section id="radars" class="panel"><div class="grid cols3" id="radarGrid"></div></section>
