@@ -263,18 +263,18 @@ re-invoked manually.
   `itemName`), segments ordered by natural code sort (`A1 < A2 < B < ... < F`).
   Segment colors come from an HSL spectrum (`hue = 0..300°` across the sorted
   code list, not a discrete palette) so adjacent codes read as adjacent hues.
-  Bar **length** is the real 4S average (`DATA.stats.s4[s4].mean` — the same
-  number shown in 4S 統計摘要), so it's always ~1–5; it is *not* a sum of the
-  per-scenario means. Each segment's **width**, however, is that scenario's
-  share of the sum of all per-scenario means for that S4 (`scenario mean / sum
-  of means`), scaled against the bar's total — i.e. width shows relative
-  contribution, while the segment label text (`code raw-mean`, e.g. `D2 3.7`)
-  shows the scenario's actual (unscaled) average score. Bars
-  are sorted by their total (the 4S average) descending, largest first. The
-  `情境編號對照表` card (`#s4ScenarioTable`) maps each short code to its full
+  Bar **length** is the real 4S average (`DATA.stats.s4[s4].mean`), so it's
+  always ~1–5; it is *not* a sum of the per-scenario means. Each segment's
+  **width**, however, is that scenario's share of the sum of all per-scenario
+  means for that S4 (`scenario mean / sum of means`), scaled against the bar's
+  total — i.e. width shows relative contribution, while the segment label text
+  (`code raw-mean`, e.g. `D2 3.7`) shows the scenario's actual (unscaled)
+  average score. Bars are sorted by their total (the 4S average) descending,
+  largest first. The chart's sibling card (same `.cols2` row, where a
+  "4S 統計摘要" per-label mean/SD list used to live) is now
+  `情境編號對照表` (`#s4ScenarioTable`), mapping each short code to its full
   `goal`/測試情境 text (or the raw `itemName` if `goal` is empty), with a color
-  swatch per row matching the chart segment color. 4S 統計摘要 (simple
-  per-label mean/SD bars) is unchanged from before this chart existed.
+  swatch per row matching the chart segment color.
 - **排序視圖 (`#ranking`)** — 依潛能分類 and 表現優劣排序 tables; the only tab
   that includes `learningRows` (labelled accordingly), everything else excludes
   學習 entirely.
