@@ -75,16 +75,17 @@ function shade(hex, percent) {
 // 列裡分數最低的那一格額外標紅框 + ▼，提示該潛能在哪個 4S 面向最弱——不是
 // 用固定及格線判斷（同樣是 3.x 分，不同列會有不同格被標記，因為標的是
 // 「這一列裡最低」，不是「低於某個絕對值」。
-function svgIso3D(byPS, s4Keys) {
-  if (!s4Keys.length) return '<div class="small">尚無資料</div>';
-  const potentials = ['回應', '監測', '預期'];
+function svgIso3D(byPS, allS4Keys) {
+  if (!allS4Keys.length) return '<div class="small">尚無資料</div>';
+  // 只保留「至少有一根長條」的潛能／4S，完全沒資料的整列/整欄直接從格子裡
+  // 拿掉，不要硬留著畫成一片空地——資料稀疏時這樣格子會縮小、貼緊實際畫出
+  // 來的長條，邊緣座標軸標籤才不會跟長條、跟彼此疊在一起。
+  const potentials = ['回應', '監測', '預期'].filter((p) => allS4Keys.some((k) => ((byPS[p] && byPS[p][k]) || {}).n > 0));
+  const s4Keys = allS4Keys.filter((k) => potentials.some((p) => ((byPS[p] && byPS[p][k]) || {}).n > 0));
+  if (!potentials.length || !s4Keys.length) return '<div class="small">尚無資料</div>';
   const tileW = 76, tileH = 38, barScale = 24, inset = 0.18;
   const cols = s4Keys.length, rows = potentials.length;
   const proj = (c, r) => ({ x: (c - r) * (tileW / 2), y: -(c + r) * (tileH / 2) });
-  // 短 4S 標籤直接印在每根長條自己正上方（跟長條綁在一起），不是沿著格線
-  // 邊緣另外排一排軸標籤——資料稀疏時（很多格沒資料）邊緣標籤的位置會跟實際
-  // 有畫出來的長條對不上、擠在一起很難讀；每根長條自己標自己最單純可靠。
-  const shortS4 = (s4) => { const m = /\(([^)]+)\)/.exec(s4); return m ? m[1] : s4; };
 
   // 同一個 4S 類別裡（固定 Y，比較 X 軸的三項潛能），分數最低的那個潛能標
   // 最淺色 + 紅框。至少要有 2 個潛能都有資料才有「比較」的意義；只有 1 個
@@ -102,18 +103,33 @@ function svgIso3D(byPS, s4Keys) {
     colMin[s4] = count >= 2 ? best.key : null;
   });
 
-  const groundCorners = [];
-  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) groundCorners.push(proj(c, r));
-  const maxBarH = 5 * barScale;
-  const xs = groundCorners.map((p) => p.x);
-  const ys = groundCorners.map((p) => p.y - maxBarH).concat(groundCorners.map((p) => p.y));
-  const minX = Math.min(...xs) - 40, maxX = Math.max(...xs) + 40;
-  const minY = Math.min(...ys) - 48, maxY = Math.max(...ys) + 20;
+  // 邊緣座標軸標籤用比較大的偏移量，跟格子本體拉開足夠距離，不會跟長條或
+  // 彼此疊在一起。「回應/監測/預期」放左邊（col=-labelOffsetL，往格子左側
+  // 延伸），「Space/Staff/...」放右下角（row=-labelOffsetB，往格子前緣延
+  // 伸，c 越大位置越往右下）——都用實際算出來的錨點收進邊界框，而不是用公
+  // 式估算留白，避免算錯導致文字被裁掉或留白不夠。
+  const labelOffsetL = 0.7, labelOffsetB = 0.65;
+  const potentialLabelPts = potentials.map((p, ri) => ({ p, pt: proj(-labelOffsetL, ri + 0.5) }));
+  const s4LabelPts = s4Keys.map((s4, ci) => ({ s4, pt: proj(ci + 0.5, -labelOffsetB) }));
+
+  const boundsPts = [];
+  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+    const g = proj(c, r);
+    boundsPts.push({ x: g.x, y: g.y - 5 * barScale, pad: 4 }); // 柱頂（含數字/▼留白）
+    boundsPts.push({ x: g.x, y: g.y, pad: 4 }); // 地面
+  }
+  potentialLabelPts.forEach(({ pt }) => boundsPts.push({ x: pt.x, y: pt.y, padX: 70, padY: 10 }));
+  s4LabelPts.forEach(({ pt }) => boundsPts.push({ x: pt.x, y: pt.y, padX: 70, padY: 10 }));
+
+  const minX = Math.min(...boundsPts.map((p) => p.x - (p.padX ?? p.pad ?? 0)));
+  const maxX = Math.max(...boundsPts.map((p) => p.x + (p.padX ?? p.pad ?? 0)));
+  const minY = Math.min(...boundsPts.map((p) => p.y - (p.padY ?? p.pad ?? 0) - 24)); // 柱頂文字（數字+▼）額外留高度
+  const maxY = Math.max(...boundsPts.map((p) => p.y + (p.padY ?? p.pad ?? 0)));
   const W = maxX - minX, H = maxY - minY;
   const ox = -minX, oy = -minY;
   const atGround = (p) => `${(ox + p.x).toFixed(1)},${(oy + p.y).toFixed(1)}`;
 
-  let bars = '';
+  let bars = '', labels = '';
   potentials.forEach((p, ri) => {
     const baseColor = POTENTIAL_COLORS[p] || '#147d83';
     s4Keys.forEach((s4, ci) => {
@@ -133,13 +149,18 @@ function svgIso3D(byPS, s4Keys) {
       bars += `<polygon points="${atGround(A)} ${atGround(B)} ${atTop(B)} ${atTop(A)}" fill="${color}"${stroke}/>`;
       bars += `<polygon points="${atTop(A)} ${atTop(B)} ${atTop(C)} ${atTop(D)}" fill="${topColor}"${stroke}/>`;
       const cx = ox + (A.x + B.x + C.x + D.x) / 4, topY = oy + (A.y + B.y + C.y + D.y) / 4 - h;
-      let ty = topY - 8;
+      const ty = topY - 8;
       if (flagged) { bars += `<text x="${cx.toFixed(1)}" y="${(ty - 13).toFixed(1)}" text-anchor="middle" font-size="12" fill="#c0392b">▼</text>`; }
       bars += `<text x="${cx.toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="800" fill="${flagged ? '#c0392b' : '#18323a'}">${o.mean.toFixed(1)}</text>`;
-      bars += `<text x="${cx.toFixed(1)}" y="${(ty + 13).toFixed(1)}" text-anchor="middle" font-size="9" fill="#7b9198">${esc(shortS4(s4))}</text>`;
     });
   });
-  return `<svg viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" style="width:100%;height:auto;min-height:300px">${bars}</svg>`;
+  potentialLabelPts.forEach(({ p, pt }) => {
+    labels += `<text x="${(ox + pt.x).toFixed(1)}" y="${(oy + pt.y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#48636c">${esc(p)}</text>`;
+  });
+  s4LabelPts.forEach(({ s4, pt }) => {
+    labels += `<text x="${(ox + pt.x).toFixed(1)}" y="${(oy + pt.y + 4).toFixed(1)}" text-anchor="start" font-size="11" fill="#48636c">${esc(s4)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" style="width:100%;height:auto;min-height:300px">${bars}${labels}</svg>`;
 }
 
 function svgCoverageGauge(value) {
