@@ -113,8 +113,8 @@ Two deployed Apps Script `/exec` URLs are hardcoded as `const`s near the top of 
 `Start.dc.html` already):
 
 ```
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec';
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec';
 ```
 
 `Component.loadConfig()` fetches `CONFIG_URL` (`doGet`) on mount and stores the result
@@ -124,9 +124,9 @@ editing `Config.gs`) doesn't affect the other; keep both in sync manually if the
 script backs both.
 
 `apps-script/ConfigWithSubmit.gs` is the other end of that contract. Config (codes,
-criteria, items) is read from spreadsheet ID `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk`
+criteria, items) is read from spreadsheet ID `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ`
 ("演習評核_設定", `CONFIG_SPREADSHEET_ID`). Submissions are written to a *separate*
-spreadsheet, ID `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` ("演習評核_紀錄",
+spreadsheet, ID `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` ("演習評核_紀錄",
 `RECORD_SPREADSHEET_ID`) — these are two different files, not the same one. It has no
 CI/deploy step: after editing it, redeploy manually via the Apps Script editor (Deploy >
 Manage deployments > edit the deployment behind `RECORD_URL` > Version: "New version" >

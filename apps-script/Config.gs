@@ -2,7 +2,7 @@
 // Deploy as a Web App (Extensions > Apps Script > Deploy > New deployment > Web app,
 // execute as "Me", access "Anyone"). Start.dc.html fetches the deployed /exec URL.
 
-var CONFIG_SPREADSHEET_ID = '1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk';
+var CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ';
 
 function doGet(e) {
   var ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
