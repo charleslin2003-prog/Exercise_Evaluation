@@ -139,6 +139,18 @@ button{font-family:inherit;cursor:pointer}
 </div>
 </sc-if>
 
+<sc-if value="{{ showEnd }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; flex-grow: 1; padding: 40px 32px; box-sizing: border-box; text-align: center;">
+  <div style="width: 112px; height: 112px; border-radius: 56px; background: #1f7a4d; color: #ffffff; display: flex; align-items: center; justify-content: center;">
+    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+  </div>
+  <div style="font-size: 28px; font-weight: 900; letter-spacing: 2px;">END</div>
+  <div style="font-size: 20px; font-weight: 900;">全部評核項目已完成</div>
+  <div style="font-size: 16px; line-height: 1.6; color: #3a382f;">已完成 {{ doneCount }} / {{ leafCount }} 個評核項目，感謝您的協助。</div>
+  <button type="button" onClick="{{ reset }}" style="margin-top: 12px; height: 56px; padding: 0 30px; border: 2px solid #d8d2bf; border-radius: 28px; background: #ffffff; color: #161512; font-size: 16px; font-weight: 700;">返回選擇項目</button>
+</div>
+</sc-if>
+
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#161512","options":["#161512","#7a4e0f","#1f7a4d","#2b5fd9"]},"$preview":{"width":390,"height":844}}'>
@@ -161,6 +173,34 @@ function nodeAt(root, path) {
 // 展開中的分組 path 字串（例如 "0"），同時間只會有一個，開新的會自動蓋掉舊的
 // ——這裡假設樹只有一層「分組」深度（今天的 階段->情境 案例），如果之後樹深
 // 到 3 層以上，同一時間只能展開一條路徑上的分組，需要另外設計。
+// 已完成的項目記在 localStorage，key 依「演習 + 評核官代號」分開，所以同一支
+// 手機換代號填寫時各自的進度不會互相蓋掉，重新整理也不會把已完成的標記弄丟
+// （評核官在長時間演習中途被手機自動重載分頁是很常見的）。localStorage 不可
+// 用（無痕模式、配額滿）時一律當成「沒有記錄」處理，只是少了跨重載的記憶，
+// 不影響評分與送出流程。
+const DONE_STORE_PREFIX = 'exerciseEvalDone:';
+function doneStorageKey(config, fillerCode) {
+  const ex = (config && (config.exerciseName || config.exerciseTopic || config.exerciseCategory)) || 'default';
+  return DONE_STORE_PREFIX + ex + ':' + (fillerCode || '');
+}
+function loadDoneItems(key) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (e) { return {}; }
+}
+function saveDoneItems(key, map) {
+  try { window.localStorage.setItem(key, JSON.stringify(map)); } catch (e) { /* 存不進去就算了 */ }
+}
+// 樹裡所有葉節點（真正要評分的項目）的名稱，用來判斷「是不是全部都評完了」。
+function collectLeafNames(nodes, out) {
+  nodes.forEach((n) => {
+    if (n.questions) out.push(n.name);
+    else if (n.children) collectLeafNames(n.children, out);
+  });
+  return out;
+}
 function flattenRows(nodes, path, depth, openGroupKey, out) {
   nodes.forEach((node, idx) => {
     const fullPath = path.concat(idx);
@@ -186,6 +226,7 @@ class Component extends DCLogic {
       openGroupKey: null,
       criteriaOpenIds: {},
       answers: {},
+      doneItems: {},
       config: null,
       loadError: null,
       codeHint: false,
@@ -250,7 +291,10 @@ class Component extends DCLogic {
     this.postWithRetry(payload, 1)
       .then(() => {
         this.submissionId = null;
-        this.setState({ submitting: false, screen: 'done' });
+        const doneItems = Object.assign({}, this.state.doneItems);
+        doneItems[item.name] = true;
+        saveDoneItems(doneStorageKey(this.state.config, this.state.fillerCode), doneItems);
+        this.setState({ submitting: false, screen: 'done', doneItems });
       })
       .catch((err) => this.setState({ submitting: false, submitError: (err && err.message) || String(err) }));
   }
@@ -273,11 +317,15 @@ class Component extends DCLogic {
     const sceneNumRe = /^SCENE\s*([A-Z]?[\d-]+|[A-Z])\b/i;
     const sceneColonRe = /^SCENE\s*[A-Z0-9-]+\s*[:：]\s*(.+)$/i;
     const baseRowStyle = 'display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; box-sizing: border-box; color: #161512; text-align: left;';
+    const doneItems = this.state.doneItems;
     const rows = rawRows.map((r) => {
       const isGroup = r.kind === 'group';
       const indent = r.depth * 18;
       let label = r.label;
       let iconText = '';
+      // r.label 在 flattenRows 裡放的就是節點原名（例如「SCENE A1」），下面才會
+      // 被改寫成要顯示的文字，所以這裡要先用它比對「已完成」記錄。
+      const isDone = !isGroup && !!doneItems[r.label];
       if (!isGroup) {
         const numMatch = sceneNumRe.exec(r.label);
         if (numMatch) iconText = numMatch[1].toUpperCase();
@@ -287,6 +335,9 @@ class Component extends DCLogic {
           const colonMatch = sceneColonRe.exec(r.label);
           label = colonMatch ? colonMatch[1].trim() : r.label.replace(/^SCENE\s*/i, '');
         }
+        // 已送出過的項目仍然可以再點進去改分數（後端同題同代號以最後一次為
+        // 準），所以只是變暗加註記，不擋點擊。
+        if (isDone) label = label + '（已完成）';
       }
       return {
         label,
@@ -301,9 +352,12 @@ class Component extends DCLogic {
           }
         },
         rowStyle: baseRowStyle + ' width: calc(100% - ' + indent + 'px); margin-left: ' + indent + 'px;' +
-          (isGroup ? ' height: 52px; font-weight: 800;' : ' min-height: 52px; padding-top: 10px; padding-bottom: 10px;'),
+          (isGroup ? ' height: 52px; font-weight: 800;' : ' min-height: 52px; padding-top: 10px; padding-bottom: 10px;') +
+          (isDone ? ' background: #efece2; border-color: #ded8c6; color: #8a867c;' : ''),
         chevronStyle: 'width: 18px; height: 18px; flex-shrink: 0; transition: transform .15s ease; transform: rotate(' + (isGroup && r.isOpen ? 90 : 0) + 'deg); display: ' + (isGroup ? 'block' : 'none') + ';',
-        leafIconStyle: 'min-width: 30px; height: 30px; padding: 0 4px; border-radius: 8px; background: #f0e2be; align-items: center; justify-content: center; color: #7a4e0f; flex-shrink: 0; box-sizing: border-box; display: ' + (isGroup ? 'none' : 'flex') + ';',
+        leafIconStyle: 'min-width: 30px; height: 30px; padding: 0 4px; border-radius: 8px; background: ' +
+          (isDone ? '#dcefe3' : '#f0e2be') + '; align-items: center; justify-content: center; color: ' +
+          (isDone ? '#1f7a4d' : '#7a4e0f') + '; flex-shrink: 0; box-sizing: border-box; display: ' + (isGroup ? 'none' : 'flex') + ';',
         checkSvgStyle: 'display: ' + (iconText ? 'none' : 'block') + ';',
         numStyle: 'font-size: 12px; font-weight: 900; display: ' + (iconText ? 'block' : 'none') + ';',
         labelStyle: isGroup
@@ -350,6 +404,12 @@ class Component extends DCLogic {
     const totalCount = itemQuestions.length;
     const ready = totalCount > 0 && answeredCount === totalCount && !!this.state.fillerCode;
     const canSubmit = ready && !this.state.submitting;
+    // 全部項目都送出過才算整場評核完成，這時「送出完成」畫面換成 END 版本。
+    // 判斷依據是「每個葉節點都在 doneItems 裡」，不是「剛好送出的是清單最後
+    // 一項」——評核官跳著填時，先填到最後一項不代表前面都填完了。
+    const leafNames = loaded ? collectLeafNames(rootItems, []) : [];
+    const doneCount = leafNames.filter((n) => doneItems[n]).length;
+    const allDone = leafNames.length > 0 && doneCount === leafNames.length;
     return {
       exerciseName: loaded ? (config.exerciseName || config.exerciseTopic || config.exerciseCategory || config.orgName || '') : '',
       codes,
@@ -359,7 +419,11 @@ class Component extends DCLogic {
       answeredCount,
       totalCount,
       fillerCode: this.state.fillerCode,
-      setCode: (e) => this.setState({ fillerCode: e && e.target ? e.target.value : '', codeHint: false }),
+      // 換代號時連同「已完成」記錄一起換成那個代號自己的進度。
+      setCode: (e) => {
+        const code = e && e.target ? e.target.value : '';
+        this.setState({ fillerCode: code, codeHint: false, doneItems: loadDoneItems(doneStorageKey(config, code)) });
+      },
       showCodeHint: this.state.codeHint && !this.state.fillerCode,
       showLoading: !loaded && !this.state.loadError,
       showLoadError: !!this.state.loadError,
@@ -367,7 +431,10 @@ class Component extends DCLogic {
       retryLoad: () => this.loadConfig(),
       showSelect: loaded && screen === 'select',
       showSurvey: loaded && screen === 'survey',
-      showDone: loaded && screen === 'done',
+      showDone: loaded && screen === 'done' && !allDone,
+      showEnd: loaded && screen === 'done' && allDone,
+      doneCount,
+      leafCount: leafNames.length,
       backToSelect: () => this.setState({ screen: 'select' }),
       submitDisabled: !canSubmit,
       submitLabel: this.state.submitting
