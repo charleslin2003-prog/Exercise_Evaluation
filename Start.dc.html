@@ -351,7 +351,7 @@ class Component extends DCLogic {
     const ready = totalCount > 0 && answeredCount === totalCount && !!this.state.fillerCode;
     const canSubmit = ready && !this.state.submitting;
     return {
-      exerciseName: loaded ? (config.exerciseName || config.exerciseTopic || config.orgName || '') : '',
+      exerciseName: loaded ? (config.exerciseName || config.exerciseTopic || config.exerciseCategory || config.orgName || '') : '',
       codes,
       rows,
       itemName,

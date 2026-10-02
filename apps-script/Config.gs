@@ -11,6 +11,7 @@ function doGet(e) {
     orgName: info.org,
     exerciseName: info.name,
     exerciseTopic: info.topic,
+    exerciseCategory: info.category,
     exerciseDate: info.date,
     exerciseDesc: info.desc,
     codes: readCodes_(ss),
@@ -35,13 +36,14 @@ function formatCellValue_(val) {
 }
 function readExerciseInfo_(ss) {
   var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
-  var info = { org: '', name: '', topic: '', date: '', desc: '' };
+  var info = { org: '', name: '', topic: '', category: '', date: '', desc: '' };
   for (var i = 0; i < values.length; i++) {
     var key = values[i][0];
     var val = formatCellValue_(values[i][1]);
     if (key === '機構名稱') info.org = val;
     else if (key === '演習名稱') info.name = val;
-    else if (key === '演習主題' || key === '主題' || key === '演習類別') info.topic = val;
+    else if (key === '演習主題' || key === '主題') info.topic = val;
+    else if (key === '演習類別') info.category = val;
     else if (key === '演習日期') info.date = val;
     else if (key === '說明') info.desc = val;
   }
