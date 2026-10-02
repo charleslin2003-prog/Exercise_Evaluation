@@ -29,7 +29,7 @@ some browsers block the scripts over file://.
 |---|---|---|
 | 機構名稱 | `orgName` | `Analysis.html` 頁首大標題（「萬芳醫院｜演習評核分析平台」的機構名部分） |
 | 演習名稱 | `exerciseName` | 內部識別用，沒有主題時當標題備用 |
-| 演習主題 或 主題 | `exerciseTopic` | 兩種標籤文字都讀得到，填哪個都可以；`Analysis.html` 頁首徽章與「主題」KPI 卡 |
+| 演習主題、主題、或演習類別 | `exerciseTopic` | 三種標籤文字都讀得到，填哪個都可以；`Analysis.html` 頁首徽章與「演習類別」KPI 卡目前顯示的文字是跟著「演習類別」這個最新用法 |
 | 演習日期 | `exerciseDate` | 頁首徽章；儲存格是日期型別也會自動格式化成 `yyyy/MM/dd`，不會變成一長串英文日期字串 |
 | 說明 | `exerciseDesc` | `Analysis.html`「說明」KPI 卡 |
 

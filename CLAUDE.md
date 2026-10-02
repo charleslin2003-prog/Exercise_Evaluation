@@ -138,7 +138,7 @@ breaks `RECORD_URL` in `Start.dc.html` until updated to match.
 
 | Sheet | Columns (header row) | Read as |
 |---|---|---|
-| `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `機構名稱`/`演習名稱`/`演習主題` (or `主題`)/`演習日期`/`說明` rows and reads column B of each | `orgName`, `exerciseName`, `exerciseTopic`, `exerciseDate`, `exerciseDesc: string` (all optional; empty string if the row isn't present). `exerciseTopic` accepts either `演習主題` or the shorter `主題` as the label — both land in the same field. `exerciseDesc` (`說明`) backs `Analysis.html`'s "說明" KPI card. |
+| `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `機構名稱`/`演習名稱`/`演習主題`(or `主題`/`演習類別`)/`演習日期`/`說明` rows and reads column B of each | `orgName`, `exerciseName`, `exerciseTopic`, `exerciseDate`, `exerciseDesc: string` (all optional; empty string if the row isn't present). `exerciseTopic` accepts `演習主題`, `主題`, or `演習類別` as the label — all three land in the same field (the sheet has been relabeled more than once; `Analysis.html`'s pill/KPI card currently say "演習類別" to match the sheet's latest wording, but the field itself doesn't care which label produced the value). `exerciseDesc` (`說明`) backs `Analysis.html`'s "說明" KPI card. |
 | `人員代號` | `代號` | `codes: { value, label }[]` (dropdown options, `value === label`) |
 | `評分標準` | `分數`, `標籤`, `說明` | `criteria: { score: number, label: string, desc: string }[]`, one row per score (1–5) |
 | `項目與問題` | `層1`, `層2`, … (any number, in order; `層1`/`層2` also accept the named aliases `情境階段`/`演練單元`) **or** `項目名稱` as a fallback single grouping column; plus `問題ID` (or `評核題號`), `問題內容` (or `評核題目`/`具體評核題目`), and an optional `測試情境與目標`/`測試情境` column | `items`: a tree, nesting depth = however many `層N` columns exist. Each leaf node also carries `goal` — the first non-blank value of the 測試情境 column under that leaf (empty string if the column doesn't exist). `goal` drives `Start.dc.html`'s picker list text and is also surfaced per-question in the analysis payload (see `buildAnalysis_` below) as the preferred label over the raw stage name. |
@@ -237,7 +237,7 @@ and re-run as needed; there's no reactive binding, so any UI update after `DATA`
 changes (there currently isn't one — the page loads once) would need its `render*()`
 re-invoked manually.
 
-- **綜合評比 (overview, `#overview`)** — `kpis` grid: 主題/說明 (from
+- **綜合評比 (overview, `#overview`)** — `kpis` grid: 演習類別/說明 (from
   `DATA.meta.exerciseTopic`/`exerciseDesc`, falling back to `—`), 評核官人數,
   評核總數 (`analysisRows + coverageRows + learningRows` counts combined). Below
   that, one card holds three aligned sections in a `1fr 140px 1fr` title row +

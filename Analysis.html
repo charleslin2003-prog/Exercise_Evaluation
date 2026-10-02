@@ -210,11 +210,11 @@ function scoreOf(row, ev){
 
 function init(){
   document.getElementById('orgTitle').textContent = (DATA.meta.orgName || '演習評核') + '｜演習評核分析平台';
-  // 沒有單獨的副標題列了：主題徽章優先顯示「演習主題」，沒填就退回顯示
+  // 沒有單獨的副標題列了：徽章優先顯示「演習類別」，沒填就退回顯示
   // 「演習名稱」頂著用，兩個都沒有就不顯示這個徽章。
   const topicText = DATA.meta.exerciseTopic || DATA.meta.exerciseName || '';
   const pills = [
-    topicText ? `演習主題：${esc(topicText)}` : '',
+    topicText ? `演習類別：${esc(topicText)}` : '',
     DATA.meta.exerciseDate ? `演習日期：${esc(DATA.meta.exerciseDate)}` : '',
   ].filter(Boolean);
   document.getElementById('infoPills').innerHTML = pills.map(p=>`<span class="pill">${p}</span>`).join('');
@@ -223,7 +223,7 @@ function init(){
   evSel.innerHTML = '<option value="mean">全部平均</option>' + DATA.meta.evaluatorCodes.map(c=>`<option value="${esc(c)}">評核官 ${esc(c)}</option>`).join('');
 
   const totalEvaluated=DATA.analysisRows.length+DATA.coverageRows.length+(DATA.learningRows||[]).length;
-  document.getElementById('kpis').innerHTML=[['主題',esc(DATA.meta.exerciseTopic||'—'),'',''],['說明',esc(DATA.meta.exerciseDesc||'—'),'','font-size:14.5px'],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分',''],['評核總數',totalEvaluated,'所有已送出評分','']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val" style="${x[3]}">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
+  document.getElementById('kpis').innerHTML=[['演習類別',esc(DATA.meta.exerciseTopic||'—'),'',''],['說明',esc(DATA.meta.exerciseDesc||'—'),'','font-size:14.5px'],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分',''],['評核總數',totalEvaluated,'所有已送出評分','']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val" style="${x[3]}">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
 
   renderIso3D();
   renderCoverageGauge();

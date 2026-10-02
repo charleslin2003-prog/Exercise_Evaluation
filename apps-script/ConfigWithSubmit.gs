@@ -488,7 +488,7 @@ function readExerciseInfo_(ss) {
     var val = formatCellValue_(values[i][1]);
     if (key === '機構名稱') info.org = val;
     else if (key === '演習名稱') info.name = val;
-    else if (key === '演習主題' || key === '主題') info.topic = val;
+    else if (key === '演習主題' || key === '主題' || key === '演習類別') info.topic = val;
     else if (key === '演習日期') info.date = val;
     else if (key === '說明') info.desc = val;
   }
