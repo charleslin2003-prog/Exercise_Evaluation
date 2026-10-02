@@ -281,9 +281,15 @@ class Component extends DCLogic {
     if (!this.submissionId) {
       this.submissionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
     }
+    // 送出當下就把代號固定下來：送出中仍然可以按返回、回到選擇畫面換代號，而
+    // 一次 POST 最久可能跑到一分鐘（20 秒逾時 x 3 次重試），所以成功回來時
+    // this.state.fillerCode 未必還是送出的那一個。完成記錄一定要歸在「送出當下
+    // 的代號」底下，否則會記到別人的進度裡（別的代號看到沒評過的項目變成已完
+    // 成、甚至被判定全部完成），而真正送出的代號反而沒有記錄。
+    const submittedCode = this.state.fillerCode;
     const payload = {
       submissionId: this.submissionId,
-      fillerCode: this.state.fillerCode,
+      fillerCode: submittedCode,
       itemName: item.name,
       answers: item.questions.map((q) => ({ id: q.id, score: answers[q.id] })),
     };
@@ -291,10 +297,20 @@ class Component extends DCLogic {
     this.postWithRetry(payload, 1)
       .then(() => {
         this.submissionId = null;
-        const doneItems = Object.assign({}, this.state.doneItems);
+        const stillSameCode = this.state.fillerCode === submittedCode;
+        // 代號沒變就接著目前記憶體裡的那份累加（localStorage 不可用時還是能在
+        // 本次操作中累積）；代號已經換掉就改用該代號存在 localStorage 的那份，
+        // 不去碰現在選的代號的進度。
+        const base = stillSameCode ? this.state.doneItems : loadDoneItems(doneStorageKey(this.state.config, submittedCode));
+        const doneItems = Object.assign({}, base);
         doneItems[item.name] = true;
-        saveDoneItems(doneStorageKey(this.state.config, this.state.fillerCode), doneItems);
-        this.setState({ submitting: false, screen: 'done', doneItems });
+        saveDoneItems(doneStorageKey(this.state.config, submittedCode), doneItems);
+        if (stillSameCode) {
+          this.setState({ submitting: false, screen: 'done', doneItems });
+        } else {
+          // 評核官已經離開這張問卷去填別的代號了，不要把畫面搶回完成頁。
+          this.setState({ submitting: false });
+        }
       })
       .catch((err) => this.setState({ submitting: false, submitError: (err && err.message) || String(err) }));
   }
