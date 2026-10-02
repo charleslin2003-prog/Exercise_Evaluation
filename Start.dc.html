@@ -147,7 +147,18 @@ button{font-family:inherit;cursor:pointer}
   <div style="font-size: 28px; font-weight: 900; letter-spacing: 2px;">END</div>
   <div style="font-size: 20px; font-weight: 900;">全部評核項目已完成</div>
   <div style="font-size: 16px; line-height: 1.6; color: #3a382f;">已完成 {{ doneCount }} / {{ leafCount }} 個評核項目，感謝您的協助。</div>
-  <button type="button" onClick="{{ reset }}" style="margin-top: 12px; height: 56px; padding: 0 30px; border: 2px solid #d8d2bf; border-radius: 28px; background: #ffffff; color: #161512; font-size: 16px; font-weight: 700;">返回選擇項目</button>
+  <div style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 280px; margin-top: 12px;">
+    <button type="button" onClick="{{ exitPage }}" style="height: 56px; border: 0; border-radius: 28px; background: #1f7a4d; color: #ffffff; font-size: 16px; font-weight: 900;">離開頁面</button>
+    <button type="button" onClick="{{ reset }}" style="height: 56px; border: 2px solid #d8d2bf; border-radius: 28px; background: #ffffff; color: #161512; font-size: 16px; font-weight: 700;">返回選擇項目</button>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showExit }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; flex-grow: 1; padding: 40px 32px; box-sizing: border-box; text-align: center;">
+  <div style="font-size: 22px; font-weight: 900;">評核結束</div>
+  <div style="font-size: 16px; line-height: 1.6; color: #3a382f;">感謝您的協助，可以直接關閉此頁面。</div>
+  <button type="button" onClick="{{ reset }}" style="margin-top: 8px; height: 48px; padding: 0 24px; border: 2px solid #d8d2bf; border-radius: 24px; background: #ffffff; color: #8a867c; font-size: 14px; font-weight: 700;">返回評核</button>
 </div>
 </sc-if>
 
@@ -449,6 +460,14 @@ class Component extends DCLogic {
       showSurvey: loaded && screen === 'survey',
       showDone: loaded && screen === 'done' && !allDone,
       showEnd: loaded && screen === 'done' && allDone,
+      showExit: loaded && screen === 'exit',
+      // 瀏覽器只允許用腳本關閉「由腳本開啟的」分頁，評核官從 LINE/訊息點進來的
+      // 一般分頁 close() 不會有任何作用也不會丟錯，所以一律再切到結束畫面，
+      // 讓畫面有明確回應、並告知可以自行關閉。
+      exitPage: () => {
+        try { window.close(); } catch (e) { /* 關不掉就走下面的結束畫面 */ }
+        this.setState({ screen: 'exit' });
+      },
       doneCount,
       leafCount: leafNames.length,
       backToSelect: () => this.setState({ screen: 'select' }),
