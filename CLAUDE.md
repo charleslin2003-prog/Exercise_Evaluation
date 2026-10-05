@@ -58,6 +58,15 @@ Google Apps Script backend on load and posts scored answers back to it on submit
   original "EMERGENCY EXERCISE EVALUATION DASHBOARD" eyebrow text). Not part of the
   evaluation-system design itself, just branding; swap the file (keep the same path)
   to change it.
+- `docs/multi-tenant-and-report-plan.md` — **評估文件，尚未實作任何一項**. Design options
+  (with scores and rejected alternatives) for the three questions this system doesn't yet
+  answer: serving more than one hospital, running more than one exercise at the same
+  hospital, and generating an analysis report. Read it before touching tenancy/identity
+  (`CONFIG_URL`/`RECORD_URL`, the two spreadsheet IDs, `doneStorageKey`, `問題ID` dedup)
+  or adding report output. It also records, with `file:line` evidence, several present-day
+  defects and places where *this* file (CLAUDE.md) is stale — notably the picker is an
+  accordion, not a `gridDims` grid, and there is no `criteria` screen. Nothing in it has
+  been built; treat it as a decision input, not a description of the code.
 
 ## Running / viewing
 
