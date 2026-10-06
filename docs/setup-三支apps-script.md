@@ -32,7 +32,7 @@
 | **入口函式** | `doGet`（第 9 行）＝只讀設定 | `doGet`（第 632 行）＋ `doPost`（第 702 行）＝讀設定、寫分數、出分析 | `onOpen`（第 140 行）＝開啟試算表時長出選單 |
 | **產出什麼** | 一個 `/exec` 網址 → 填進 `Start.dc.html` 第 202 行 `CONFIG_URL` | 一個 `/exec` 網址 → 填進 `Start.dc.html` 第 210 行 `RECORD_URL` **和** `Analysis.html` 第 163 行 `RECORD_URL` | 試算表**最上方選單列**多一個「演習評核報告」選單（在「說明」右邊，**不是**在「擴充功能」底下），沒有任何網址 |
 | **誰在用它** | 評核官手機，而且只在連結**沒帶** `?t=`／`?ex=` 時 | 評核官手機（送出分數）＋ 儀表板 `Analysis.html` ＋ 報告產生器 | 只有業主自己，在試算表裡點選單 |
-| **目前沙箱的網址** | `…/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec` | `…/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec` | 無 |
+| **目前沙箱的網址** | `…/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec` | `…/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec` | 無 |
 
 ### 這張表最重要的一句話
 
@@ -213,7 +213,7 @@
 
 #### 驗證（每一條都有確切的預期答案；**下面 1–8 條全部是 2026-10-06〔實測〕過的真答案**）
 
-1. **裸網址**：把 `https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec`
+1. **裸網址**：把 `https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec`
    貼進瀏覽器網址欄（不帶任何 `?`）。
    預期：一片 JSON，開頭是 `orgName`，裡面有 `"tenantSource":"fallback"`、`"tenant":""`、
    `"exercise":""`、`"submitOpen":true`，`codes` 陣列**8 筆**（A01–A07＋TEST-USER）。
@@ -466,7 +466,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 | 屬性名稱 | 必填 | 沙箱該填的值 |
 |---|---|---|
 | `REPORT_ANALYSIS_KEY` | **必填** | `WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub` |
-| `REPORT_API_URL` | **必填** | `https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec` |
+| `REPORT_API_URL` | **必填** | `https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec` |
 | `REPORT_TEMPLATE_DOC_ID` | **必填** | 步驟 6 複製的範本 Doc 檔案 ID（沙箱尚不存在，要自己建） |
 | `REPORT_OUTPUT_FOLDER_ID` | 選填 | **留空**（預設＝設定試算表所在的資料夾） |
 | `REPORT_TENANT` | 選填 | `wanfang-7f3a2c`（或留空＝單一演習模式） |
@@ -581,7 +581,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
    **「資料非空」出現不同的數字就停手**，去檢查 `REPORT_ANALYSIS_KEY`——金鑰指到了別的
    紀錄檔案。
 4. **不用任何工具也能驗同一份資料**〔實測〕：把這串貼進瀏覽器網址欄——
-   `https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec?action=analysis&key=WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub`
+   `https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec?action=analysis&key=WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub`
    ——這就是 `Report.gs` 會發出的那個請求。預期一片 JSON（不是登入頁），含
    `"recordRowCount":101`、`"icc2k":0.5503…`、`analysisRows` 16 筆、`coverageRows` 7 筆。
    看到 Google 登入頁 ＝ 那個部署的存取權不是「任何人」。
