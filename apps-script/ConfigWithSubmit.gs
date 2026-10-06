@@ -92,7 +92,7 @@ var ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
 // 「legacy／第一場」租戶（見 fallbackTenant_）。業主還沒建註冊表，
 // REGISTRY_SPREADSHEET_ID 就先留空字串——空字串的意思是「整個註冊表機制關閉，
 // 一律走 fallback」，連 openById 都不會打一次。
-var REGISTRY_SPREADSHEET_ID = '';
+var REGISTRY_SPREADSHEET_ID = '1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk';
 var REGISTRY_SHEET_NAME = '租戶註冊表';
 var DEFAULT_RECORD_SHEET_NAME = '評核紀錄';
 // 註冊表快取：設定表「改一格、手機重整就生效」是對業主的承諾，所以設定表
