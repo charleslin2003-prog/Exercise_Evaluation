@@ -1,11 +1,106 @@
 # 多醫院 / 多演習 / 分析報告 — 方案評估
 
-> 產出日期：2026-10-05　｜　狀態：**方案評估，尚未實作任何一項**
+> 產出日期：2026-10-05　｜　狀態：**方案 A 與報告方案 A 已實作（2026-10-06）**
+> —— 本文件第 0 章以下維持 10-05 當時的評估原貌（未來式語氣、`檔案:行號` 指的都是
+> **改動前**的程式碼），**實際進度請以下面的「實作進度」一節為準**。
+>
 >
 > 回答三個問題：(1) 不同醫院如何進行？(2) 同一醫院兩種不同演習如何評核？(3) 分析報告如何產生？
 >
 > 方法：4 種多租戶架構各自獨立設計 → 4 個評審視角（業主可操作性／資料隔離／工程風險／分析價值）
 > 交叉評分 → 完整性批判（逐條回查程式碼）。所有 `檔案:行號` 都已對照 commit `6b495f9` 的實際程式碼驗證過。
+
+---
+
+## 實作進度（2026-10-06）
+
+> 這一節是 10-06 補上的。**下面第 0 章起的內容沒有改寫**，仍是 10-05 的評估原貌。
+
+### 已實作（三個檔案都已改好，待部署）
+
+| 來源 | 項目 | 狀態 |
+|---|---|---|
+| §2.1 | `租戶註冊表` 路由：`readRegistry_`／`assertRegistrySane_`（五條檢查規則）／`resolveTenant_`／`normSlug_`／`isSpreadsheetId_`／`fallbackTenant_`／`tenantSheetConfig_`／`tenantSheetRecord_` | ✅ |
+| §2.1 | `doGet` 兩個分支都包 try/catch；`action=analysis` 的金鑰改比對該列的 `分析金鑰` | ✅ |
+| §2.1 | `action=selftest`（管理金鑰保護，只回檔名/分頁名/欄名/數量）、`action=flush`（只清 `reg:v2`）、`action=exercises` | ✅ |
+| §2.1 | `doPost` 冪等快取 key 加租戶前綴（**fallback 模式維持一字不差的 `'sub_'+id`**） | ✅ |
+| §2.1 | 前端 `?t=`／`?ex=`、POST 帶 `tenant`/`exercise`、`doneStorageKey` 修掉 D2、`scenePrefix` 可設定、`Analysis.html` 從自己的網址讀 `?t=&ex=&key=&view=report` | ✅ |
+| §2.1 | **刻意沒做**：刪掉 `CONFIG_SPREADSHEET_ID`/`RECORD_SPREADSHEET_ID`/`RECORD_SHEET_NAME`/`ANALYSIS_KEY` 四個常數（第 92 行），以及刪掉 `Analysis.html` 的兩個常數（第 122 行）。它們現在**就是** fallback 租戶 —— 業主還沒建註冊表，刪掉等於今天就壞 | ⛔ 推翻 |
+| §2.1 | 把 `CONFIG_URL`/`RECORD_URL` 收斂成一個 `API_URL`（第 115 行）：**沒做**。兩個常數都留著，沒帶參數走 `CONFIG_URL`（與今天逐位元相同），帶了參數才改走 `RECORD_URL`（`Config.gs` 沒有註冊表程式碼，會把任何 `?t=` 靜靜當成寫死的那一場） | ⛔ 推翻 |
+| §3.1 / §3.3 | **觀察紀錄**：問卷逐題文字框、POST 的 `answers[].comment`、`評核紀錄` 的 `觀察紀錄` 選填欄、`演習資訊` 的 `啟用觀察紀錄`／`低分需說明門檻` 兩個選填列（低分必填只擋在前端） | ✅ |
+| §3.3 | **標籤快照**（直接補掉 D3）：`評核紀錄` 新增 `測試情境`／`評核潛能`／`4S 元素`／`評核題目` 四個選填欄，送出當時寫死；`buildAnalysis_` 改成「有快照用快照、沒有才 join」，並逐列回報 `labelSource` | ✅ |
+| §3.3 | 「不需新資料、只是沒人算」三項全部補上：`stats.untriggered`（1 分占比）、`stats.missingQuestions`（缺漏清單）、`stats.byEvaluator`（寬嚴傾向） | ✅ |
+| §3.1 | 報告列印版（方案 A）：`body.reportMode` ＋ R0–R11 章節、完整 `@media print`（這個檔案本來**一條列印樣式都沒有**）、匿名模式預設開啟、`#includeRanking` 預設關閉、進報告模式自動把網址列的 `?key=` 清掉 | ✅ |
+| §4.2 | `stats.within1` 第一次被真的渲染出來（在報告摘要 R2）；§4.1 兩個隱藏分頁**維持隱藏**，`#detail` 在報告與列印兩種模式都額外強制 `display:none!important` | ✅ |
+| §6.1 | 裸 `indexOf` → `safeHeaderCol_`（`readCodes_`／`readCriteria_`／`readItems_`）。`readItems_` 探測 `層N` 的那個迴圈仍用裸 `indexOf`（那裡的 -1 是終止條件） | ✅ |
+| §6.2 | 四個 `getSheetByName` → `nullSafeSheet_`；設定分支補 try/catch | ✅ |
+| §6.3 | `Start.dc.html` 的四層 fallback 單行抬頭 → 機構／演習／日期三行身分抬頭（`exerciseName` 本身的四層 fallback 保留不動） | ✅ |
+| §7.2 | 新增的 `演習代號`／`醫院代號` 等文字欄全部加進 `textColIndexes` 的 `'@'` 清單，不會被 Sheets 自動轉成日期 | ✅ |
+| §6.7 | `CLAUDE.md` 本身的六處過期描述（`gridDims` 不存在、選擇畫面是手風琴、沒有 `criteria` 畫面、`showCriteria` 是逐題旗標、`exit` 畫面沒文件、logo 是 `.png`、分頁只有 5 顆按鈕）已全部改正，並補上這次新增的全部內容 | ✅ |
+| 新增 | `README.md` 補上 `評核紀錄` 的八個新選填欄與 `觀察紀錄` 的填寫說明；新增 `docs/owner-guide-多醫院多演習.md`（業主用操作手冊） | ✅ |
+
+### 尚未實作
+
+| 來源 | 項目 | 為什麼還沒做 |
+|---|---|---|
+| §1.1 D4 | 重複葉節點名稱 | 現在就壞，但與這次改造正交；修它會動到 `collectLeafNames`／`findLeafByName_`／`doneItems` 三處語意 |
+| §1.1 D5 | 演習進行中改設定表毀掉飛行中的送出 | 無法用程式修（白名單本來就該比對當下設定）。改用流程擋：`docs/owner-guide-多醫院多演習.md` §11 的粗體鐵則 |
+| §2.1 | 註冊表上那支**容器綁定**腳本（`onOpen` 自訂選單「新增一場演習」→ `makeCopy` → 產金鑰 → 寫入一列 → 打 `selftest`） | 需要在業主的試算表上操作，repo 裡放不了。`action=selftest`／`action=exercises` 已經先上，那支腳本之後可以純前置、不用再動 Web App |
+| §3.1 | 方案 B（試算表選單 → 範本 Google 文件 → PDF）＝ 正式交付物 | 明確定義為下一階段。列印版是「內部檢視版，不是可歸檔的醫院品質記錄」，`#reportHint` 裡有把這句話印出來 |
+| §3.2 | 大綱第二、十二～十五項（參演規模、評核委員名單、與前次比較、改善行動計畫、結論建議） | 全部卡在「系統裡沒有這些資料」，不是報告工具的問題 |
+| §6.4 | 修 D4 | 同上 |
+| §6.5 | 刪掉 `apps-script/Config.gs` | 刻意不做。它現在是「沒帶參數時的設定載入」那條路，留著它等於多一層隔離（`ConfigWithSubmit` 部署搞砸時，不帶參數的評核單仍讀得到題目）。代價是七個共用函式**從這一版開始正式漂移**，`ConfigWithSubmit.gs` 檔頭有註記 |
+| §6.6 | 換掉已經在 git 裡的 `ANALYSIS_KEY` | 這一輪硬性要求不准動它的值（動了今天的分析頁連結就死）。真正的解法是註冊表上線後每列各一把，舊的那把退化成只管 fallback 那一場 |
+
+### 仍需業主／工程師在 Apps Script 與試算表上動手的事
+
+1. **貼上新版 `ConfigWithSubmit.gs` 並重新部署**（編輯現有部署 → 版本選「新版本」）。
+   這一步做完、什麼都不設定的話，系統行為跟今天完全一樣。
+2. **`REGISTRY_SPREADSHEET_ID` 出貨值是空字串**，`ADMIN_KEY` 也是空字串。要用註冊表
+   就建一份試算表、分頁命名「租戶註冊表」、把檔案 ID 填進那一行再重新部署一次；
+   要用 `selftest`/`flush` 就另外填一串亂數進 `ADMIN_KEY`（**不要跟 `ANALYSIS_KEY` 同值**）。
+3. **第一列（遷移列）必須指向跟常數相同的那兩個 ID，`分析金鑰` 必須沿用現有的
+   `ANALYSIS_KEY` 原值**，否則已經發出去的分析頁連結會立刻失效。發布任何新連結前，
+   用 `action=selftest` 把「不帶參數」與「帶 `?t=&ex=`」兩條路都跑一次，確認拿到同一份資料。
+4. **新增的八個 `評核紀錄` 選填欄要自己加標頭**（尤其 `觀察紀錄`）。不加就是今天的行為。
+5. 想要低分必填說明，就在 `演習資訊` 加 `低分需說明門檻` 一列。
+6. 操作程序見 `docs/owner-guide-多醫院多演習.md`；試算表欄位定義見 `README.md`。
+
+### 2026-10-06 沙箱驗證結果
+
+測試環境（個人帳號 charleslin2003@gmail.com）：
+設定 `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk`、
+紀錄 `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM`（101 列真實測試資料）。
+`action=analysis` 回 `analysisRows=16`／`coverageRows=7`／`learningRows=0`、評核官 5 人、
+`icc2k=0.5503`、`within1=0.750`。**這組數字是本次改動的回歸基準線**：改完之後必須一字不差地重現。
+
+實際跑過之後，從這 101 列看到四件事（都是**現有資料／現有邏輯**的行為，不是這次改出來的 bug）：
+
+1. **題號 `10-2` 被靜默丟掉。** 它在 `評核紀錄` 裡有分數，但 `項目與問題` 和 `對應指標`
+   **兩張表都沒有這一題**。`buildAnalysis_` 先 join 不到潛能 → 三個陣列的分流條件
+   （回應/監測/預期 → `analysisRows`，含「覆蓋率」→ `coverageRows`，學習 → `learningRows`）
+   一個都不符合 → 整列從 payload 消失，**沒有任何錯誤訊息**，也不會出現在
+   `stats.missingQuestions`（那張清單是「設定表有、紀錄表沒有」，這一題剛好相反）。
+   這正是 §2.3 批評方案 B 時點名的那個失敗模式，在單租戶下就已經存在。
+2. **題號 `11-6`、`11-7` 的 `階段` 是空的。** 它們在 `對應指標` 裡有潛能、所以有進
+   `analysisRows`，但在 `項目與問題` 裡找不到 → `stageIndex[id]` 不存在 → `stage` 退回
+   空字串、`itemName` 退回紀錄表那一欄。報告的「階段」欄會是空白。
+3. **`SCENE 01`–`SCENE 10` 這組舊名稱被讀取時的 join 改寫成 `SCENE A1`/`SCENE A2`/`SCENE B`…**
+   —— 紀錄表那 101 列寫入當時的 `演練單元` 是舊編號，但 `itemName` 的優先序是
+   「`stageIndex` 現查 → 紀錄欄墊底」，所以畫面上看到的是**設定表現在的名字**，不是當初送出的名字。
+   這就是缺陷 D3 的活體樣本。這一輪刻意**沒有**翻轉 `stage`/`itemName` 的優先序
+   （翻了今天的數字就會變），只對 `goal`/`potential`/`s4`/`indicator`/`question` 五個標籤
+   導入「快照優先」。要讓 `itemName` 也凍結，得等紀錄表補上快照欄、而且是下一個階段的事。
+4. **`TEST-USER` 對 `1-1` 送過兩次，前一次被後一次覆蓋。** 去重鍵是
+   `(問題ID, 人員代號)` 取最後一列，這是設計上的行為（重送 = 更正）。
+   值得記下來是因為：在**共用一份紀錄檔的多場演習**底下，同樣這條規則就會變成 D1
+   （跨場次互相覆蓋）—— 方案 A 給每一場自己的紀錄檔，正是讓這條規則從「勉強可接受」
+   變成「剛好正確」的原因。
+
+> 1 和 2 的共同根因是「`評核紀錄` 和 `項目與問題`／`對應指標` 之間沒有任何完整性檢查」。
+> `action=selftest` 回的 `config.questionCount` 與 `record.rowCount` 可以當成人工對帳的
+> 第一道線索，但**真正的「紀錄表有、設定表沒有」清單目前仍然沒有人算**（`stats.missingQuestions`
+> 只做了反方向）。這是下一個最便宜的補強點。
 
 ---
 

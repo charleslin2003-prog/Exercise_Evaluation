@@ -36,9 +36,17 @@ button{font-family:inherit;cursor:pointer}
 <sc-if value="{{ showSelect }}" hint-placeholder-val="{{ true }}">
 <div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
 
+  <!-- 身分抬頭：機構名稱 / 演習名稱 / 演習日期 三行。以前這裡只有一行（標籤硬寫
+       「演習名稱」、值卻是 演習名稱→主題→類別→機構名稱 的四層 fallback），評核官
+       拿到錯的連結完全看不出來。機構名稱與日期都是選填，沒填就不佔版面。 -->
   <div style="display: flex; flex-direction: column; gap: 4px; padding: 24px 24px 14px; box-sizing: border-box; flex-shrink: 0;">
-    <div style="font-size: 13px; font-weight: 700; color: #8a5a1e; letter-spacing: 1px;">演習名稱</div>
+    <sc-if value="{{ showOrgName }}" hint-placeholder-val="{{ true }}">
+    <div style="font-size: 13px; font-weight: 700; color: #8a5a1e; letter-spacing: 1px;">{{ orgName }}</div>
+    </sc-if>
     <div style="font-size: 22px; font-weight: 900; line-height: 1.3;">{{ exerciseName }}</div>
+    <sc-if value="{{ showExerciseDate }}" hint-placeholder-val="{{ true }}">
+    <div style="font-size: 13px; font-weight: 700; color: #7a4e0f;">演習日期：{{ exerciseDateText }}</div>
+    </sc-if>
   </div>
 
   <div style="display: flex; align-items: center; gap: 10px; padding: 0 24px 10px; box-sizing: border-box; flex-shrink: 0;">
@@ -114,11 +122,29 @@ button{font-family:inherit;cursor:pointer}
             <button type="button" onClick="{{ o.pick }}" style="{{ o.style }}">{{ o.n }}</button>
           </sc-for>
         </div>
+
+        <!-- 逐題觀察紀錄：系統以前完全沒有自由文字欄位，報告只有分數沒有「為什麼」。
+             預設選填；設定表若填了「低分需說明門檻」，低於門檻的題目要寫才能送出
+             （只擋在前端，後端不以文字內容拒絕送出，免得半新半舊的版本吃掉分數）。 -->
+        <sc-if value="{{ q.showCommentBox }}" hint-placeholder-val="{{ true }}">
+        <textarea onChange="{{ q.setComment }}" value="{{ q.commentValue }}" placeholder="{{ q.commentPlaceholder }}" style="{{ q.commentBoxStyle }}"></textarea>
+        </sc-if>
+        <sc-if value="{{ q.showCommentHint }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size: 13px; font-weight: 700; color: #b00020;">{{ q.commentHintText }}</div>
+        </sc-if>
       </div>
     </sc-for>
   </div>
 
   <div style="padding: 12px 24px 28px; box-sizing: border-box; background: #f7f5ee; border-top: 2px solid #e6e0cf; flex-shrink: 0;">
+    <!-- 未開放／已結束：後端設定上就不收這場演習的分數，再按也沒用，所以文案
+         不是「再按一次送出」，而是直接說明原因並把送出鈕鎖住。 -->
+    <sc-if value="{{ showSubmitClosed }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-bottom: 10px; padding: 12px 14px; background: #fdeaea; border: 2px solid #f0bcbc; border-radius: 14px; font-size: 13px; line-height: 1.5; color: #b00020;">目前未開放送出評核，請聯絡演習主辦單位。{{ submitClosedReason }}</div>
+    </sc-if>
+    <sc-if value="{{ showSubmitRefusal }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-bottom: 10px; padding: 12px 14px; background: #fdeaea; border: 2px solid #f0bcbc; border-radius: 14px; font-size: 13px; line-height: 1.5; color: #b00020;">{{ submitRefusal }}（評分未寫入，重試也不會成功，請聯絡演習主辦單位。）</div>
+    </sc-if>
     <sc-if value="{{ showSubmitError }}" hint-placeholder-val="{{ false }}">
     <div style="margin-bottom: 10px; padding: 12px 14px; background: #fdeaea; border: 2px solid #f0bcbc; border-radius: 14px; font-size: 13px; line-height: 1.5; color: #b00020;">送出失敗，評分未寫入。請確認網路後再按一次送出。（{{ submitError }}）</div>
     </sc-if>
@@ -183,6 +209,57 @@ const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRr
 // 刻意不填正式的 /exec：那一個會把分數寫進業主的 11HeRK… 正式紀錄表。
 const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec';
 
+// 多醫院／多演習路由：連結上的 ?t=（醫院代號）與 ?ex=（演習代號）。兩者都是
+// 註冊表裡不可猜的 slug，後端只用它們查註冊表那一列，代號本身永遠不會被當成
+// 試算表 ID 使用。這裡絕對不讀 ?key=，也絕對不從這支檔案送出任何金鑰
+// ——設定分支沒有驗證、每支評核官手機都會抓它。
+const Q_PARAMS = new URLSearchParams(window.location.search);
+const T_PARAM = Q_PARAMS.get('t') || '';
+const EX_PARAM = Q_PARAMS.get('ex') || '';
+const HAS_TENANT_PARAMS = !!(T_PARAM || EX_PARAM);
+// 沒有帶參數時維持今天的行為：原封不動 fetch(CONFIG_URL)，連 '?' 都不加。
+// 帶了參數就得改打 RECORD_URL，因為 CONFIG_URL 指的是另一個 apps-script/Config.gs
+// 專案，它沒有註冊表程式碼，任何 ?t= 都會被它靜靜地當成寫死的那一場。
+function configRequestUrl() {
+  if (!HAS_TENANT_PARAMS) return CONFIG_URL;
+  const qs = [];
+  if (T_PARAM) qs.push('t=' + encodeURIComponent(T_PARAM));
+  if (EX_PARAM) qs.push('ex=' + encodeURIComponent(EX_PARAM));
+  return RECORD_URL + '?' + qs.join('&');
+}
+// 情境前綴（預設 SCENE）是由後端給的，所以要先轉義再組 RegExp，否則醫院自訂
+// 成含 . ( ) 等字元的前綴會變成萬用比對。
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+// 演習日期：設定表那一格若是真正的日期格式，Apps Script 會序列化成
+// 'Sat Oct 03 2026 15:00:00 GMT+0800 (台北標準時間)'（實測測試設定表就是這樣），
+// 原樣印在 390px 寬的抬頭會折成兩三行。只有認得出是這種 Date.toString() 時才轉成
+// YYYY/MM/DD；業主自己打的「2026/10/06」、「10月3日上午」等文字一律原樣顯示。
+function formatExerciseDate(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s || !/GMT|UTC/.test(s)) return s;
+  const t = Date.parse(s);
+  if (isNaN(t)) return s;
+  const d = new Date(t);
+  const mm = d.getMonth() + 1;
+  const dd = d.getDate();
+  return d.getFullYear() + '/' + (mm < 10 ? '0' + mm : mm) + '/' + (dd < 10 ? '0' + dd : dd);
+}
+// 後端用設定（啟用=N、不在送出時間窗、註冊資料有問題…）拒絕的送出，重試再多
+// 次也不會變成成功，所以收到這些 errorCode 就不要再耗掉 3 次重試與兩分鐘，
+// 直接把中文原因攤在畫面上。網路／逾時類錯誤沒有 errorCode，照舊重試。
+const NO_RETRY_ERROR_CODES = {
+  DISABLED: true,
+  OUT_OF_WINDOW: true,
+  NO_TENANT: true,
+  NO_EXERCISE: true,
+  NO_DEFAULT: true,
+  AMBIGUOUS_DEFAULT: true,
+  ROW_INVALID: true,
+  BAD_CODE: true,
+};
+
 // config.items 是一棵樹：分組節點是 { name, children }，葉節點（真正的評核項目）
 // 是 { name, questions }。層數由後端依試算表的「層N」欄位決定，可以是 1 層
 // （葉節點直接出現在根陣列）或多層（例如 階段->情境）。
@@ -206,8 +283,16 @@ function nodeAt(root, path) {
 // 不影響評分與送出流程。
 const DONE_STORE_PREFIX = 'exerciseEvalDone:';
 function doneStorageKey(config, fillerCode) {
-  const ex = (config && (config.exerciseName || config.exerciseTopic || config.exerciseCategory)) || 'default';
-  return DONE_STORE_PREFIX + ex + ':' + (fillerCode || '');
+  // 有帶 ?t=/?ex= 就用「醫院代號/演習代號」當 key：那是註冊表裡固定不變的身分，
+  // 業主在演習中途改一格演習名稱不會再讓全場評核官的「已完成」記錄蒸發，兩場都
+  // 沒填演習名稱也不會共用字面上的 'default'。
+  // 沒帶參數時一定要維持舊 key（連四層 fallback 都照抄）：正在演習中、拿的是舊
+  // 連結的評核官，不能因為這次上線就把已完成標記弄丟。
+  if (!T_PARAM && !EX_PARAM) {
+    const ex = (config && (config.exerciseName || config.exerciseTopic || config.exerciseCategory)) || 'default';
+    return DONE_STORE_PREFIX + ex + ':' + (fillerCode || '');
+  }
+  return DONE_STORE_PREFIX + T_PARAM + '/' + EX_PARAM + ':' + (fillerCode || '');
 }
 function loadDoneItems(key) {
   try {
@@ -252,12 +337,14 @@ class Component extends DCLogic {
       openGroupKey: null,
       criteriaOpenIds: {},
       answers: {},
+      comments: {},
       doneItems: {},
       config: null,
       loadError: null,
       codeHint: false,
       submitting: false,
       submitError: null,
+      submitRefusal: null,
     };
     this.submissionId = null;
   }
@@ -266,12 +353,18 @@ class Component extends DCLogic {
   }
   loadConfig() {
     this.setState({ config: null, loadError: null });
-    fetch(CONFIG_URL)
+    fetch(configRequestUrl())
       .then((res) => {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
-      .then((data) => this.setState({ config: data }))
+      .then((data) => {
+        // Apps Script 不能回 HTTP 狀態碼，錯誤一律是 200 + {error:…}。沒有這一行
+        // 的話，連結打錯（找不到這場演習）只會長出一張沒有代號、沒有項目的空白
+        // 問卷，評核官不知道發生什麼事。
+        if (data && data.error) throw new Error(data.error);
+        this.setState({ config: data });
+      })
       .catch((err) => this.setState({ loadError: (err && err.message) || String(err) }));
   }
   postSubmission(payload) {
@@ -290,13 +383,20 @@ class Component extends DCLogic {
         return res.json();
       })
       .then((data) => {
-        if (!data || !data.ok) throw new Error((data && data.error) || '寫入失敗');
+        if (!data || !data.ok) {
+          const err = new Error((data && data.error) || '寫入失敗');
+          // 把機器可讀的 errorCode 一起帶上，讓重試邏輯分得出「網路不好」和
+          // 「這場演習根本不收分數」。
+          err.code = (data && data.errorCode) || '';
+          throw err;
+        }
         return data;
       })
       .finally(() => { if (timer) clearTimeout(timer); });
   }
   postWithRetry(payload, attempt) {
     return this.postSubmission(payload).catch((err) => {
+      if (err && err.code && NO_RETRY_ERROR_CODES[err.code]) throw err;
       if (attempt >= 3) throw err;
       return new Promise((r) => setTimeout(r, 800 * attempt)).then(() => this.postWithRetry(payload, attempt + 1));
     });
@@ -313,13 +413,23 @@ class Component extends DCLogic {
     // 的代號」底下，否則會記到別人的進度裡（別的代號看到沒評過的項目變成已完
     // 成、甚至被判定全部完成），而真正送出的代號反而沒有記錄。
     const submittedCode = this.state.fillerCode;
+    const comments = this.state.comments;
     const payload = {
       submissionId: this.submissionId,
       fillerCode: submittedCode,
       itemName: item.name,
-      answers: item.questions.map((q) => ({ id: q.id, score: answers[q.id] })),
+      // comment 是選填的觀察紀錄；上限 500 字在前端先切，後端也會再切一次。
+      answers: item.questions.map((q) => ({
+        id: q.id,
+        score: answers[q.id],
+        comment: String(comments[q.id] || '').trim().slice(0, 500),
+      })),
+      // 身分代號：後端 resolveTenant_ 以 body 的 tenant/exercise 優先於 query。
+      // 沒帶參數時兩個都是空字串，後端就走寫死的那一組常數（與今天完全相同）。
+      tenant: T_PARAM,
+      exercise: EX_PARAM,
     };
-    this.setState({ submitting: true, submitError: null });
+    this.setState({ submitting: true, submitError: null, submitRefusal: null });
     this.postWithRetry(payload, 1)
       .then(() => {
         this.submissionId = null;
@@ -338,7 +448,16 @@ class Component extends DCLogic {
           this.setState({ submitting: false });
         }
       })
-      .catch((err) => this.setState({ submitting: false, submitError: (err && err.message) || String(err) }));
+      .catch((err) => {
+        const msg = (err && err.message) || String(err);
+        // 設定層面的拒絕（已結束、不在時間窗、註冊資料有問題…）單獨一條狀態：
+        // 文案要說「不要再按」，而不是叫評核官確認網路後重送。
+        if (err && err.code && NO_RETRY_ERROR_CODES[err.code]) {
+          this.setState({ submitting: false, submitError: null, submitRefusal: msg });
+        } else {
+          this.setState({ submitting: false, submitError: msg, submitRefusal: null });
+        }
+      });
   }
   renderVals() {
     const accent = this.props.accent ?? '#161512';
@@ -356,8 +475,12 @@ class Component extends DCLogic {
     // 另一欄「測試情境與目標」(leaf.goal，readItems_ 讀出來的)，沒有的話才退回舊的
     // 「SCENE A1：說明」冒號格式，兩者都沒有就顯示去掉 SCENE 前綴後的原文字
     // （例如非 SCENE 開頭的「總結評核」維持不變）。
-    const sceneNumRe = /^SCENE\s*([A-Z]?[\d-]+|[A-Z])\b/i;
-    const sceneColonRe = /^SCENE\s*[A-Z0-9-]+\s*[:：]\s*(.+)$/i;
+    // 前綴改由設定（註冊表那一列的 scenePrefix）決定，預設仍是 SCENE，所以沒有
+    // 設定的醫院比對結果與今天完全一樣；不用 SCENE 命名的醫院也能有編號徽章。
+    const scenePrefix = escapeRegExp((loaded && config.scenePrefix) || 'SCENE');
+    const sceneNumRe = new RegExp('^' + scenePrefix + '\\s*([A-Z]?[\\d-]+|[A-Z])\\b', 'i');
+    const sceneColonRe = new RegExp('^' + scenePrefix + '\\s*[A-Z0-9-]+\\s*[:：]\\s*(.+)$', 'i');
+    const sceneStripRe = new RegExp('^' + scenePrefix + '\\s*', 'i');
     const baseRowStyle = 'display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; box-sizing: border-box; color: #161512; text-align: left;';
     const doneItems = this.state.doneItems;
     const rows = rawRows.map((r) => {
@@ -375,7 +498,7 @@ class Component extends DCLogic {
           label = r.goal;
         } else {
           const colonMatch = sceneColonRe.exec(r.label);
-          label = colonMatch ? colonMatch[1].trim() : r.label.replace(/^SCENE\s*/i, '');
+          label = colonMatch ? colonMatch[1].trim() : r.label.replace(sceneStripRe, '');
         }
         // 已送出過的項目仍然可以再點進去改分數（後端同題同代號以最後一次為
         // 準），所以只是變暗加註記，不擋點擊。
@@ -390,7 +513,7 @@ class Component extends DCLogic {
           } else {
             if (!this.state.fillerCode) return this.setState({ codeHint: true });
             this.submissionId = null;
-            this.setState({ path: r.path, screen: 'survey', answers: {}, submitError: null, criteriaOpenIds: {} });
+            this.setState({ path: r.path, screen: 'survey', answers: {}, comments: {}, submitError: null, submitRefusal: null, criteriaOpenIds: {} });
           }
         },
         rowStyle: baseRowStyle + ' width: calc(100% - ' + indent + 'px); margin-left: ' + indent + 'px;' +
@@ -413,8 +536,14 @@ class Component extends DCLogic {
     const itemName = selected ? selected.name : '';
     const itemQuestions = selected ? selected.questions : [];
     const answers = this.state.answers;
+    const comments = this.state.comments;
     const criteriaOpenIds = this.state.criteriaOpenIds;
     const criteriaList = loaded ? config.criteria : [];
+    // 觀察紀錄欄位：設定表沒有「啟用觀察紀錄」那一列時預設開啟（舊版後端不回這
+    // 個欄位，值會是 undefined，所以用 !== false 判斷）。門檻讀不到或不是數字就
+    // 當成 0，也就是「永遠只是選填」。
+    const commentEnabled = !loaded || config.commentEnabled !== false;
+    const commentRequiredBelow = (loaded && Number(config.commentRequiredBelow)) || 0;
     const questions = itemQuestions.map((q) => {
       const current = answers[q.id];
       const options = [1, 2, 3, 4, 5].map((n) => {
@@ -430,10 +559,30 @@ class Component extends DCLogic {
       // 按鈕），這樣捲到清單底下的題目時，點開說明會直接出現在那一題底下，
       // 不用捲回頂端找按鈕。
       const criteriaShown = !!criteriaOpenIds[q.id];
+      const commentValue = comments[q.id] || '';
+      const commentRequired = commentRequiredBelow > 0 && current != null && current <= commentRequiredBelow;
+      const showCommentHint = commentRequired && !commentValue.trim();
       return {
         id: q.id,
         text: q.text,
         options,
+        showCommentBox: commentEnabled,
+        commentValue,
+        setComment: (e) => this.setState({
+          comments: { ...comments, [q.id]: (e && e.target ? e.target.value : '') },
+        }),
+        commentPlaceholder: commentRequiredBelow > 0
+          ? '觀察紀錄（評 ' + commentRequiredBelow + ' 分以下必填）'
+          : '觀察紀錄（選填）',
+        commentRequired,
+        showCommentHint,
+        // 門檻是 0（永遠只是選填）時這行永遠不會顯示，但也不要組出「評 0 分以下」
+        // 這種無意義的字串，免得日後有人把 sc-if 的條件改掉就印出來。
+        commentHintText: commentRequiredBelow > 0
+          ? '評 ' + commentRequiredBelow + ' 分以下請簡要說明觀察到的情況'
+          : '',
+        commentBoxStyle: 'background: #ffffff; border: 2px solid ' + (showCommentHint ? '#f0bcbc' : '#d8d2bf') +
+          '; border-radius: 14px; padding: 12px; font-size: 14px; color: #161512; line-height: 1.5; min-height: 72px; width: 100%; box-sizing: border-box; resize: vertical; font-family: inherit; outline: none;',
         criteria: criteriaList,
         showCriteria: criteriaShown,
         toggleCriteria: () => this.setState({ criteriaOpenIds: { ...criteriaOpenIds, [q.id]: !criteriaShown } }),
@@ -444,16 +593,33 @@ class Component extends DCLogic {
     });
     const answeredCount = itemQuestions.filter((q) => answers[q.id] != null).length;
     const totalCount = itemQuestions.length;
-    const ready = totalCount > 0 && answeredCount === totalCount && !!this.state.fillerCode;
+    // 低分說明只擋在前端：後端不會因為文字內容拒絕送出，所以就算手機拿到的是舊
+    // 版頁面也不可能因此掉分數。
+    const commentMissing = commentEnabled && commentRequiredBelow > 0 && itemQuestions.some((q) => {
+      const score = answers[q.id];
+      return score != null && score <= commentRequiredBelow && !String(comments[q.id] || '').trim();
+    });
+    // 後端說這場不開放送出時就直接鎖住按鈕，不要先收下分數再讓它被丟掉。
+    const submitClosed = loaded && config.submitOpen === false;
+    const ready = totalCount > 0 && answeredCount === totalCount && !!this.state.fillerCode && !commentMissing && !submitClosed;
     const canSubmit = ready && !this.state.submitting;
     // 全部項目都送出過才算整場評核完成，這時「送出完成」畫面換成 END 版本。
     // 判斷依據是「每個葉節點都在 doneItems 裡」，不是「剛好送出的是清單最後
     // 一項」——評核官跳著填時，先填到最後一項不代表前面都填完了。
+    // 抬頭的大字維持原本的四層 fallback（演習名稱→主題→類別→機構名稱）。四個都
+    // 退到機構名稱時，上面那行機構名稱就不要再重複印一次。
+    const exerciseNameText = loaded ? (config.exerciseName || config.exerciseTopic || config.exerciseCategory || config.orgName || '') : '';
+    const orgNameText = (loaded && config.orgName) || '';
+    const exerciseDateText = formatExerciseDate(loaded ? config.exerciseDate : '');
     const leafNames = loaded ? collectLeafNames(rootItems, []) : [];
     const doneCount = leafNames.filter((n) => doneItems[n]).length;
     const allDone = leafNames.length > 0 && doneCount === leafNames.length;
     return {
-      exerciseName: loaded ? (config.exerciseName || config.exerciseTopic || config.exerciseCategory || config.orgName || '') : '',
+      exerciseName: exerciseNameText,
+      orgName: orgNameText,
+      showOrgName: !!orgNameText && orgNameText !== exerciseNameText,
+      exerciseDateText,
+      showExerciseDate: !!exerciseDateText,
       codes,
       rows,
       itemName,
@@ -489,15 +655,23 @@ class Component extends DCLogic {
       submitDisabled: !canSubmit,
       submitLabel: this.state.submitting
         ? '送出中…'
-        : (this.state.submitError ? '重新送出' : '送出評核（' + answeredCount + '/' + totalCount + '）'),
+        : (submitClosed
+          ? '目前未開放送出'
+          // 送出失敗（網路）與被後端設定拒絕都已經送過一次，按鈕文字一律改成
+          // 「重新送出」；只有 submitRefusal 這一條的卡片會另外說明重試不會成功。
+          : ((this.state.submitError || this.state.submitRefusal) ? '重新送出' : '送出評核（' + answeredCount + '/' + totalCount + '）')),
       submitStyle: 'width: 100%; height: 58px; border: 0; border-radius: 29px; font-size: 17px; font-weight: 900; background: ' +
         (canSubmit ? accent : '#d8d2bf') + '; color: ' + (canSubmit ? '#ffffff' : '#8a867c') + ';',
       showSubmitError: !!this.state.submitError && !this.state.submitting,
       submitError: this.state.submitError || '',
+      showSubmitClosed: submitClosed,
+      submitClosedReason: (loaded && config.submitClosedReason) || '',
+      showSubmitRefusal: !!this.state.submitRefusal && !this.state.submitting,
+      submitRefusal: this.state.submitRefusal || '',
       submit: () => { if (canSubmit) this.submitScores(); },
       reset: () => {
         this.submissionId = null;
-        this.setState({ screen: 'select', path: [], answers: {}, submitError: null, criteriaOpenIds: {} });
+        this.setState({ screen: 'select', path: [], answers: {}, comments: {}, submitError: null, submitRefusal: null, criteriaOpenIds: {} });
       },
     };
   }

@@ -3,6 +3,15 @@
 // This is the version deployed behind RECORD_URL in Start.dc.html.
 // Deploy as a Web App (Extensions > Apps Script > Deploy > New deployment > Web app,
 // execute as "Me", access "Anyone"). Start.dc.html fetches the deployed /exec URL.
+//
+// ⚠️ 與 apps-script/Config.gs 的關係：原本七個函式（readExerciseInfo_/readCodes_/
+// readCriteria_/findHeaderCol_/readItems_/formatCellValue_/stripGroupInternals_）
+// 兩個檔案逐位元相同。這一版只改這個檔案（Config.gs 即將退役，見
+// docs/multi-tenant-and-report-plan.md §6.5），所以 readExerciseInfo_／readCodes_／
+// readCriteria_／readItems_ 從現在開始「兩份會漂移」：這裡多了 啟用觀察紀錄／
+// 低分需說明門檻 兩個選填標籤，以及缺欄位時丟中文錯誤的防護。Config.gs 那一份
+// 沒有。CONFIG_URL 還指著 Config.gs 的部署，所以「沒帶 ?t=/?ex= 的設定載入」
+// 行為不變（它本來就不認識租戶註冊表）。
 
 // ⚠️ 測試分支（dev）：這兩個 ID 是個人帳號 charleslin2003@gmail.com 底下的
 // 測試用試算表，不是業主正式的那一對。master 分支上的正式值是：
@@ -30,6 +39,27 @@ var RECORD_ITEM_ALIASES_ = ['項目名稱'];
 var RECORD_STAGE_ALIASES_ = ['情境階段'];
 var RECORD_SCENE_ALIASES_ = ['演練單元'];
 var RECORD_INDICATOR_ALIASES_ = ['指標代號'];
+// 以下八欄全部是「新增的選填欄」：業主現在那張 6 欄表一欄都沒有，findHeaderCol_
+// 會回 -1，寫入時整欄跳過（跟上面那批選填欄同一套 :155-159 / :175-180 模式），
+// 所以不動試算表也不會有任何行為變化。要用就在 評核紀錄 補上對應欄名即可。
+// 這些欄的用途是「送出當時就把標籤寫死」，直接補掉 plan §1.1 的缺陷 D3
+// （標籤是讀取時才 join 設定表，業主為下一場改題庫就會回頭改寫上一場的報告）。
+var RECORD_COMMENT_ALIASES_ = ['觀察紀錄', '觀察意見', '質性觀察', '備註'];
+var RECORD_EXERCISEID_ALIASES_ = ['演習代號', '場次代號'];
+var RECORD_TENANT_ALIASES_ = ['醫院代號', '機構代號'];
+// 注意：這個別名陣列跟設定表那邊的 GOAL_HEADER_ALIASES_（:551 附近）刻意分開
+// 宣告、不共用變數——一邊是「設定表的來源欄」，一邊是「紀錄表的快照欄」，
+// 兩邊將來很可能被業主改成不同欄名。
+var RECORD_GOAL_ALIASES_ = ['測試情境與目標', '測試情境'];
+var RECORD_POTENTIAL_ALIASES_ = ['評核潛能', '潛能'];
+var RECORD_S4_ALIASES_ = ['4S 元素', '4S元素', '單一 4S 元素'];
+// 「評核題目」跟 RECORD_ID_ALIASES_ 的「評核題號」只差一個字，但不會互相誤中：
+// findHeaderCol_ 先把所有欄位跑完一輪「完全相等」才做「開頭比對」，而開頭比對
+// 時「評核題目」不是以「評核題號」開頭（反之亦然）。
+var RECORD_QUESTION_ALIASES_ = ['評核題目', '具體評核題目', '問題內容'];
+// 觀察紀錄字數上限。前端送出前自己 trim + 切到 500 字，伺服器再切一次；
+// 字數或內容絕對不構成「拒絕整筆送出」的理由（分數比留言重要）。
+var COMMENT_MAX_LENGTH_ = 500;
 
 // 問題ID -> 指標代號 對照表，跟「演習評核_設定」放在同一個試算表（是設定
 // 資料的一部分，不是送出後才產生的紀錄，所以歸在 CONFIG_SPREADSHEET_ID 底
@@ -51,43 +81,644 @@ var INDICATOR_S4_ALIASES_ = ['4S 元素', '單一 4S 元素'];
 // 不能只靠「多一個 action 參數」擋人，所以另外要求帶一把只存在於
 // Analysis.html 原始碼裡的亂數金鑰。部署前務必把下面這個值換成自己產生的
 // 隨機字串，並且要跟 Analysis.html 裡的 ANALYSIS_KEY 保持一致。
+// 有了租戶註冊表以後，這把金鑰只負責「fallback 租戶」（也就是下面那對寫死的
+// 試算表）；註冊表裡的每一列各有自己的 分析金鑰，換金鑰 = 改一格。
 var ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
 
-function doGet(e) {
-  var action = e && e.parameter && e.parameter.action;
-  if (action === 'analysis') {
-    if (!e.parameter.key || e.parameter.key !== ANALYSIS_KEY) {
-      return jsonOut_({ error: 'unauthorized' });
+// ===== 多租戶路由（方案 A：租戶註冊表）=====
+// docs/multi-tenant-and-report-plan.md §2.1 原本建議「刪掉上面那四個常數」。
+// 這裡刻意不刪：本次改動的硬規則是「沒有 ?t=/?ex=、而且還沒建註冊表時，每一
+// 個端點的行為都要跟今天完全一樣」，所以那四個常數留下來當作永久的
+// 「legacy／第一場」租戶（見 fallbackTenant_）。業主還沒建註冊表，
+// REGISTRY_SPREADSHEET_ID 就先留空字串——空字串的意思是「整個註冊表機制關閉，
+// 一律走 fallback」，連 openById 都不會打一次。
+var REGISTRY_SPREADSHEET_ID = '';
+var REGISTRY_SHEET_NAME = '租戶註冊表';
+var DEFAULT_RECORD_SHEET_NAME = '評核紀錄';
+// 註冊表快取：設定表「改一格、手機重整就生效」是對業主的承諾，所以設定表
+// 永不快取；註冊表是控制平面、改動極少，快取 120 秒換掉每次請求兩趟
+// openById。改完想立刻生效就打 action=flush。
+var REGISTRY_CACHE_KEY_ = 'reg:v2';
+var REGISTRY_CACHE_TTL_ = 120;
+// 管理金鑰：只給 action=selftest / action=flush 用，不會出現在任何上架的 HTML
+// 裡（由操作者自己打在網址列，或由註冊表那支容器綁定腳本用 UrlFetchApp 帶）。
+// 空字串 = 停用：selftest/flush 直接回中文「尚未設定」並且一張試算表都不開。
+// 絕對不要把它設成跟 ANALYSIS_KEY 一樣的值。
+var ADMIN_KEY = '';
+
+// 註冊表每一欄都用 findHeaderCol_ 比對欄名（絕不用欄位位置），跟 評核紀錄／
+// 對應指標 同一套做法。欄名意義見 docs/multi-tenant-and-report-plan.md §2.1。
+var REGISTRY_HID_ALIASES_ = ['醫院代號', '機構代號'];
+var REGISTRY_EXID_ALIASES_ = ['演習代號', '場次代號'];
+var REGISTRY_NAME_ALIASES_ = ['顯示名稱', '名稱'];
+var REGISTRY_CONFIGID_ALIASES_ = ['設定試算表ID', '設定檔ID'];
+var REGISTRY_RECORDID_ALIASES_ = ['紀錄試算表ID', '紀錄檔ID'];
+var REGISTRY_RECORDSHEET_ALIASES_ = ['紀錄分頁名稱', '紀錄分頁'];
+var REGISTRY_KEY_ALIASES_ = ['分析金鑰', '金鑰'];
+var REGISTRY_ENABLED_ALIASES_ = ['啟用', '啟用中'];
+var REGISTRY_FROM_ALIASES_ = ['開放送出起', '送出開始'];
+var REGISTRY_TO_ALIASES_ = ['開放送出迄', '送出結束'];
+var REGISTRY_DEFAULT_ALIASES_ = ['預設演習', '預設'];
+var REGISTRY_SCENEPREFIX_ALIASES_ = ['scenePrefix', '情境前綴'];
+// 檔案擁有者 欄是純文件用途：路由不讀它、任何端點（含 selftest）都不回傳它。
+
+// 代號（醫院代號／演習代號）只接受小寫英數加 - 與 _、最多 32 字。兩件事要特別
+// 注意：
+// (1) Date 直接拒絕。業主手打「2026-01」這種值，Sheets 會自動判讀成日期，拿到
+//     的是 Date 物件；String(Date) 出來是「Thu Jan 01 2026 …」，絕對不能拿去
+//     當代號（plan §7.2）。所以 演習代號 建議用 2026a 這種不含「連字號+數字」
+//     的寫法。
+// (2) 代號永遠不會被拿去 openById。試算表 ID 只能從註冊表那一列讀出來——這是
+//     避免整個 Web App 變成「任意 Drive 檔案讀取代理」的關鍵分界。
+function normSlug_(s) {
+  if (s instanceof Date) return '';
+  if (s == null) return '';
+  var v = String(s).trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(v)) return '';
+  return v;
+}
+
+// 設定試算表ID／紀錄試算表ID 進 openById 之前的格式檢查。格式不合就把那一列
+// 標成無效（規則 5），不要拿一個明顯不是 ID 的字串去打 Drive。
+function isSpreadsheetId_(s) {
+  if (s instanceof Date) return false;
+  return /^[A-Za-z0-9_-]{20,}$/.test(String(s == null ? '' : s).trim());
+}
+
+// 租戶解析失敗時丟出來的錯誤：message 是直接印給使用者看的中文句子，
+// tenantCode 是給程式判斷的代碼。doGet 兩個分支和 doPost 都靠
+// tenantCodeOf_ 把它轉成各自的 JSON 錯誤形狀。
+function newTenantError_(message, code) {
+  var err = new Error(message);
+  err.tenantCode = code;
+  return err;
+}
+function tenantCodeOf_(err) {
+  return (err && err.tenantCode) || '';
+}
+function errorOut_(err, defaultCode) {
+  return {
+    error: String((err && err.message) || err),
+    errorCode: tenantCodeOf_(err) || defaultCode,
+  };
+}
+
+// fallback 租戶：完全由今天就存在的四個常數組成。case (i)/(ii)/(iii) 都回這個
+// 物件，所以「沒帶代號、沒建註冊表」時每一行後續程式碼看到的東西跟今天一模
+// 一樣（同兩份試算表、同分頁名稱、同 ANALYSIS_KEY、同 'sub_'+id 快取 key）。
+// enabled 永遠 true、時間窗永遠 null，所以 啟用 與 開放送出起/迄 兩道閘門在
+// fallback 模式下不可能擋到任何人。
+function fallbackTenant_() {
+  return {
+    hid: '',
+    exid: '',
+    displayName: '',
+    configId: CONFIG_SPREADSHEET_ID,
+    recordId: RECORD_SPREADSHEET_ID,
+    recordSheet: RECORD_SHEET_NAME,
+    analysisKey: ANALYSIS_KEY,
+    enabled: true,
+    isDefault: true,
+    openFrom: null,
+    openTo: null,
+    openFromText: '',
+    openToText: '',
+    scenePrefix: 'SCENE',
+    source: 'fallback',
+    rowNumber: 0,
+    registryWarning: '',
+    requestedHid: '',
+    requestedExid: '',
+    reasons: [],
+  };
+}
+
+function cloneTenant_(t) {
+  var out = {};
+  Object.keys(t).forEach(function (k) { out[k] = t[k]; });
+  return out;
+}
+
+function isNo_(v) {
+  if (v === false) return true;
+  var s = String(v == null ? '' : v).trim();
+  return s === 'N' || s === 'n' || s === '否' || s === '停用' ||
+    s === 'FALSE' || s === 'False' || s === 'false';
+}
+
+function isYes_(v) {
+  if (v === true) return true;
+  var s = String(v == null ? '' : v).trim();
+  return s === 'Y' || s === 'y' || s === '是' || s === '預設' || s === '1' ||
+    s === 'TRUE' || s === 'True' || s === 'true';
+}
+
+function formatDateTime_(ms) {
+  return Utilities.formatDate(new Date(ms), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
+}
+
+// 讀代號格（醫院代號／演習代號）。空白是「必填欄位空白」（規則 4）、被判讀成
+// 日期與格式不合各有自己的中文理由（規則 5），理由只會出現在 action=selftest，
+// 不會進任何評核官手機抓得到的 payload。
+function readSlugCell_(value, label, reasons) {
+  if (value instanceof Date) {
+    reasons.push(label + ' 被試算表判讀成日期，請把該格設成純文字格式');
+    return '';
+  }
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) {
+    reasons.push('必填欄位空白：' + label);
+    return '';
+  }
+  var slug = normSlug_(raw);
+  if (!slug) {
+    reasons.push(label + ' 格式不合（只允許小寫英數、- 與 _，最多 32 字）');
+    return '';
+  }
+  return slug;
+}
+
+function readIdCell_(value, label, reasons) {
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) {
+    reasons.push('必填欄位空白：' + label);
+    return '';
+  }
+  if (!isSpreadsheetId_(raw)) {
+    reasons.push(label + ' 格式不合（看起來不是試算表 ID）');
+    return '';
+  }
+  return raw;
+}
+
+// 讀時間窗格。空白 = 沒有這一邊的界限；Date 格直接用；文字格試著 parse，
+// parse 不出來就把整列標成無效——「看不懂的值」不可以被悄悄當成「不限」，
+// 否則業主以為自己關了送出，實際上還開著。
+function readWindowCell_(value, label, reasons) {
+  if (value instanceof Date) return { ms: value.getTime(), text: formatDateTime_(value.getTime()) };
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return { ms: null, text: '' };
+  var parsed = new Date(raw);
+  var ms = parsed.getTime();
+  if (isNaN(ms)) {
+    reasons.push(label + ' 無法判讀成日期時間（請填成 2026/10/06 08:00 這種格式）');
+    return { ms: null, text: '' };
+  }
+  return { ms: ms, text: formatDateTime_(ms) };
+}
+
+// 讀整張租戶註冊表。回傳 { configured, readable, sheetFound, rowCount, rows,
+// invalidTenants, invalid, warning }：
+//   rows            = 通過五條檢查的列（含 啟用=N 的列，action=exercises 要列出來）
+//   invalidTenants  = 沒通過的列（還留著 hid/exid，才能把「這場演習註冊資料有問題」
+//                     跟「根本沒這家機構」分開回答）
+//   invalid         = [{ rowNumber, reasons }]，只給 action=selftest 看
+//   warning         = 整張表不可用的原因（case (ii)），只給 action=selftest 看
+// REGISTRY_SPREADSHEET_ID 是空字串就回 null（= 機制關閉，連快取都不碰）。
+// 這個函式「永不往外丟例外」：控制平面壞掉不應該讓正在進行的演習跟著掛掉，
+// 所以失敗一律收斂成 warning，由 resolveTenant_ 決定退回 fallback。
+function readRegistry_() {
+  if (!REGISTRY_SPREADSHEET_ID) return null;
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(REGISTRY_CACHE_KEY_);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (errCache) {
+      // 快取內容壞了就當沒快取，重讀一次。
     }
+  }
+  var out = {
+    configured: true,
+    readable: false,
+    sheetFound: false,
+    rowCount: 0,
+    rows: [],
+    invalidTenants: [],
+    invalid: [],
+    warning: '',
+  };
+  try {
+    var ss = SpreadsheetApp.openById(REGISTRY_SPREADSHEET_ID);
+    out.readable = true;
+    var sheet = ss.getSheetByName(REGISTRY_SHEET_NAME);
+    if (!sheet) {
+      out.warning = '租戶註冊表裡找不到分頁：' + REGISTRY_SHEET_NAME;
+    } else {
+      out.sheetFound = true;
+      readRegistryRows_(sheet, out);
+    }
+  } catch (err) {
+    // 刪檔／改名／沒權限／ID 填錯都會走到這裡。刻意不區分「設定錯誤」和
+    // 「暫時性權限抖動」：硬失敗讓演習停擺、或猜一列資料，兩種都更糟。
+    out.warning = '無法開啟租戶註冊表（請確認 REGISTRY_SPREADSHEET_ID 與檔案權限）：' +
+      String((err && err.message) || err);
+  }
+  try {
+    cache.put(REGISTRY_CACHE_KEY_, JSON.stringify(out), REGISTRY_CACHE_TTL_);
+  } catch (errPut) {
+    // 快取寫不進去（例如內容過大）不是致命錯誤，下次重讀就是。
+  }
+  return out;
+}
+
+// 把註冊表分頁的內容填進 readRegistry_ 的結果物件。每一欄都用 findHeaderCol_
+// 比對欄名，絕不用欄位位置（跟 評核紀錄／對應指標 同一條規則）。
+function readRegistryRows_(sheet, out) {
+  var values = sheet.getDataRange().getValues();
+  var header = values.length ? values[0] : [];
+  var cols = {
+    hid: findHeaderCol_(header, REGISTRY_HID_ALIASES_),
+    exid: findHeaderCol_(header, REGISTRY_EXID_ALIASES_),
+    displayName: findHeaderCol_(header, REGISTRY_NAME_ALIASES_),
+    configId: findHeaderCol_(header, REGISTRY_CONFIGID_ALIASES_),
+    recordId: findHeaderCol_(header, REGISTRY_RECORDID_ALIASES_),
+    recordSheet: findHeaderCol_(header, REGISTRY_RECORDSHEET_ALIASES_),
+    analysisKey: findHeaderCol_(header, REGISTRY_KEY_ALIASES_),
+    enabled: findHeaderCol_(header, REGISTRY_ENABLED_ALIASES_),
+    openFrom: findHeaderCol_(header, REGISTRY_FROM_ALIASES_),
+    openTo: findHeaderCol_(header, REGISTRY_TO_ALIASES_),
+    isDefault: findHeaderCol_(header, REGISTRY_DEFAULT_ALIASES_),
+    scenePrefix: findHeaderCol_(header, REGISTRY_SCENEPREFIX_ALIASES_),
+  };
+  // 五個必填欄的「欄」本身不見了，就不是「某一列有問題」而是整張表不能用：
+  // 逐列報「必填欄位空白」只會生出 N 份一樣的雜訊。
+  var missing = [];
+  if (cols.hid === -1) missing.push(REGISTRY_HID_ALIASES_[0]);
+  if (cols.exid === -1) missing.push(REGISTRY_EXID_ALIASES_[0]);
+  if (cols.configId === -1) missing.push(REGISTRY_CONFIGID_ALIASES_[0]);
+  if (cols.recordId === -1) missing.push(REGISTRY_RECORDID_ALIASES_[0]);
+  if (cols.analysisKey === -1) missing.push(REGISTRY_KEY_ALIASES_[0]);
+  if (missing.length) {
+    out.warning = REGISTRY_SHEET_NAME + ' 缺少必要欄位：' + missing.join('／');
+    return;
+  }
+  var parsed = [];
+  for (var i = 1; i < values.length; i++) {
+    // 整列全空（業主在表格下方留白）直接跳過，不算資料列也不報錯。
+    if (isBlankRow_(values[i])) continue;
+    parsed.push(parseRegistryRow_(cols, values[i], i + 1));
+  }
+  out.rowCount = parsed.length;
+  assertRegistrySane_(parsed);
+  parsed.forEach(function (t) {
+    if (t.reasons.length) {
+      out.invalidTenants.push(t);
+      out.invalid.push({ rowNumber: t.rowNumber, reasons: t.reasons });
+    } else {
+      out.rows.push(t);
+    }
+  });
+  if (!out.rowCount) {
+    out.warning = REGISTRY_SHEET_NAME + ' 沒有任何資料列';
+  } else if (!out.rows.length) {
+    out.warning = REGISTRY_SHEET_NAME + ' 的每一列都沒通過檢查，詳情請看 action=selftest';
+  }
+}
+
+function isBlankRow_(row) {
+  for (var i = 0; i < row.length; i++) {
+    if (String(row[i] == null ? '' : row[i]).trim() !== '') return false;
+  }
+  return true;
+}
+
+function parseRegistryRow_(cols, row, rowNumber) {
+  var reasons = [];
+  var t = {
+    hid: readSlugCell_(row[cols.hid], REGISTRY_HID_ALIASES_[0], reasons),
+    exid: readSlugCell_(row[cols.exid], REGISTRY_EXID_ALIASES_[0], reasons),
+    displayName: cols.displayName !== -1 ? String(row[cols.displayName] == null ? '' : row[cols.displayName]).trim() : '',
+    configId: readIdCell_(row[cols.configId], REGISTRY_CONFIGID_ALIASES_[0], reasons),
+    recordId: readIdCell_(row[cols.recordId], REGISTRY_RECORDID_ALIASES_[0], reasons),
+    recordSheet: DEFAULT_RECORD_SHEET_NAME,
+    analysisKey: String(row[cols.analysisKey] == null ? '' : row[cols.analysisKey]).trim(),
+    enabled: true,
+    isDefault: false,
+    openFrom: null,
+    openTo: null,
+    openFromText: '',
+    openToText: '',
+    scenePrefix: 'SCENE',
+    source: 'registry',
+    rowNumber: rowNumber,
+    registryWarning: '',
+    requestedHid: '',
+    requestedExid: '',
+    reasons: reasons,
+  };
+  if (cols.recordSheet !== -1) {
+    var sheetName = String(row[cols.recordSheet] == null ? '' : row[cols.recordSheet]).trim();
+    if (sheetName) t.recordSheet = sheetName;
+  }
+  if (!t.analysisKey) reasons.push('必填欄位空白：' + REGISTRY_KEY_ALIASES_[0]);
+  if (cols.enabled !== -1) t.enabled = !isNo_(row[cols.enabled]);
+  if (cols.isDefault !== -1) t.isDefault = isYes_(row[cols.isDefault]);
+  if (cols.openFrom !== -1) {
+    var from = readWindowCell_(row[cols.openFrom], REGISTRY_FROM_ALIASES_[0], reasons);
+    t.openFrom = from.ms;
+    t.openFromText = from.text;
+  }
+  if (cols.openTo !== -1) {
+    var to = readWindowCell_(row[cols.openTo], REGISTRY_TO_ALIASES_[0], reasons);
+    t.openTo = to.ms;
+    t.openToText = to.text;
+  }
+  if (cols.scenePrefix !== -1) {
+    var prefix = String(row[cols.scenePrefix] == null ? '' : row[cols.scenePrefix]).trim();
+    if (prefix) t.scenePrefix = prefix;
+  }
+  // 代號原樣記下來，payload 的 tenant/exercise 一律回這兩個欄位（fallback 模式
+  // 下 hid/exid 是空字串，但要把使用者帶來的 ?t=/?ex= 原封不動回給前端）。
+  t.requestedHid = t.hid;
+  t.requestedExid = t.exid;
+  return t;
+}
+
+// 組合鍵的分隔字元（U+241F，SYMBOL FOR UNIT SEPARATOR）。選它是因為它絕對不會出現在業主手打的
+// 代號、分頁名稱或問題ID 裡，所以 'a' + SEP + 'bc' 不可能跟 'ab' + SEP + 'c'
+// 撞在一起。
+var KEY_SEP_ = '\u241F';
+
+// 五條檢查，就地把列標成無效（不丟錯：單一列壞掉不該害其他醫院一起不能用）。
+// 規則 4/5（必填空白、格式不合）在 parseRegistryRow_ 裡就處理完了，這裡做的是
+// 需要「跨列比對」的三條。
+function assertRegistrySane_(rows) {
+  // 規則 1、2 只比對 啟用=Y 的列：已封存（啟用=N）的列不可能被路由到，讓它跟
+  // 進行中的列相撞只會害業主不能把舊場次留著當歷史。代號還沒填好的列也跳過
+  // （它已經因為規則 4/5 無效了，再加一條「重複」只是雜訊）。
+  var enabled = rows.filter(function (r) { return r.enabled; });
+  markDuplicates_(
+    enabled.filter(function (r) { return r.hid && r.exid; }),
+    function (r) { return r.hid + KEY_SEP_ + r.exid; },
+    function (others) { return '醫院代號+演習代號 與第 ' + others + ' 列重複'; });
+  // 這一條是 plan §2.1 要求「必須硬擋」的那一條：「複製了一列但忘記換紀錄檔」
+  // 是唯一還能讓缺陷 D1（兩場演習在同一個 問題ID 上互相覆蓋分數）回來的入口。
+  // 刻意不是「第一列優先」而是「整組都標無效」，否則身分會取決於列的順序，
+  // 同一個 ?t=X&ex=Y 會變成不確定的結果。
+  markDuplicates_(
+    enabled.filter(function (r) { return r.recordId; }),
+    function (r) { return r.recordId + KEY_SEP_ + r.recordSheet; },
+    function (others) { return '紀錄試算表ID+分頁名稱 與第 ' + others + ' 列重複，兩場演習會互相覆蓋分數'; });
+  // 規則 3 比對「全部」列，不分啟用與否：已封存那列的 分析金鑰 仍然是一把活的
+  // 憑證。同一把金鑰出現在同一個 醫院代號 的不同 演習代號 是「刻意允許」的
+  // （一家醫院一把儀表板金鑰、跨場次共用），這也正是遷移那一列能沿用今天這把
+  // ANALYSIS_KEY 的原因；出現在不同 醫院代號 才是漏洞（A 院只要改個 ?t= 就能
+  // 讀 B 院的儀表板）。
+  var byKey = {};
+  rows.forEach(function (r) {
+    if (!r.analysisKey) return;
+    if (!byKey[r.analysisKey]) byKey[r.analysisKey] = [];
+    byKey[r.analysisKey].push(r);
+  });
+  Object.keys(byKey).forEach(function (k) {
+    var group = byKey[k];
+    group.forEach(function (r) {
+      var others = group.filter(function (o) { return o !== r && o.hid !== r.hid; });
+      if (!others.length) return;
+      r.reasons.push('分析金鑰 與第 ' + others.map(rowNumberOf_).join('、') + ' 列（不同醫院代號）相同');
+    });
+  });
+  return rows;
+}
+
+function rowNumberOf_(r) { return r.rowNumber; }
+
+function markDuplicates_(rows, keyOf, reasonOf) {
+  var byKey = {};
+  rows.forEach(function (r) {
+    var k = keyOf(r);
+    if (!byKey[k]) byKey[k] = [];
+    byKey[k].push(r);
+  });
+  Object.keys(byKey).forEach(function (k) {
+    var group = byKey[k];
+    if (group.length < 2) return;
+    group.forEach(function (r) {
+      var others = group.filter(function (o) { return o !== r; }).map(rowNumberOf_);
+      r.reasons.push(reasonOf(others.join('、')));
+    });
+  });
+}
+
+// 解析這一次請求屬於哪一場演習。這是整份檔案最吃重的一段，順序刻意固定：
+//
+// (0) 代號先取 POST body 的 tenant/exercise，其次才取 query 的 ?t=/?ex=
+//     （plan §2.1）。有填但格式不合是「錯誤」，不會被悄悄當成沒填——否則一個
+//     打錯的代號會變成「看到 fallback 租戶的資料」。
+// (i) REGISTRY_SPREADSHEET_ID === ''（目前上架的狀態）→ 無條件回 fallback，
+//     就算帶了 ?t=/?ex= 也一樣。理由：連結有可能在業主建好註冊表之前就先帶著
+//     ?t= 流傳出去，把這種連結判成錯誤會在演習當天讓全場評核官無法評分。代號
+//     會原樣回在 payload 的 tenant/exercise 裡，但對路由零影響，tenantSource
+//     回 'fallback' 讓前端自己判斷。
+// (ii) 註冊表有設定但不可用（開不起來／分頁不見／零資料列／沒有一列通過檢查）
+//     → 同樣回 fallback，另外把原因放在 registryWarning 上（只有 action=selftest
+//     看得到）。控制平面壞掉時，那一家真正在用的醫院必須照樣能評分。
+// (iii) 註冊表可用，但沒帶 醫院代號 → 回 fallback。寫死的那兩個常數永久當
+//     「legacy／第一場」租戶，這是已經發出去的 LINE 連結在註冊表上線後還能用的
+//     原因（plan §5.10：舊訊息會一直留著）。
+//     ⚠️ 必須保持成立的前提：註冊表裡那一列遷移資料要指向跟常數「同樣的」兩個
+//     試算表 ID，否則「不帶參數」跟「?t=…&ex=…」會看到兩份不同的資料。公布任何
+//     連結之前，先用 action=selftest 比對兩條路徑。
+// (iv) 註冊表可用又帶了 醫院代號 → 這時候代號才真的決定路由，而且「找不到」
+//     一律是硬錯誤，絕不退回 fallback、絕不改用別的列。打錯一個字就看到另一家
+//     醫院的資料，是這整段程式唯一真正要防的事。
+function resolveTenant_(e, body) {
+  var rawHid = (body && body.tenant) || (e && e.parameter && e.parameter.t) || '';
+  var rawExid = (body && body.exercise) || (e && e.parameter && e.parameter.ex) || '';
+  var hid = normSlug_(rawHid);
+  var exid = normSlug_(rawExid);
+  if (String(rawHid == null ? '' : rawHid).trim() && !hid) {
+    throw newTenantError_('連結裡的機構代號格式不正確，請確認連結是否完整。', 'BAD_CODE');
+  }
+  if (String(rawExid == null ? '' : rawExid).trim() && !exid) {
+    throw newTenantError_('連結裡的演習代號格式不正確，請確認連結是否完整。', 'BAD_CODE');
+  }
+
+  var reg = readRegistry_();
+  if (!reg) return withRequested_(fallbackTenant_(), hid, exid);           // (i)
+  if (!reg.rows.length) {                                                   // (ii)
+    var warned = withRequested_(fallbackTenant_(), hid, exid);
+    warned.registryWarning = reg.warning || (REGISTRY_SHEET_NAME + ' 目前沒有可用的資料列');
+    return warned;
+  }
+  if (!hid) return withRequested_(fallbackTenant_(), hid, exid);            // (iii)
+
+  // (iv)
+  var valid = reg.rows.filter(function (r) { return r.hid === hid; });
+  var invalidMatch = (reg.invalidTenants || []).filter(function (r) {
+    return r.hid === hid && (!exid || r.exid === exid);
+  });
+  if (!valid.length) {
+    if (invalidMatch.length) {
+      throw newTenantError_('這場演習的註冊資料有問題，請聯絡系統管理者。', 'ROW_INVALID');
+    }
+    throw newTenantError_('找不到這家機構的設定（代號：' + hid + '），請確認連結是否正確。', 'NO_TENANT');
+  }
+  if (!exid) {
+    var defaults = valid.filter(function (r) { return r.enabled && r.isDefault; });
+    if (defaults.length === 1) return cloneTenant_(defaults[0]);
+    if (!defaults.length) {
+      throw newTenantError_('這家機構尚未指定預設演習，請在連結後面加上演習代號。', 'NO_DEFAULT');
+    }
+    throw newTenantError_('這家機構有多列被標為預設演習，請只保留一列。', 'AMBIGUOUS_DEFAULT');
+  }
+  var pair = valid.filter(function (r) { return r.exid === exid; });
+  if (pair.length === 1) return cloneTenant_(pair[0]);
+  if (pair.length > 1) {
+    // 規則 1 已經把「啟用=Y 的重複」全部標成無效，所以能走到這裡的只有兩列
+    // 以上 啟用=N 的同代號列。照樣不猜，回「註冊資料有問題」。
+    throw newTenantError_('這場演習的註冊資料有問題，請聯絡系統管理者。', 'ROW_INVALID');
+  }
+  if (invalidMatch.length) {
+    throw newTenantError_('這場演習的註冊資料有問題，請聯絡系統管理者。', 'ROW_INVALID');
+  }
+  throw newTenantError_('找不到這場演習（機構：' + hid + '／演習：' + exid + '），請確認連結是否正確。', 'NO_EXERCISE');
+}
+
+function withRequested_(t, hid, exid) {
+  t.requestedHid = hid;
+  t.requestedExid = exid;
+  return t;
+}
+
+// 送出時間窗：只有 doPost 會擋，設定分支不擋（評核官可以提早打開表單看題目）。
+// 設定 payload 改成回報 submitOpen / submitClosedReason，讓前端把「送出」按鈕
+// 變灰——而不是收下分數再丟掉。
+function submitWindowState_(t) {
+  if (!t.enabled) return { open: false, reason: '這場演習已結束，不再開放評核。' };
+  var now = Date.now();
+  if (t.openFrom !== null && t.openFrom !== undefined && now < t.openFrom) {
+    return { open: false, reason: '目前不在開放送出時間內（' + windowText_(t) + '）。' };
+  }
+  if (t.openTo !== null && t.openTo !== undefined && now > t.openTo) {
+    return { open: false, reason: '目前不在開放送出時間內（' + windowText_(t) + '）。' };
+  }
+  return { open: true, reason: '' };
+}
+
+function windowText_(t) {
+  return (t.openFromText || '不限') + ' ~ ' + (t.openToText || '不限');
+}
+
+// 三個 openById（設定分支 :71、doPost :115、buildAnalysis_ :260）統一收斂到這裡，
+// 失敗時給中文訊息而不是 Apps Script 原文的 "You do not have permission…"。
+function tenantSheetConfig_(t) {
+  try {
+    return SpreadsheetApp.openById(t.configId);
+  } catch (err) {
+    throw new Error('無法開啟設定試算表，請確認檔案權限。');
+  }
+}
+
+// 紀錄檔同理，另外把 getSheetByName 的 null 防護一起做掉（原本 :138-140 與
+// :266-267 兩處各寫一份）。fallback 模式下丟出的字串跟今天完全一樣。
+function tenantSheetRecord_(t) {
+  var ss;
+  try {
+    ss = SpreadsheetApp.openById(t.recordId);
+  } catch (err) {
+    throw new Error('無法開啟紀錄試算表，請確認檔案權限。');
+  }
+  var sheet = ss.getSheetByName(t.recordSheet);
+  if (!sheet) throw new Error('找不到工作表：' + t.recordSheet);
+  return { ss: ss, sheet: sheet };
+}
+
+function param_(e, name) {
+  return (e && e.parameter && e.parameter[name]) || '';
+}
+
+function doGet(e) {
+  var action = param_(e, 'action');
+  // 管理用的兩個 action 先處理，而且在碰任何試算表之前就先驗 ADMIN_KEY。
+  if (action === 'selftest') return jsonOut_(handleSelfTest_(e));
+  if (action === 'flush') return jsonOut_(handleFlush_(e));
+  if (action === 'exercises') return jsonOut_(handleExercises_(e));
+
+  if (action === 'analysis') {
+    var t;
+    try {
+      t = resolveTenant_(e, null);
+    } catch (errTenant) {
+      return jsonOut_(errorOut_(errTenant, 'NO_TENANT'));
+    }
+    // 金鑰比對的對象從全域常數改成「解析出來那一列的 分析金鑰」；fallback 模式
+    // 下 t.analysisKey 就是 ANALYSIS_KEY，所以行為與今天相同。回傳字串刻意
+    // 保持成 'unauthorized' 一字不差（Analysis.html 直接印它）。
+    if (!param_(e, 'key') || param_(e, 'key') !== t.analysisKey) {
+      return jsonOut_({ error: 'unauthorized', errorCode: 'UNAUTHORIZED' });
+    }
+    // 啟用=N 刻意「不」擋分析：演習結束後報告才要開始做。
     // buildAnalysis_ 常見的失敗原因是 指標 分頁還沒補上 評核潛能/4S 元素 兩欄
     // （或欄名對不上）；包起來讓 Analysis.html 至少能顯示清楚的錯誤訊息，
     // 而不是 Apps Script 未捕捉例外時丟出的那種通用 HTML 錯誤頁。
     try {
-      return jsonOut_(buildAnalysis_());
+      return jsonOut_(buildAnalysis_(t));
     } catch (err) {
-      return jsonOut_({ error: String((err && err.message) || err) });
+      return jsonOut_({ error: String((err && err.message) || err), errorCode: 'ANALYSIS_FAILED' });
     }
   }
-  var ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
-  var info = readExerciseInfo_(ss);
-  return jsonOut_({
-    orgName: info.org,
-    exerciseName: info.name,
-    exerciseTopic: info.topic,
-    exerciseCategory: info.category,
-    exerciseDate: info.date,
-    exerciseDesc: info.desc,
-    codes: readCodes_(ss),
-    criteria: readCriteria_(ss),
-    items: readItems_(ss),
-  });
+
+  // 設定分支。原本 :71-83 完全沒有 try/catch（只有分析分支有），所以分頁改名或
+  // 權限問題會讓評核官手機看到 Apps Script 的原始 HTML 錯誤頁（plan §6.2）。
+  try {
+    var ct = resolveTenant_(e, null);
+    if (!ct.enabled) {
+      throw newTenantError_('這場演習已結束，不再開放評核。', 'DISABLED');
+    }
+    var ss = tenantSheetConfig_(ct);
+    var info = readExerciseInfo_(ss);
+    var win = submitWindowState_(ct);
+    // ⚠️ 這個分支「沒有任何驗證」，每一支評核官手機都會抓它，所以
+    // payload 裡永遠不准出現：分析金鑰／ADMIN_KEY／任何試算表 ID／紀錄分頁
+    // 名稱／註冊表列號／registryWarning／檔案擁有者（plan §6.6）。
+    // 下面這些欄位全部是「可以公開」的那一類。
+    return jsonOut_({
+      orgName: info.org,
+      exerciseName: info.name,
+      exerciseTopic: info.topic,
+      exerciseCategory: info.category,
+      exerciseDate: info.date,
+      exerciseDesc: info.desc,
+      codes: readCodes_(ss),
+      criteria: readCriteria_(ss),
+      items: readItems_(ss),
+      tenant: ct.hid || ct.requestedHid || '',
+      exercise: ct.exid || ct.requestedExid || '',
+      displayName: ct.displayName || '',
+      scenePrefix: ct.scenePrefix || 'SCENE',
+      commentEnabled: info.commentEnabled,
+      commentRequiredBelow: info.commentRequiredBelow,
+      submitOpen: win.open,
+      submitClosedReason: win.reason,
+      tenantSource: ct.source,
+    });
+  } catch (err) {
+    return jsonOut_(errorOut_(err, 'CONFIG_READ_FAILED'));
+  }
 }
 
 function doPost(e) {
   try {
-    return jsonOut_(appendSubmission_(JSON.parse(e.postData.contents)));
+    var body = JSON.parse(e.postData.contents);
+    var t = resolveTenant_(e, body);
+    if (!t.enabled) {
+      throw newTenantError_('這場演習已結束，不再開放評核。', 'DISABLED');
+    }
+    var win = submitWindowState_(t);
+    if (!win.open) {
+      throw newTenantError_(win.reason, 'OUT_OF_WINDOW');
+    }
+    return jsonOut_(appendSubmission_(body, t));
   } catch (err) {
-    return jsonOut_({ ok: false, error: String((err && err.message) || err) });
+    // ok/error 兩個欄位的形狀跟今天一樣（Start.dc.html 只看這兩個），
+    // errorCode 是新增的，前端沒用到也不會壞。
+    return jsonOut_({
+      ok: false,
+      error: String((err && err.message) || err),
+      errorCode: tenantCodeOf_(err) || 'SUBMIT_FAILED',
+    });
   }
 }
 
@@ -98,7 +729,7 @@ function jsonOut_(data) {
 
 // Google Sheets 會把以這些字元開頭的字串值當成公式執行；寫入前一律跳脫，
 // 避免透過 fillerCode/itemName/問題ID 注入公式（即使下面已用白名單擋掉未知值，
-// 這裡仍保留一層防禦）。
+// 這裡仍保留一層防禦）。觀察紀錄 是唯一不受白名單保護的自由文字欄，更需要它。
 var FORMULA_TRIGGER_CHARS = ['=', '+', '-', '@'];
 function sanitizeCell_(value) {
   var s = String(value == null ? '' : value);
@@ -106,13 +737,13 @@ function sanitizeCell_(value) {
   return s;
 }
 
-function appendSubmission_(body) {
+function appendSubmission_(body, t) {
   var answers = (body && body.answers) || [];
   if (!answers.length) throw new Error('沒有評分資料');
 
   // 白名單驗證：fillerCode / itemName / 問題ID 都必須是設定表裡真實存在的值，
   // 拒絕任何不在名單內的提交，防止偽造代號或注入任意字串（例如試算表公式）。
-  var configSs = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
+  var configSs = tenantSheetConfig_(t);
   var validCodes = readCodes_(configSs).map(function (c) { return c.value; });
   if (validCodes.indexOf(String(body.fillerCode || '')) === -1) {
     throw new Error('未知的人員代號：' + body.fillerCode);
@@ -128,16 +759,25 @@ function appendSubmission_(body) {
   });
 
   // 客戶端重試時會帶同一組 submissionId，避免逾時後重送造成重複列。
-  var cacheKey = body.submissionId ? 'sub_' + body.submissionId : '';
+  // ⚠️ CacheService.getScriptCache() 是「整個腳本專案共用一個命名空間」，不加
+  // 租戶前綴就等於跨醫院共用同一個去重窗（兩家醫院剛好產生同一個
+  // submissionId，第二家的送出會被當成重複而整批丟掉）。但 fallback 模式下
+  // 必須保持跟今天「一字不差」的 'sub_' + id——部署那一瞬間正在重試的送出
+  // 還是要能被正確去重，所以這裡不是無條件加前綴。
+  var cacheKey = '';
+  if (body.submissionId) {
+    cacheKey = t.source === 'registry'
+      ? 'sub_' + t.hid + '/' + t.exid + '_' + body.submissionId
+      : 'sub_' + body.submissionId;
+  }
   var cache = CacheService.getScriptCache();
   if (cacheKey && cache.get(cacheKey)) return { ok: true, rows: 0, duplicate: true };
 
   // 這些都是唯讀查詢，不用等鎖就能先做；recordSs 只 open 一次重複使用，
   // 避免對同一份試算表多打一次 API（doPost 常被嫌慢，很大一部分就是每個
   // SpreadsheetApp 呼叫都是一次網路來回，能少一次是一次）。
-  var recordSs = SpreadsheetApp.openById(RECORD_SPREADSHEET_ID);
-  var sheet = recordSs.getSheetByName(RECORD_SHEET_NAME);
-  if (!sheet) throw new Error('找不到工作表：' + RECORD_SHEET_NAME);
+  var record = tenantSheetRecord_(t);
+  var sheet = record.sheet;
   var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
   // 必要欄：缺了就直接報錯。選填欄：找不到就是 -1，寫入時直接跳過那一欄，
@@ -157,10 +797,23 @@ function appendSubmission_(body) {
   var stageCol = findHeaderCol_(header, RECORD_STAGE_ALIASES_);
   var sceneCol = findHeaderCol_(header, RECORD_SCENE_ALIASES_);
   var indicatorCol = findHeaderCol_(header, RECORD_INDICATOR_ALIASES_);
+  // 以下八欄都是新增的選填欄，業主那張 6 欄表全部會回 -1 而被跳過。
+  var commentCol = findHeaderCol_(header, RECORD_COMMENT_ALIASES_);
+  var exerciseIdCol = findHeaderCol_(header, RECORD_EXERCISEID_ALIASES_);
+  var tenantCol = findHeaderCol_(header, RECORD_TENANT_ALIASES_);
+  var goalCol = findHeaderCol_(header, RECORD_GOAL_ALIASES_);
+  var potentialCol = findHeaderCol_(header, RECORD_POTENTIAL_ALIASES_);
+  var s4Col = findHeaderCol_(header, RECORD_S4_ALIASES_);
+  var questionCol = findHeaderCol_(header, RECORD_QUESTION_ALIASES_);
 
   var exerciseName = exerciseCol !== -1 ? readExerciseInfo_(configSs).name : '';
   var indicatorByQuestionId = indicatorCol !== -1 ? readIndicatorMap_(configSs) : null;
-  var stageIndex = (stageCol !== -1 || sceneCol !== -1) ? indexQuestionsByStage_(items) : null;
+  // 評核潛能/4S 元素/評核題目 任一欄存在才讀 對應指標 全表（沿用 :162 的
+  // 「要用到才讀」模式，少一趟就少一次網路來回）。
+  var indicatorFull = (potentialCol !== -1 || s4Col !== -1 || questionCol !== -1)
+    ? readIndicatorFull_(configSs) : null;
+  var stageIndex = (stageCol !== -1 || sceneCol !== -1 || goalCol !== -1)
+    ? indexQuestionsByStage_(items) : null;
 
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -172,15 +825,33 @@ function appendSubmission_(body) {
       var row = [];
       for (var j = 0; j < header.length; j++) row.push('');
       var questionId = String(a.id || '');
+      var stageInfo = stageIndex ? (stageIndex[questionId] || {}) : {};
+      var fullInfo = indicatorFull ? (indicatorFull[questionId] || {}) : {};
       if (exerciseCol !== -1) row[exerciseCol] = sanitizeCell_(exerciseName);
       if (itemCol !== -1) row[itemCol] = sanitizeCell_(body.itemName);
-      if (stageCol !== -1) row[stageCol] = sanitizeCell_((stageIndex[questionId] || {}).stage || '');
-      if (sceneCol !== -1) row[sceneCol] = sanitizeCell_((stageIndex[questionId] || {}).itemName || body.itemName);
+      if (stageCol !== -1) row[stageCol] = sanitizeCell_(stageInfo.stage || '');
+      if (sceneCol !== -1) row[sceneCol] = sanitizeCell_(stageInfo.itemName || body.itemName);
       row[idCol] = sanitizeCell_(questionId);
       if (indicatorCol !== -1) row[indicatorCol] = sanitizeCell_(indicatorByQuestionId[questionId] || '');
       row[scoreCol] = Number(a.score);
       row[codeCol] = sanitizeCell_(body.fillerCode);
       row[timeCol] = now;
+      // 身分欄：fallback 模式下 t.hid/t.exid 都是空字串，寫進去就是空的——
+      // 這是刻意的，沒有註冊表時「這場演習叫什麼代號」沒有任何真實答案，
+      // 寫個假的進去比留空更糟。
+      if (tenantCol !== -1) row[tenantCol] = sanitizeCell_(t.hid || '');
+      if (exerciseIdCol !== -1) row[exerciseIdCol] = sanitizeCell_(t.exid || '');
+      // 標籤快照：送出當時就把 測試情境／評核潛能／4S 元素／評核題目 寫死，
+      // 之後業主為下一場改設定表也不會回頭改寫這一場的報告（缺陷 D3）。
+      if (goalCol !== -1) row[goalCol] = sanitizeCell_(stageInfo.goal || '');
+      if (potentialCol !== -1) row[potentialCol] = sanitizeCell_(fullInfo.potential || '');
+      if (s4Col !== -1) row[s4Col] = sanitizeCell_(fullInfo.s4 || '');
+      if (questionCol !== -1) row[questionCol] = sanitizeCell_(fullInfo.question || '');
+      // 觀察紀錄：唯一的自由文字欄。前端已經 trim + 切到 500 字，這裡再切一次。
+      // 內容或長度「永遠不會」造成整筆送出失敗——分數比留言重要。
+      if (commentCol !== -1) {
+        row[commentCol] = sanitizeCell_(String(a.comment == null ? '' : a.comment).trim().substring(0, COMMENT_MAX_LENGTH_));
+      }
       return row;
     });
 
@@ -190,7 +861,11 @@ function appendSubmission_(body) {
     // 讀出來就變成一整串日期字串（不是原本的問題ID）。寫入前把這幾個文字欄
     // 的儲存格格式強制設成「純文字」('@')，之後就不會再被誤判——這一步要在
     // setValues 之前做，格式要先套用到目標儲存格上。
-    var textColIndexes = [idCol, codeCol, exerciseCol, itemCol, stageCol, sceneCol, indicatorCol].filter(function (c) { return c !== -1; });
+    // 新增的 演習代號 欄特別需要它：「2026-01」正是 plan §7.2 點名的自動轉
+    // 日期陷阱，而解法本來就在這十行之內。
+    var textColIndexes = [idCol, codeCol, exerciseCol, itemCol, stageCol, sceneCol, indicatorCol,
+      tenantCol, exerciseIdCol, goalCol, potentialCol, s4Col, questionCol, commentCol]
+      .filter(function (c) { return c !== -1; });
     textColIndexes.forEach(function (c) {
       sheet.getRange(startRow, c + 1, rows.length, 1).setNumberFormat('@');
     });
@@ -204,8 +879,7 @@ function appendSubmission_(body) {
 }
 
 function readIndicatorMap_(ss) {
-  var sheet = ss.getSheetByName(INDICATOR_SHEET_NAME);
-  if (!sheet) throw new Error('找不到工作表：' + INDICATOR_SHEET_NAME);
+  var sheet = nullSafeSheet_(ss, INDICATOR_SHEET_NAME);
   var values = sheet.getDataRange().getValues();
   var header = values[0];
   var idCol = findHeaderCol_(header, INDICATOR_ID_ALIASES_);
@@ -224,8 +898,7 @@ function readIndicatorMap_(ss) {
 
 // 分析頁用：問題ID -> {question, indicator, potential, s4} 完整對照表。
 function readIndicatorFull_(ss) {
-  var sheet = ss.getSheetByName(INDICATOR_SHEET_NAME);
-  if (!sheet) throw new Error('找不到工作表：' + INDICATOR_SHEET_NAME);
+  var sheet = nullSafeSheet_(ss, INDICATOR_SHEET_NAME);
   var values = sheet.getDataRange().getValues();
   var header = values[0];
   var idCol = findHeaderCol_(header, INDICATOR_ID_ALIASES_);
@@ -256,57 +929,141 @@ function readIndicatorFull_(ss) {
 // 彙總 評核紀錄 目前所有已送出的分數，依潛能/4S/指標分組並計算統計量，
 // 供 Analysis.html 畫雷達圖、4S 長條圖、逐題明細與一致性統計。
 // 同一題同一位評核官若送出過不只一次，以試算表裡較晚的那列為準。
-function buildAnalysis_() {
-  var configSs = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);
-  var recordSs = SpreadsheetApp.openById(RECORD_SPREADSHEET_ID);
+//
+// 這一版的三個改動（統計本體 :292-350 一行都沒動）：
+// 1. 四個 openById/getSheetByName 改成吃解析出來的租戶。
+// 2. byQuestion 的鍵從「問題ID」改成「(醫院代號, 演習代號, 問題ID)」組合鍵。
+//    方案 A 每場演習各有自己的紀錄檔，所以正常情況下前兩段都是同一個值、
+//    分組結果跟今天一模一樣；但如果業主選了「兩場共用一份紀錄檔、用不同分頁」
+//    的次要選項、或自己手動把兩場的資料貼進同一張表，組合鍵就是最後一道防線，
+//    不會讓兩場的 1-1 互相覆蓋（缺陷 D1）。業主現在那張 6 欄表沒有 醫院代號/
+//    演習代號 欄，兩段都是空字串，分組與今天完全相同。
+// 3. 標籤改成「快照優先」：紀錄表有對應的快照欄且該格非空就用它，否則才回頭
+//    join 設定表（今天的行為），並逐列記下 labelSource 讓報告可以誠實揭露。
+//    ⚠️ stage 與 itemName 刻意「不」改優先序——情境階段/演練單元 這兩欄在業主
+//    現在那張表上「已經有值」，把它們改成快照優先會立刻改掉今天的輸出數字。
+function buildAnalysis_(t) {
+  var configSs = tenantSheetConfig_(t);
   var exerciseInfo = readExerciseInfo_(configSs);
-  var stageIndex = indexQuestionsByStage_(readItems_(configSs));
+  var items = readItems_(configSs);
+  var stageIndex = indexQuestionsByStage_(items);
   var indicatorFull = readIndicatorFull_(configSs);
 
-  var sheet = recordSs.getSheetByName(RECORD_SHEET_NAME);
-  if (!sheet) throw new Error('找不到工作表：' + RECORD_SHEET_NAME);
+  var record = tenantSheetRecord_(t);
+  var sheet = record.sheet;
   var values = sheet.getDataRange().getValues();
   var header = values[0];
   var idCol = findHeaderCol_(header, RECORD_ID_ALIASES_);
   var codeCol = findHeaderCol_(header, RECORD_CODE_ALIASES_);
   var scoreCol = findHeaderCol_(header, RECORD_SCORE_ALIASES_);
   if (idCol === -1 || codeCol === -1 || scoreCol === -1) {
-    throw new Error(RECORD_SHEET_NAME + ' 缺少欄位：' + RECORD_ID_ALIASES_.join('/') + ' / ' +
+    throw new Error(t.recordSheet + ' 缺少欄位：' + RECORD_ID_ALIASES_.join('/') + ' / ' +
       RECORD_CODE_ALIASES_.join('/') + ' / ' + RECORD_SCORE_ALIASES_.join('/'));
   }
   // 項目名稱/演練單元其中一個存在就拿來當 fallback（優先用 stageIndex 現查
   // 的結果，這欄只在該題已經從 項目與問題 移除時墊底用）。
   var itemFallbackCol = findHeaderCol_(header, RECORD_ITEM_ALIASES_.concat(RECORD_SCENE_ALIASES_));
+  // 以下全部是選填欄，業主現在那張表一欄都沒有，全部 -1。
+  var rowTenantCol = findHeaderCol_(header, RECORD_TENANT_ALIASES_);
+  var rowExerciseIdCol = findHeaderCol_(header, RECORD_EXERCISEID_ALIASES_);
+  var snapGoalCol = findHeaderCol_(header, RECORD_GOAL_ALIASES_);
+  var snapPotentialCol = findHeaderCol_(header, RECORD_POTENTIAL_ALIASES_);
+  var snapS4Col = findHeaderCol_(header, RECORD_S4_ALIASES_);
+  var snapIndicatorCol = findHeaderCol_(header, RECORD_INDICATOR_ALIASES_);
+  var snapQuestionCol = findHeaderCol_(header, RECORD_QUESTION_ALIASES_);
+  var commentCol = findHeaderCol_(header, RECORD_COMMENT_ALIASES_);
 
+  var recordRowCount = Math.max(0, values.length - 1);
+  var commentCount = 0;
   var byQuestion = {};
+  var order = [];
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
     var id = String(row[idCol] || '');
     var code = String(row[codeCol] || '');
     var score = Number(row[scoreCol]);
     if (!id || !code || isNaN(score)) continue;
-    if (!byQuestion[id]) byQuestion[id] = { itemName: itemFallbackCol !== -1 ? String(row[itemFallbackCol] || '') : '', byCode: {} };
-    byQuestion[id].byCode[code] = score;
+    var rowHid = rowTenantCol !== -1 ? String(row[rowTenantCol] || '') : '';
+    var rowExid = rowExerciseIdCol !== -1 ? String(row[rowExerciseIdCol] || '') : '';
+    var key = rowHid + KEY_SEP_ + rowExid + KEY_SEP_ + id;
+    if (!byQuestion[key]) {
+      byQuestion[key] = {
+        questionId: id,
+        hid: rowHid,
+        exid: rowExid,
+        itemName: itemFallbackCol !== -1 ? String(row[itemFallbackCol] || '') : '',
+        snap: { goal: '', potential: '', s4: '', indicator: '', question: '' },
+        byCode: {},
+        commentByCode: {},
+      };
+      order.push(key);
+    }
+    var bucket = byQuestion[key];
+    bucket.byCode[code] = score;
+    // 快照欄逐列覆寫：同一題同一人以較晚那列為準，標籤也跟著那一列走。
+    if (snapGoalCol !== -1 && String(row[snapGoalCol] || '')) bucket.snap.goal = String(row[snapGoalCol]);
+    if (snapPotentialCol !== -1 && String(row[snapPotentialCol] || '')) bucket.snap.potential = String(row[snapPotentialCol]);
+    if (snapS4Col !== -1 && String(row[snapS4Col] || '')) bucket.snap.s4 = String(row[snapS4Col]);
+    if (snapIndicatorCol !== -1 && String(row[snapIndicatorCol] || '')) bucket.snap.indicator = String(row[snapIndicatorCol]);
+    if (snapQuestionCol !== -1 && String(row[snapQuestionCol] || '')) bucket.snap.question = String(row[snapQuestionCol]);
+    if (commentCol !== -1) {
+      var cmt = String(row[commentCol] == null ? '' : row[commentCol]).trim();
+      if (cmt) {
+        bucket.commentByCode[code] = cmt;
+        commentCount++;
+      } else if (bucket.commentByCode[code]) {
+        // 後來那一列把留言清空了，就跟分數一樣以較晚的為準。
+        delete bucket.commentByCode[code];
+      }
+    }
   }
 
-  var rows = Object.keys(byQuestion).map(function (id) {
-    var meta = indicatorFull[id] || { question: '', indicator: '', potential: '', s4: '' };
-    var stageInfo = stageIndex[id] || { stage: '', itemName: byQuestion[id].itemName, goal: '' };
-    var codes = Object.keys(byQuestion[id].byCode).sort();
-    var scores = codes.map(function (c) { return { code: c, score: byQuestion[id].byCode[c] }; });
+  var rows = order.map(function (k) {
+    var b = byQuestion[k];
+    var qid = b.questionId;
+    var meta = indicatorFull[qid] || { question: '', indicator: '', potential: '', s4: '' };
+    var stageInfo = stageIndex[qid] || { stage: '', itemName: b.itemName, goal: '' };
+    var fromSnapshot = false;
+    var fromJoin = false;
+    function pickLabel(snapValue, joinValue) {
+      if (snapValue) {
+        fromSnapshot = true;
+        return snapValue;
+      }
+      if (joinValue) {
+        fromJoin = true;
+        return joinValue;
+      }
+      return '';
+    }
+    var goal = pickLabel(b.snap.goal, stageInfo.goal || '');
+    var potential = pickLabel(b.snap.potential, meta.potential);
+    var s4 = pickLabel(b.snap.s4, meta.s4);
+    var indicator = pickLabel(b.snap.indicator, meta.indicator);
+    var question = pickLabel(b.snap.question, meta.question);
+    var codes = Object.keys(b.byCode).sort();
+    var scores = codes.map(function (c) { return { code: c, score: b.byCode[c] }; });
     var vals = scores.map(function (s) { return s.score; });
+    var untriggered = 0;
+    vals.forEach(function (v) { if (v === 1) untriggered++; });
     return {
-      questionId: id,
+      questionId: qid,
       stage: stageInfo.stage,
-      itemName: stageInfo.itemName || byQuestion[id].itemName,
-      goal: stageInfo.goal || '',
-      potential: meta.potential,
-      s4: meta.s4,
-      indicator: meta.indicator,
-      question: meta.question,
+      itemName: stageInfo.itemName || b.itemName,
+      goal: goal,
+      potential: potential,
+      s4: s4,
+      indicator: indicator,
+      question: question,
       scores: scores,
       mean: mean_(vals),
       sd: sd_(vals),
+      exerciseId: b.exid || t.exid || '',
+      comments: Object.keys(b.commentByCode).sort().map(function (c) {
+        return { code: c, comment: b.commentByCode[c] };
+      }),
+      labelSource: fromSnapshot ? 'snapshot' : (fromJoin ? 'join' : 'none'),
+      untriggered: untriggered,
     };
   });
 
@@ -349,8 +1106,80 @@ function buildAnalysis_() {
     });
   });
 
+  // 以下三組是新增的，而且全部是「現有資料的純推導」，沒有要求任何新欄位
+  // （plan §3.3 的「不需新資料、只是目前沒人算」那一列）。原有七個 stats 鍵
+  // 的計算方式一個字都沒改。
+  // 1 分的定義是「劇本未走到此條件」（見 評分標準 工作表），跟 2-5 分放在一起
+  // 平均會讓「沒演到」和「表現差」分不出來，所以單獨算一個未觸發率。
+  var untriggeredN = 0;
+  var untriggeredTotal = 0;
+  consistencyRows.forEach(function (r) {
+    r.scores.forEach(function (s) {
+      untriggeredTotal++;
+      if (s.score === 1) untriggeredN++;
+    });
+  });
+  stats.untriggered = {
+    n: untriggeredN,
+    total: untriggeredTotal,
+    rate: untriggeredTotal ? untriggeredN / untriggeredTotal : null,
+  };
+
+  // 缺漏清單：項目與問題 裡有、但一分都沒收到的題目。業主看到的「評核官人數」
+  // 是實際出現過的代號聯集，所以「哪一題根本沒人評」今天是隱形的。
+  var scoredIds = {};
+  rows.forEach(function (r) { if (r.scores.length) scoredIds[r.questionId] = true; });
+  stats.missingQuestions = [];
+  Object.keys(stageIndex).forEach(function (qid) {
+    // 項目與問題 裡「有分組名稱、但 評核題號 那一格空白」的列（業主常拿來放
+    // 補充說明或分隔列）會讓 readItems_ 產生一筆 id 為空字串的題目，
+    // indexQuestionsByStage_ 再把它存成 stageIndex['']。那一筆永遠不可能收到
+    // 分數，列進缺漏清單只會在報告上多一列「永遠補不起來的空白題」，
+    // 反而讓真正漏掉的題目被淹掉，所以直接略過。
+    if (!qid) return;
+    if (scoredIds[qid]) return;
+    var si = stageIndex[qid];
+    stats.missingQuestions.push({
+      questionId: qid,
+      stage: si.stage || '',
+      itemName: si.itemName || '',
+      goal: si.goal || '',
+    });
+  });
+
+  // 各評核官的寬嚴傾向。deviation = 該評核官的平均，減掉「他評過的那些題目」
+  // 的題目平均——用他自己評過的題目當基準，才不會把「只評了比較難的那幾題」
+  // 誤判成嚴格。報告端要能匿名呈現（只給序號、不給代號）。
+  var byEvaluator = {};
+  consistencyRows.forEach(function (r) {
+    r.scores.forEach(function (s) {
+      if (!byEvaluator[s.code]) byEvaluator[s.code] = { scores: [], rowMeans: [] };
+      byEvaluator[s.code].scores.push(s.score);
+      byEvaluator[s.code].rowMeans.push(r.mean);
+    });
+  });
+  stats.byEvaluator = Object.keys(byEvaluator).sort().map(function (c) {
+    var own = mean_(byEvaluator[c].scores);
+    var base = mean_(byEvaluator[c].rowMeans);
+    return {
+      code: c,
+      n: byEvaluator[c].scores.length,
+      mean: own,
+      deviation: (own === null || base === null) ? null : own - base,
+    };
+  });
+
   var codeSet = {};
   rows.forEach(function (r) { r.scores.forEach(function (s) { codeSet[s.code] = true; }); });
+
+  // 標籤來源統計只算「真的進到 payload 三個陣列裡」的列：潛能空白的題目
+  // （例如紀錄表裡有、對應指標 裡沒有的題號）本來就不會出現在任何圖表上，
+  // 把它們算進來只會讓報告上的「快照 N 題／讀取時對照 M 題」跟使用者看到的
+  // 列數對不起來。
+  var labelSourceSummary = { snapshot: 0, join: 0, none: 0 };
+  analysisRows.concat(coverageRows).concat(learningRows).forEach(function (r) {
+    labelSourceSummary[r.labelSource] = (labelSourceSummary[r.labelSource] || 0) + 1;
+  });
 
   return {
     meta: {
@@ -362,6 +1191,26 @@ function buildAnalysis_() {
       exerciseDesc: exerciseInfo.desc,
       generatedAt: new Date().toISOString(),
       evaluatorCodes: Object.keys(codeSet).sort(),
+      // ⚠️ 這裡刻意「只回真的解析到的身分」，不像設定分支那樣把使用者帶來的
+      // 代號原樣回echo。設定分支的 echo 是為了讓前端知道「你帶的參數我收到了」，
+      // 但分析頁把 meta.tenant 當成「後端真的從註冊表解析到機構」的判斷依據
+      // （Analysis.html 用它決定要不要開放「過去演習」按鈕），而且 meta.tenant/
+      // meta.exercise 會被印在報告的「演習代號」徽章與附錄C 上。還沒建註冊表時
+      // 有人用 ?t=wanfang-7f3a2c 開儀表板，資料其實來自寫死的那一組試算表，
+      // 卻在紙本報告上印出一個機構／場次代號，是會誤導判讀的假身分。
+      tenant: t.hid || '',
+      exercise: t.exid || '',
+      displayName: t.displayName || '',
+      scenePrefix: t.scenePrefix || 'SCENE',
+      tenantSource: t.source,
+      // 檔名可以放在這裡（這個分支有金鑰保護），給報告的附錄C 用；
+      // 試算表 ID 永遠不放，檔名不是憑證、ID 是。
+      configFileName: configSs.getName(),
+      recordFileName: record.ss.getName(),
+      recordSheetName: t.recordSheet,
+      recordRowCount: recordRowCount,
+      commentCount: commentCount,
+      labelSourceSummary: labelSourceSummary,
     },
     analysisRows: analysisRows,
     coverageRows: coverageRows,
@@ -475,6 +1324,279 @@ function indexChildren_(nodes, stageName, out) {
   });
 }
 
+// ===== 管理／診斷用的三個 action =====
+// 共同前提：ADMIN_KEY 是一把「不會出現在任何上架 HTML 裡」的金鑰，由操作者自己
+// 打在網址列，或由註冊表那支容器綁定腳本用 UrlFetchApp 帶。空字串 = 停用，而且
+// 停用時連一張試算表都不會打開（驗證在最前面）。
+function adminGate_(e) {
+  if (!ADMIN_KEY) {
+    return { ok: false, error: '尚未設定管理金鑰（ADMIN_KEY），自我檢測未啟用。', errorCode: 'ADMIN_DISABLED' };
+  }
+  if (param_(e, 'adminKey') !== ADMIN_KEY) {
+    return { ok: false, error: '管理金鑰不正確。', errorCode: 'UNAUTHORIZED' };
+  }
+  return null;
+}
+
+function msgOf_(err) {
+  return String((err && err.message) || err);
+}
+
+// 註冊表快取只有一把 key，flush 就只清這一把。
+// ⚠️ 絕對不能呼叫 cache.removeAll，也不能去碰 sub_ 開頭的那些 key：那是 doPost
+// 的冪等去重窗，清掉的瞬間，一個正在重試的送出就會 append 出重複列（plan §7.5）。
+function handleFlush_(e) {
+  var gate = adminGate_(e);
+  if (gate) return gate;
+  CacheService.getScriptCache().remove(REGISTRY_CACHE_KEY_);
+  return { ok: true, flushed: [REGISTRY_CACHE_KEY_] };
+}
+
+// action=selftest：業主（或註冊表那支腳本）新增一場演習之後，立刻知道
+// 「設定檔讀不讀得到、紀錄檔寫不寫得進去」。
+// ⚠️ 回傳內容的紅線：只能有「檔名、分頁名、欄名、數量」。不准有試算表 ID、
+// 不准有任何金鑰、不准有 人員代號／問題ID／分數／任何儲存格內容。它也是
+// 「註冊表哪一列為什麼無效」與「fallback case (ii) 的 warning」唯一的出口，
+// 這兩樣東西刻意不出現在任何評核官手機抓得到的 payload 裡。
+function handleSelfTest_(e) {
+  var gate = adminGate_(e);
+  if (gate) return gate;
+  var reg = readRegistry_();
+  var registryInfo = {
+    configured: !!REGISTRY_SPREADSHEET_ID,
+    readable: reg ? !!reg.readable : false,
+    sheetFound: reg ? !!reg.sheetFound : false,
+    rowCount: reg ? reg.rowCount : 0,
+    validRowCount: reg ? reg.rows.length : 0,
+    invalidRows: reg ? reg.invalid : [],
+    warning: reg ? reg.warning : '',
+  };
+  var t;
+  try {
+    t = resolveTenant_(e, null);
+  } catch (err) {
+    return {
+      ok: false,
+      error: msgOf_(err),
+      errorCode: tenantCodeOf_(err) || 'NO_TENANT',
+      tenant: '',
+      exercise: '',
+      displayName: '',
+      tenantSource: '',
+      registry: registryInfo,
+      messages: ['無法解析這個連結對應的演習：' + msgOf_(err)],
+    };
+  }
+  if (!registryInfo.warning && t.registryWarning) registryInfo.warning = t.registryWarning;
+  return doSelfTest_(t, registryInfo);
+}
+
+function doSelfTest_(t, registryInfo) {
+  var messages = [];
+  var ok = true;
+  if (!registryInfo.configured) {
+    messages.push('尚未設定租戶註冊表（REGISTRY_SPREADSHEET_ID 為空），目前使用程式內建的那一組試算表。');
+  } else if (registryInfo.warning) {
+    messages.push('⚠️ 註冊表無法使用，已退回程式內建的那一組試算表：' + registryInfo.warning);
+  }
+  if (registryInfo.invalidRows && registryInfo.invalidRows.length) {
+    ok = false;
+    registryInfo.invalidRows.forEach(function (bad) {
+      messages.push('⚠️ 註冊表第 ' + bad.rowNumber + ' 列無效：' + bad.reasons.join('；'));
+    });
+  }
+
+  var configReport = {
+    readable: false, fileName: '', sheetsFound: [], missingSheets: [],
+    codeCount: 0, criteriaCount: 0, leafCount: 0, questionCount: 0, indicatorRowCount: 0,
+  };
+  try {
+    var configSs = tenantSheetConfig_(t);
+    configReport.readable = true;
+    configReport.fileName = configSs.getName();
+    messages.push('✅ 設定檔可讀：' + configReport.fileName);
+    ['演習資訊', '人員代號', '評分標準', '項目與問題', INDICATOR_SHEET_NAME].forEach(function (name) {
+      if (configSs.getSheetByName(name)) configReport.sheetsFound.push(name);
+      else configReport.missingSheets.push(name);
+    });
+    if (configReport.missingSheets.length) {
+      ok = false;
+      messages.push('⚠️ 設定檔缺少分頁：' + configReport.missingSheets.join('／'));
+    }
+    try {
+      configReport.codeCount = readCodes_(configSs).length;
+    } catch (errCodes) {
+      ok = false;
+      messages.push('⚠️ 人員代號 讀取失敗：' + msgOf_(errCodes));
+    }
+    try {
+      configReport.criteriaCount = readCriteria_(configSs).length;
+    } catch (errCriteria) {
+      ok = false;
+      messages.push('⚠️ 評分標準 讀取失敗：' + msgOf_(errCriteria));
+    }
+    try {
+      var counted = countItems_(readItems_(configSs));
+      configReport.leafCount = counted.leaves;
+      configReport.questionCount = counted.questions;
+    } catch (errItems) {
+      ok = false;
+      messages.push('⚠️ 項目與問題 讀取失敗：' + msgOf_(errItems));
+    }
+    try {
+      configReport.indicatorRowCount = Object.keys(readIndicatorFull_(configSs)).length;
+    } catch (errInd) {
+      ok = false;
+      messages.push('⚠️ ' + INDICATOR_SHEET_NAME + ' 讀取失敗（分析頁會壞，評核表單不受影響）：' + msgOf_(errInd));
+    }
+  } catch (errConfig) {
+    ok = false;
+    messages.push('❌ 設定檔打不開：' + msgOf_(errConfig));
+  }
+
+  var recordReport = {
+    readable: false, writable: null, fileName: '', sheetName: t.recordSheet,
+    headerColumns: [], rowCount: 0, missingRequired: [], presentOptional: [], absentOptional: [],
+  };
+  try {
+    var record = tenantSheetRecord_(t);
+    recordReport.readable = true;
+    recordReport.fileName = record.ss.getName();
+    messages.push('✅ 紀錄檔可讀：' + recordReport.fileName + '／' + t.recordSheet);
+    var lastCol = record.sheet.getLastColumn();
+    var header = lastCol ? record.sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+    recordReport.headerColumns = header.map(function (h) { return String(h == null ? '' : h); });
+    recordReport.rowCount = Math.max(0, record.sheet.getLastRow() - 1);
+    [[RECORD_ID_ALIASES_, '問題ID'], [RECORD_SCORE_ALIASES_, '分數'],
+      [RECORD_CODE_ALIASES_, '人員代號'], [RECORD_TIME_ALIASES_, '送出時間']].forEach(function (pair) {
+      if (findHeaderCol_(header, pair[0]) === -1) recordReport.missingRequired.push(pair[1]);
+    });
+    if (recordReport.missingRequired.length) {
+      ok = false;
+      messages.push('⚠️ 紀錄檔缺少必要欄位：' + recordReport.missingRequired.join('／'));
+    }
+    [[RECORD_EXERCISE_ALIASES_, '演習名稱'], [RECORD_ITEM_ALIASES_, '項目名稱'],
+      [RECORD_STAGE_ALIASES_, '情境階段'], [RECORD_SCENE_ALIASES_, '演練單元'],
+      [RECORD_INDICATOR_ALIASES_, '指標代號'], [RECORD_COMMENT_ALIASES_, '觀察紀錄'],
+      [RECORD_EXERCISEID_ALIASES_, '演習代號'], [RECORD_TENANT_ALIASES_, '醫院代號'],
+      [RECORD_GOAL_ALIASES_, '測試情境'], [RECORD_POTENTIAL_ALIASES_, '評核潛能'],
+      [RECORD_S4_ALIASES_, '4S 元素'], [RECORD_QUESTION_ALIASES_, '評核題目']].forEach(function (pair) {
+      if (findHeaderCol_(header, pair[0]) !== -1) recordReport.presentOptional.push(pair[1]);
+      else recordReport.absentOptional.push(pair[1]);
+    });
+    // 寫入探測刻意「不」append 任何一列、也不動任何一格：掛一個 developer
+    // metadata 上去再拿掉，兩步都成功就代表腳本帳號對這份檔案有編輯權。失敗
+    // 不代表資料有問題，只代表權限還沒給。
+    try {
+      var probeKey = 'selftest_' + Date.now();
+      record.ss.addDeveloperMetadata(probeKey, '1');
+      record.ss.createDeveloperMetadataFinder().withKey(probeKey).find().forEach(function (meta) {
+        meta.remove();
+      });
+      SpreadsheetApp.flush();
+      recordReport.writable = true;
+      messages.push('✅ 紀錄檔可寫');
+    } catch (errWrite) {
+      ok = false;
+      recordReport.writable = false;
+      messages.push('⚠️ 紀錄檔不可寫（請把執行這支腳本的 Google 帳號加成該檔案的編輯者）：' + msgOf_(errWrite));
+    }
+  } catch (errRecord) {
+    ok = false;
+    messages.push('❌ 紀錄檔打不開：' + msgOf_(errRecord));
+  }
+
+  return {
+    ok: ok,
+    tenant: t.hid || t.requestedHid || '',
+    exercise: t.exid || t.requestedExid || '',
+    displayName: t.displayName || '',
+    tenantSource: t.source,
+    registry: registryInfo,
+    config: configReport,
+    record: recordReport,
+    messages: messages,
+  };
+}
+
+function countItems_(nodes) {
+  var out = { leaves: 0, questions: 0 };
+  nodes.forEach(function (n) {
+    if (n.questions) {
+      out.leaves++;
+      out.questions += n.questions.length;
+    } else if (n.children) {
+      var sub = countItems_(n.children);
+      out.leaves += sub.leaves;
+      out.questions += sub.questions;
+    }
+  });
+  return out;
+}
+
+// action=exercises：列出某一家機構底下的所有場次，給 Analysis.html 那顆目前
+// disabled 的「過去演習」按鈕用。授權方式：?t= 加 ?key=，而 key 只要等於「該
+// 醫院代號底下任何一列有效列的 分析金鑰」就算通過——檢查規則 3 保證同一把金鑰
+// 不會跨兩個 醫院代號，所以這個比法不會讓 A 院列出 B 院的場次。
+// ⚠️ 回傳內容永遠不含 設定試算表ID／紀錄試算表ID／紀錄分頁名稱／分析金鑰／
+// 檔案擁有者。啟用=N 的列「要」列出來（enabled:false），那正是「過去演習」
+// 清單需要的東西。
+function handleExercises_(e) {
+  var key = param_(e, 'key');
+  var hid = normSlug_(param_(e, 't'));
+  var reg = readRegistry_();
+  if (!reg || !reg.rows.length) {
+    // fallback 模式：?t= 一律忽略，金鑰比對程式內建的 ANALYSIS_KEY，
+    // 回傳只有一個元素的清單（就是那一場寫死的演習）。
+    if (!key || key !== ANALYSIS_KEY) return { error: 'unauthorized', errorCode: 'UNAUTHORIZED' };
+    var info = { name: '', date: '' };
+    try {
+      info = readExerciseInfo_(tenantSheetConfig_(fallbackTenant_()));
+    } catch (err) {
+      // 讀不到就回空字串，不要讓整份清單失敗。
+    }
+    return {
+      tenant: '',
+      exercises: [{
+        exercise: '',
+        displayName: '',
+        exerciseName: info.name || '',
+        exerciseDate: info.date || '',
+        enabled: true,
+        isDefault: true,
+      }],
+    };
+  }
+  var mine = reg.rows.filter(function (r) { return hid && r.hid === hid; });
+  var authorized = false;
+  mine.forEach(function (r) { if (key && r.analysisKey === key) authorized = true; });
+  if (!authorized) return { error: 'unauthorized', errorCode: 'UNAUTHORIZED' };
+  var sorted = mine.slice().sort(function (a, b) { return a.exid < b.exid ? -1 : (a.exid > b.exid ? 1 : 0); });
+  return {
+    tenant: hid,
+    exercises: sorted.map(function (r) {
+      var name = '';
+      var date = '';
+      try {
+        var rowInfo = readExerciseInfo_(tenantSheetConfig_(r));
+        name = rowInfo.name;
+        date = rowInfo.date;
+      } catch (errRow) {
+        // 某一場的設定檔打不開（權限還沒給、檔案被刪）不該讓整份清單失敗，
+        // 那一列就只少了名稱與日期兩個欄位。
+      }
+      return {
+        exercise: r.exid,
+        displayName: r.displayName || '',
+        exerciseName: name,
+        exerciseDate: date,
+        enabled: r.enabled,
+        isDefault: r.isDefault,
+      };
+    }),
+  };
+}
+
 // 演習資訊 是 key/value 列，A 欄放標籤、B 欄放值，沒有固定標頭列，逐列掃描
 // A 欄比對標籤文字。機構名稱/演習主題/演習日期都是選填的，沒填就回空字串，
 // 前端據此決定要不要顯示（標題/徽章）。
@@ -487,9 +1609,17 @@ function formatCellValue_(val) {
   if (val instanceof Date) return Utilities.formatDate(val, 'Asia/Taipei', 'yyyy/MM/dd');
   return String(val == null ? '' : val);
 }
+// ⚠️ 這個函式原本跟 apps-script/Config.gs 那一份逐位元相同；從這一版起「兩份
+// 會漂移」：這裡多認兩個選填標籤（啟用觀察紀錄／低分需說明門檻），Config.gs
+// 沒有。key/value 的形狀本身刻意沒有改動，所以 README.md 那份業主實際在填的
+// 對外契約逐字保持有效（plan §2.1）。多出來的兩列是「有填才生效」，業主不填
+// 就是今天的行為（留言框開著、不強制說明）。
 function readExerciseInfo_(ss) {
-  var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
-  var info = { org: '', name: '', topic: '', category: '', date: '', desc: '' };
+  var values = nullSafeSheet_(ss, '演習資訊').getDataRange().getValues();
+  var info = {
+    org: '', name: '', topic: '', category: '', date: '', desc: '',
+    commentEnabled: true, commentRequiredBelow: 0,
+  };
   for (var i = 0; i < values.length; i++) {
     var key = values[i][0];
     var val = formatCellValue_(values[i][1]);
@@ -499,13 +1629,45 @@ function readExerciseInfo_(ss) {
     else if (key === '演習類別') info.category = val;
     else if (key === '演習日期') info.date = val;
     else if (key === '說明') info.desc = val;
+    else if (key === '啟用觀察紀錄') {
+      // 只有明確寫 N／否／關閉 才關掉；空白或任何其他值都當成開啟，
+      // 因為「少一個留言框」比「意外關掉報告唯一的質性資料來源」好修。
+      info.commentEnabled = !(val === 'N' || val === 'n' || val === '否' || val === '關閉' ||
+        val === 'FALSE' || val === 'False' || val === 'false');
+    } else if (key === '低分需說明門檻') {
+      // 2 的意思是「評 1 或 2 分要寫說明」。空白、非數字都當 0（永不強制）。
+      var threshold = Number(val);
+      info.commentRequiredBelow = isNaN(threshold) ? 0 : threshold;
+    }
   }
   return info;
 }
 
+// getSheetByName 回 null 的四個地方（演習資訊/人員代號/評分標準/項目與問題）
+// 統一走這裡：分頁被改名或刪掉時給一句中文，而不是讓
+// 「Cannot read property getDataRange of null」直接噴到評核官手機上（plan §6.2）。
+function nullSafeSheet_(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) throw new Error('找不到工作表：' + name);
+  return sheet;
+}
+
+// findHeaderCol_ 加上「找不到就丟中文錯誤」。plan §6.1 點名的那三處裸
+// indexOf（readCodes_ 的 代號、readCriteria_ 的 分數/標籤/說明、readItems_ 的
+// 問題ID/問題內容）都改用這個：欄名被改到的話，原本會拿到 row[-1] === undefined，
+// 整張表「靜靜地變成空的」而且沒有任何錯誤——業主看到空的代號下拉選單，只會
+// 以為是評核官還沒送出。
+// ⚠️ readItems_ 探測「層N」那個迴圈必須繼續用裸 indexOf：那裡的 -1 是
+// 「層數到底了」的迴圈終止條件，不是錯誤。
+function safeHeaderCol_(header, aliases, label) {
+  var col = findHeaderCol_(header, aliases);
+  if (col === -1) throw new Error(label + ' 缺少欄位：' + aliases.join('／'));
+  return col;
+}
+
 function readCodes_(ss) {
-  var values = ss.getSheetByName('人員代號').getDataRange().getValues();
-  var col = values[0].indexOf('代號');
+  var values = nullSafeSheet_(ss, '人員代號').getDataRange().getValues();
+  var col = safeHeaderCol_(values[0], ['代號'], '人員代號');
   var out = [];
   for (var i = 1; i < values.length; i++) {
     var v = values[i][col];
@@ -516,11 +1678,11 @@ function readCodes_(ss) {
 }
 
 function readCriteria_(ss) {
-  var values = ss.getSheetByName('評分標準').getDataRange().getValues();
+  var values = nullSafeSheet_(ss, '評分標準').getDataRange().getValues();
   var header = values[0];
-  var scoreCol = header.indexOf('分數');
-  var labelCol = header.indexOf('標籤');
-  var descCol = header.indexOf('說明');
+  var scoreCol = safeHeaderCol_(header, ['分數'], '評分標準');
+  var labelCol = safeHeaderCol_(header, ['標籤'], '評分標準');
+  var descCol = safeHeaderCol_(header, ['說明'], '評分標準');
   var out = [];
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
@@ -548,6 +1710,7 @@ var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'
 // 選填欄：每個葉節點（最底層分組，例如 SCENE）的簡要說明，取自這一欄的第一
 // 筆值，掛在葉節點的 goal 上，給 Start.dc.html 選擇畫面當作該情境的列表文字
 // 用（配合數字徽章顯示）。沒有這欄就是空字串，前端會退回原本只顯示編號。
+// 這是「真的選填」，所以刻意不用 safeHeaderCol_，-1 由 :605 的判斷吸收。
 var GOAL_HEADER_ALIASES_ = ['測試情境與目標', '測試情境'];
 // 找標頭列裡符合任一別名的欄位：先找「完全相等」，全部欄位都找過一輪都沒
 // 命中，才退而求其次找「開頭比對」。一定要先做完整的完全相等再做開頭比對
@@ -569,22 +1732,23 @@ function findHeaderCol_(header, names) {
   return -1;
 }
 function readItems_(ss) {
-  var values = ss.getSheetByName('項目與問題').getDataRange().getValues();
+  var values = nullSafeSheet_(ss, '項目與問題').getDataRange().getValues();
   var header = values[0];
   var groupCols = [];
   for (var lvl = 1; ; lvl++) {
+    // 這裡的 -1 是迴圈終止條件（層數到底了），不是錯誤，所以維持裸 indexOf。
     var at = header.indexOf('層' + lvl);
     if (at === -1 && GROUP_HEADER_ALIASES_[lvl - 1]) at = findHeaderCol_(header, GROUP_HEADER_ALIASES_[lvl - 1]);
     if (at === -1) break;
     groupCols.push(at);
   }
   if (!groupCols.length) {
-    var nameCol = header.indexOf('項目名稱');
+    var nameCol = findHeaderCol_(header, ['項目名稱']);
     if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1/情境階段');
     groupCols = [nameCol];
   }
-  var idCol = findHeaderCol_(header, ID_HEADER_ALIASES_);
-  var textCol = findHeaderCol_(header, TEXT_HEADER_ALIASES_);
+  var idCol = safeHeaderCol_(header, ID_HEADER_ALIASES_, '項目與問題');
+  var textCol = safeHeaderCol_(header, TEXT_HEADER_ALIASES_, '項目與問題');
   var goalCol = findHeaderCol_(header, GOAL_HEADER_ALIASES_);
 
   var root = { children: [], index: {} };
