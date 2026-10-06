@@ -18,6 +18,33 @@
 
 > 這一節是 10-06 補上的。**下面第 0 章起的內容沒有改寫**，仍是 10-05 的評估原貌。
 
+### ✅ 多租戶已上線並驗證（2026-10-06）
+
+註冊表 `1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk`（分頁名必須也叫 `租戶註冊表`，
+不是 `工作表1` —— 這一點踩過一次：分頁名不對時 `getSheetByName` 回 null，整張註冊表
+被判不可用並**無聲退回**單一場次模式，連 `?t=亂打的代號` 都拿得到正常資料。回應裡的
+`tenant` 欄只是把帶進來的代號原樣回填，**判斷依據是 `tenantSource`**）。
+
+單列：`wanfang-7f3a2c` / `2026a` → 設定 `1yiZ…` / 紀錄 `1jD6…`，金鑰沿用既有的
+`ANALYSIS_KEY`，`預設演習=Y`。實測五條路由：
+
+| 請求 | 結果 |
+|---|---|
+| 不帶參數 | `tenantSource=fallback`（相容路徑未被破壞）|
+| `?t=wanfang-7f3a2c&ex=2026a` | `tenantSource=registry`，`displayName` 正確解析 |
+| 只帶 `?t=` | 走 `預設演習=Y` → `exercise=2026a` |
+| `?t=nonexistent-hospital` | `NO_TENANT` 中文錯誤，**不是**退回別人的資料 |
+| `?t=wanfang-7f3a2c&ex=9999z` | `NO_EXERCISE` |
+
+兩條路徑（fallback 與 registry）對同一份資料算出的統計**逐位元相同**：
+`16/7/0`、`overall n=53 mean=4.169811 sd=0.935123`、`icc2k=0.550349`、`within1=0.750000`。
+`meta.configFileName`/`recordFileName` 解析為 `演習評核_設定`/`演習評核_紀錄`，
+證明 ID 指向正確（這是肉眼核對 44 字元 ID 抓不到的錯誤）。
+`action=exercises` 列出該場次；錯誤金鑰回 `{"error":"unauthorized"}`（與舊字串逐字相同）。
+
+註冊表的讀取結果（含失敗結果）快取 120 秒，所以改完註冊表最多要等兩分鐘才生效；
+`action=flush` 可立即清除，但需要 `ADMIN_KEY`（目前為空字串＝停用）。
+
 ### ⏸️ 工作暫停點（2026-10-06，第二次更新：報告方案 B 已寫完，但一次都沒跑過）
 
 **`apps-script/Report.gs` ＋ `apps-script/ReportDialog.html` 已經寫完並進 repo。**
