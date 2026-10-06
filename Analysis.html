@@ -37,14 +37,14 @@
 <script>
 // 跟 apps-script/ConfigWithSubmit.gs 部署後的 RECORD_URL 一致（跟 Start.dc.html
 // 用同一個 /exec 網址，用 action=analysis 參數走分析用的 doGet 分支）。
-// ⚠️ 測試分支（dev）：故意留成無效值。這個頁面要讀的是測試紀錄表
-// 1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM（已有 101 列測試資料），但目前沒有
-// 任何活著的 /exec 能讀它 —— 舊的 record 部署權限已壞，正式的那一個讀的是業主的
-// 11HeRK…（目前 0 列）。照 Start.dc.html 開頭的說明部署一個測試 Web App 之後，
-// 把它的 /exec 填到這裡（兩個檔案要同一個值）。
-// master 上的正式值：
+// ⚠️ 測試分支（dev）：f2c1c47 之前那個舊 record 部署，要讀的是測試紀錄表
+// 1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM（已有 101 列測試資料）。
+// 2026-10-06 實測這個部署仍然回「你沒有存取所要求文件的權限。(第 66 行)」，
+// 所以本頁目前會停在「讀取失敗」；修法見 Start.dc.html 的 RECORD_URL 註解
+// （兩個檔案必須填同一個值）。
+// master 上的正式值（讀業主的 11HeRK…，不要在測試分支用）：
 //   'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
-const RECORD_URL = 'REPLACE_WITH_TEST_EXEC_URL';
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec';
 // 必須跟 ConfigWithSubmit.gs 裡的 ANALYSIS_KEY 完全一致，兩邊都要換成同一組
 // 自訂的隨機字串再部署 —— 這把金鑰只存在於這個檔案，不會出現在 Start.dc.html。
 const ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';

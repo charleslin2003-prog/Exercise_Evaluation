@@ -170,18 +170,25 @@ button{font-family:inherit;cursor:pointer}
 //   CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec'
 //   RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
 //
-// CONFIG_URL 用的是 f2c1c47 之前那個舊部署，已實測它仍然活著、而且讀的就是測試
-// 設定表 1yiZ…（回傳 8 個代號 A01-A07+TEST-USER，與該表的 人員代號 分頁一致），
-// 所以選項目／看評分標準／填分數這段 UI 現在就能測，不需要先部署。
+// CONFIG_URL（f2c1c47 之前那個舊部署）：已實測仍然活著，讀的就是測試設定表
+// 1yiZ…（回傳 8 個代號 A01-A07+TEST-USER，與該表 人員代號 分頁一致），所以
+// 選項目／看評分標準／填分數這段 UI 不需要先部署就能測。
 const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
-// RECORD_URL 故意留成無效值：舊的 record 部署已經壞掉（回
-// 「Exception: 你沒有存取所要求文件的權限。(第 66 行，檔案名稱：ConfigWithSubmit)」，
-// 因為那個專案現在以公司帳號執行，開不了個人帳號的 1yiZ…），而正式的那一個會把
-// 分數寫進業主的 11HeRK… 正式紀錄表。測試分支寧可「送出失敗」也不能誤寫正式資料。
-// 要測送出：把 apps-script/ConfigWithSubmit.gs 貼進一個 charleslin2003@gmail.com
-// 擁有的 Apps Script 專案，部署成 Web App（執行身分：我／存取權：任何人），
-// 再把它的 /exec 填到這裡與 Analysis.html:40。
-const RECORD_URL = 'REPLACE_WITH_TEST_EXEC_URL';
+// RECORD_URL（f2c1c47 之前那個舊 record 部署）：⚠️ 2026-10-06 實測仍然回
+// 「Exception: 你沒有存取所要求文件的權限。(第 66 行，檔案名稱：ConfigWithSubmit)」
+// —— 第 66 行就是 doGet 裡的 openById(CONFIG_SPREADSHEET_ID)，doPost(:110) 與
+// action=analysis(:255) 也會死在同一個地方，所以送出與分析頁目前都不會動。
+// 原因：兩份設定表的帳號互相看不到（1yiZ… 只有 charleslin2003@gmail.com 一個
+// owner、沒分享給任何人；1j3UCb… 從個人帳號完全查不到），所以這個部署的「執行
+// 身分帳號」和它程式裡的 CONFIG_SPREADSHEET_ID 分屬不同帳號。
+// 修法：用 charleslin2003@gmail.com 登入開這個部署背後的 Apps Script 專案，確認
+// 它的兩個 ID 是 1yiZ…/1jD6…（即 apps-script/ConfigWithSubmit.gs 這一版），然後
+// Deploy > Manage deployments > 編輯現有部署 > 版本「新版本」> Deploy，並確認
+// 執行身分=我、存取權=任何人。若該專案不在個人帳號底下，就得新建一個部署，
+// 那會換掉 /exec，記得回來同步這一行與 Analysis.html。
+// 刻意不填正式的 /exec：那一個會把分數寫進業主的 11HeRK… 正式紀錄表，測試分支
+// 寧可「送出失敗」也不能誤寫正式資料。
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec';
 
 // config.items 是一棵樹：分組節點是 { name, children }，葉節點（真正的評核項目）
 // 是 { name, questions }。層數由後端依試算表的「層N」欄位決定，可以是 1 層
