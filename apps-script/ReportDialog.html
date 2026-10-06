@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<!--
+  演習評核報告 — 模態對話框（方案 B 的使用者介面）。
+
+  這個檔案跑在 Chrome 裡，不是在 .gs 的 V8 執行環境裡，所以這裡用的是一般的
+  現代瀏覽器 JavaScript（const/let/箭頭函式/樣板字串都可以），與 Report.gs
+  刻意維持的 ES5 風格不同。
+
+  在 Apps Script 專案裡，這個檔案必須命名為「ReportDialog」（檔案 → 新增 →
+  HTML），Report.gs 的 openDialog_() 以這個名字載入它。
+
+  為什麼要分批呼叫：Apps Script 單次執行的硬上限是 6 分鐘，而產生一份報告大約
+  是 20–60 次 API 呼叫。對話框每按一次 google.script.run 都是一次**獨立執行**、
+  各有自己的六分鐘額度，所以把章節切開、由前端驅動，就不會撞上硬上限。
+  伺服器端每次回 {runId, step, totalSteps, label, done, warnings[], docUrl}。
+-->
+<html>
+<head>
+<base target="_top">
+<style>
+  :root {
+    --ink: #161512;
+    --muted: #6b6558;
+    --line: #e6e0cf;
+    --accent: #7a4e0f;
+    --bg: #f7f5ee;
+    --err: #b00020;
+    --ok: #1d7a4c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px 18px 18px;
+    font: 14px/1.65 "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    color: var(--ink);
+    background: #fff;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    background: var(--bg);
+  }
+  .card h2 { font-size: 13.5px; margin: 0 0 8px; color: var(--accent); }
+  label.opt { display: block; margin: 7px 0; cursor: pointer; }
+  label.opt input { margin-right: 7px; vertical-align: 1px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 2px 0 0 24px; }
+  .danger { color: var(--err); }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+  button {
+    font: inherit;
+    padding: 7px 16px;
+    border-radius: 6px;
+    border: 1px solid #d8d2bf;
+    background: #fff;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button[disabled] { opacity: .5; cursor: not-allowed; }
+  .bar { height: 8px; border-radius: 4px; background: #e9e4d6; overflow: hidden; margin: 8px 0; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+  ul.steps { list-style: none; margin: 6px 0 0; padding: 0; max-height: 170px; overflow: auto; }
+  ul.steps li { padding: 2px 0; font-size: 12.5px; }
+  ul.warn { margin: 6px 0 0; padding-left: 20px; font-size: 12.5px; color: #8a5a00; }
+  .check { font-size: 12.5px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .check:last-child { border-bottom: 0; }
+  .check b { display: block; }
+  .check .d { color: var(--muted); white-space: pre-wrap; }
+  .err { color: var(--err); white-space: pre-wrap; font-size: 12.5px; }
+  a { color: var(--accent); }
+  .links a { display: inline-block; margin-right: 14px; }
+  .mono { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1 id="title">產生評核報告</h1>
+<p class="sub" id="subtitle">
+  報告的統計數字全部取自後端的分析結果，與分析儀表板完全一致。
+</p>
+
+<!-- ===== 產生模式：選項 ===== -->
+<div class="card" id="optionsCard" style="display:none">
+  <h2>產生選項</h2>
+
+  <label class="opt">
+    <input type="checkbox" id="optComments" checked>
+    附上觀察紀錄彙整（第十二章）
+  </label>
+  <div class="hint danger">
+    ⚠ 觀察紀錄是評核官自由填寫的文字。評核官代號會被匿名化，但匿名化
+    <b>無法遮蔽文字內容本身出現的姓名或職稱</b>。質性內容是這份報告最有價值的部分，
+    但請在知情的情況下選擇附上，並於分發前人工檢視該章。
+  </div>
+
+  <label class="opt">
+    <input type="checkbox" id="optAppendixB">
+    附上附錄B 原始評分資料（逐題 × 逐評核官）
+  </label>
+  <div class="hint">
+    即使匿名，這仍是一張完整的個別評分矩陣，所以預設不附。勾選後仍會套用匿名映射，
+    除非下面的識別模式也同時開啟。
+  </div>
+
+  <label class="opt">
+    <input type="checkbox" id="optIdentified">
+    <span class="danger">附上可識別的評核官代號（識別模式）</span>
+  </label>
+  <div class="hint">
+    預設為匿名：所有評核官一律顯示為「評核官 1…N」，編號規則與分析儀表板相同。
+    勾選這一項會印出實際的人員代號，並在封面與附錄C 留下可見標記。
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <button id="btnCheck">先檢查設定</button>
+    <button id="btnStart" class="primary">開始產生</button>
+  </div>
+  <div class="hint" style="margin-left:0">
+    產生期間請不要關閉這個視窗，也不要編輯本試算表（視窗是模態的，正是為了擋住這件事）。
+  </div>
+</div>
+
+<!-- ===== 進度 ===== -->
+<div class="card" id="progressCard" style="display:none">
+  <h2 id="progressTitle">產生中…</h2>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="mono" id="progressMeta">—</div>
+  <ul class="steps" id="steps"></ul>
+</div>
+
+<!-- ===== 檢查結果 ===== -->
+<div class="card" id="checkCard" style="display:none">
+  <h2 id="checkTitle">檢查結果</h2>
+  <div id="checkBody">檢查中，請稍候…</div>
+  <div class="row" style="margin-top:10px">
+    <button id="btnRecheck">重新檢查</button>
+  </div>
+</div>
+
+<!-- ===== 警告 ===== -->
+<div class="card" id="warnCard" style="display:none">
+  <h2>警告與降級紀錄</h2>
+  <ul class="warn" id="warnList"></ul>
+  <div class="hint" style="margin-left:0">同樣的內容也會印在報告的附錄C。</div>
+</div>
+
+<!-- ===== 結果 ===== -->
+<div class="card" id="resultCard" style="display:none">
+  <h2 id="resultTitle">完成</h2>
+  <div class="links" id="resultLinks"></div>
+  <div class="err" id="resultError"></div>
+  <div class="row" style="margin-top:10px">
+    <button id="btnClose">關閉</button>
+  </div>
+</div>
+
+<script>
+var MODE = '<?= mode ?>';
+
+var state = {
+  runId: '',
+  running: false,
+  startedAt: 0,
+  timer: null,
+  doneLabels: []
+};
+
+function $(id) { return document.getElementById(id); }
+
+function show(id, on) { $(id).style.display = on ? '' : 'none'; }
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function startTimer() {
+  state.startedAt = Date.now();
+  stopTimer();
+  state.timer = setInterval(function () {
+    var sec = Math.round((Date.now() - state.startedAt) / 1000);
+    var mm = Math.floor(sec / 60), ss = sec % 60;
+    var el = $('elapsed');
+    if (el) el.textContent = (mm ? mm + ' 分 ' : '') + ss + ' 秒';
+  }, 1000);
+}
+
+function stopTimer() {
+  if (state.timer) { clearInterval(state.timer); state.timer = null; }
+}
+
+function setProgress(res) {
+  var total = res.totalSteps || 1;
+  var done = res.step || 0;
+  $('bar').style.width = Math.min(100, Math.round(done / total * 100)) + '%';
+  $('progressMeta').innerHTML =
+    '報告編號 ' + esc(res.runId) + '　｜　章節 ' + done + ' / ' + total +
+    '　｜　已耗時 <span id="elapsed">0 秒</span>';
+  if (res.label) {
+    state.doneLabels.push(res.label);
+    var ul = $('steps');
+    var li = document.createElement('li');
+    li.textContent = '• ' + res.label;
+    ul.appendChild(li);
+    ul.scrollTop = ul.scrollHeight;
+  }
+  renderWarnings(res.warnings);
+}
+
+function renderWarnings(list) {
+  if (!list || !list.length) return;
+  show('warnCard', true);
+  var ul = $('warnList');
+  ul.innerHTML = '';
+  for (var i = 0; i < list.length; i++) {
+    var li = document.createElement('li');
+    li.textContent = list[i];
+    ul.appendChild(li);
+  }
+}
+
+function finish(res) {
+  state.running = false;
+  stopTimer();
+  show('resultCard', true);
+  var partial = res.status === 'partial';
+  // 伺服器回 ok:false 的原因大多是可修正的（例如「產生期間資料已經變動，請用
+  // 選單的『重設產生狀態』之後重新產生」）。按鈕是 startRun() 停用的，若這裡
+  // 不放開，業主讀到一句「請重新產生」卻連按鈕都按不下去，只能關掉視窗再從
+  // 選單進來一次 —— 而訊息從來沒說要這樣做。部分完成也放開，因為重新產生
+  // 一定是另一份全新的 Doc，不會覆寫手上這一份。
+  if (res.ok === false || res.status === 'failed' || partial) {
+    $('btnStart').disabled = false;
+    $('btnCheck').disabled = false;
+  }
+  $('progressTitle').textContent = partial ? '已收尾（部分完成）' : '已完成';
+  $('resultTitle').textContent = partial
+    ? '部分完成 — 報告有章節未產生'
+    : (res.ok === false ? '已中止' : '完成');
+  var links = '';
+  if (res.docUrl) links += '<a href="' + esc(res.docUrl) + '" target="_blank">開啟 Google 文件</a>';
+  if (res.pdfUrl) links += '<a href="' + esc(res.pdfUrl) + '" target="_blank">開啟 PDF</a>';
+  if (partial) {
+    links += '<div class="hint" style="margin-left:0">' +
+      '未產生的章節已在文件中就地標示，檔名帶有「（部分完成）」，' +
+      '「報告快照」工作表的狀態欄為「部分完成」。所有數字都已經安全落在快照工作表裡。</div>';
+  }
+  $('resultLinks').innerHTML = links;
+  if (res.error) $('resultError').textContent = res.error;
+  renderWarnings(res.warnings);
+}
+
+function fail(err) {
+  state.running = false;
+  stopTimer();
+  show('resultCard', true);
+  $('resultTitle').textContent = '已中止';
+  $('resultError').textContent = (err && err.message) ? err.message : String(err);
+  $('btnStart').disabled = false;
+  $('btnCheck').disabled = false;
+}
+
+// ---- 產生流程 ----
+
+function startRun() {
+  if (state.running) return;
+  var identified = $('optIdentified').checked;
+  var identifiedConfirmed = false;
+  if (identified) {
+    // 二次確認的內容必須明確寫出後果。commit 54b33dd 刻意把具名逐評核官分數表
+    // 從儀表板上拿掉，這裡不得成為繞過它的後門。
+    identifiedConfirmed = window.confirm(
+      '本報告將印出評核官的人員代號。\n\n' +
+      '在十餘人的品管部門中，人員代號等同可還原到個人的假名。' +
+      '這個呈現方式曾在 commit 54b33dd 中被刻意從分析儀表板上移除。\n\n' +
+      '請確認已取得必要的同意，並會依院內個資規範控管本文件的流通。\n\n' +
+      '按「確定」以識別模式產生；按「取消」改回匿名模式。');
+    if (!identifiedConfirmed) {
+      $('optIdentified').checked = false;
+      identified = false;
+    }
+  }
+
+  state.running = true;
+  state.doneLabels = [];
+  $('btnStart').disabled = true;
+  $('btnCheck').disabled = true;
+  $('steps').innerHTML = '';
+  show('progressCard', true);
+  show('resultCard', false);
+  $('resultError').textContent = '';
+  $('progressTitle').textContent = '產生中…';
+  startTimer();
+
+  google.script.run
+    .withSuccessHandler(onStep)
+    .withFailureHandler(fail)
+    .reportStart({
+      includeComments: $('optComments').checked,
+      includeAppendixB: $('optAppendixB').checked,
+      identified: identified,
+      identifiedConfirmed: identifiedConfirmed
+    });
+}
+
+function onStep(res) {
+  if (!res || res.ok === false) {
+    finish(res || { ok: false, error: '伺服器沒有回傳結果。' });
+    return;
+  }
+  state.runId = res.runId;
+  setProgress(res);
+  if (res.done) {
+    finish(res);
+    return;
+  }
+  google.script.run
+    .withSuccessHandler(onStep)
+    .withFailureHandler(fail)
+    .reportContinue(state.runId);
+}
+
+// ---- 檢查設定 ----
+
+function runCheck() {
+  show('checkCard', true);
+  $('checkBody').innerHTML = '檢查中，請稍候…（第一次會向後端取一次資料，約需數秒）';
+  $('btnRecheck').disabled = true;
+  if ($('btnCheck')) $('btnCheck').disabled = true;
+  google.script.run
+    .withSuccessHandler(renderCheck)
+    .withFailureHandler(function (err) {
+      $('btnRecheck').disabled = false;
+      if ($('btnCheck')) $('btnCheck').disabled = false;
+      $('checkBody').innerHTML = '<div class="err">' + esc(err && err.message ? err.message : err) + '</div>';
+    })
+    .reportValidateOnly();
+}
+
+function renderCheck(res) {
+  $('btnRecheck').disabled = false;
+  if ($('btnCheck')) $('btnCheck').disabled = false;
+  if (!res || !res.checks) {
+    $('checkBody').innerHTML = '<div class="err">沒有取得檢查結果。</div>';
+    return;
+  }
+  $('checkTitle').textContent = res.ok ? '檢查結果：全部通過' : '檢查結果：有項目未通過';
+  var html = '';
+  for (var i = 0; i < res.checks.length; i++) {
+    var c = res.checks[i];
+    var mark = c.ok ? '✅' : '❌';
+    html += '<div class="check"><b>' + mark + '　' + esc(c.label) + '</b>' +
+      '<div class="d">' + esc(c.detail) + '</div></div>';
+  }
+  // 誠實揭露實際的副作用。原本這裡寫「不會建立任何檔案、不會寫入任何一列資料」，
+  // 但有兩項檢查只能用實做才驗得出來（權限與圖表能力都無法靠猜），所以必須說
+  // 清楚它們各做了什麼 —— 承諾與行為不一致，比多做一點事更傷。
+  html += '<div class="hint" style="margin-left:0">本檢查不會產生報告文件、不會寫入任何評分或快照資料；' +
+    '「報告快照」工作表若尚未建立，本檢查刻意不建立它。但為了實測權限與能力，它會：' +
+    '在輸出資料夾建立一個 0 位元組測試檔並立刻丟進垃圾桶、' +
+    '在隱藏工作表「_報告暫存」寫入一組假資料畫一張測試圖並隨即清空。' +
+    (res.ok ? '' : '請依上面的中文說明修正後再按「重新檢查」。') + '</div>';
+  $('checkBody').innerHTML = html;
+}
+
+// ---- 初始化 ----
+
+$('btnClose').onclick = function () { google.script.host.close(); };
+$('btnRecheck').onclick = runCheck;
+
+if (MODE === 'check') {
+  $('title').textContent = '檢查設定（不產生報告）';
+  $('subtitle').textContent =
+    '逐項檢查指令碼屬性、範本錨點、後端連線、身分比對、資料、輸出權限、圖表能力與 ICC 驗算。' +
+    '這個模式不會產生報告文件，也不會寫入任何評分或快照資料；' +
+    '權限與圖表能力兩項是實測的，詳細副作用列在結果下方。';
+  runCheck();
+} else {
+  show('optionsCard', true);
+  $('btnStart').onclick = startRun;
+  $('btnCheck').onclick = runCheck;
+}
+</script>
+</body>
+</html>

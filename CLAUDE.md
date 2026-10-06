@@ -68,6 +68,18 @@ Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
 - `apps-script/ConfigWithSubmit.gs` — the script deployed behind `RECORD_URL` and the one
   that gets edited. Serves the config branch, `action=analysis`, `action=selftest`,
   `action=exercises`, `action=flush`, and `doPost`.
+- `apps-script/Report.gs` — **container-bound** report generator (plan §3.1's 方案B), pasted
+  under the 演習評核_設定 spreadsheet (擴充功能 > Apps Script), **not** a Web App and **not**
+  deployed: save, reload the sheet, the 演習評核報告 menu appears. It never touches
+  `ConfigWithSubmit.gs` and adds zero deploy risk — that is its entire reason to exist.
+  Reads `action=analysis` over `UrlFetchApp` and lays the numbers into a copy of an
+  owner-owned template Doc, then exports a PDF. **Never executed by anyone** — see
+  "Report generator (方案B)".
+- `apps-script/ReportDialog.html` — the `HtmlService` modal (560×680) `Report.gs` serves.
+  Plain modern browser JS (it runs in Chrome, not the V8 `.gs` runtime), so the ES5 house
+  style of the `.gs` files does not apply here. It drives generation by calling
+  `reportStart` then `reportContinue` in a loop, one chapter batch per call, rendering a
+  progress list, a timer, and the warnings/degradation log.
 - `Analysis.html` — standalone (non-DC) dashboard page for reviewing aggregated results.
   Fetches `RECORD_URL?action=analysis&key=…` on load. Deliberately not linked from
   `Start.dc.html`; access control is the unshared URL plus the `key` query param.
@@ -579,3 +591,79 @@ exercise, tenantSource, generatedAt — **no key, no spreadsheet ID, no URL**).
 routed through the registry); it calls `action=exercises` and renders a list of
 `?t=&ex=&key=` links in `#pastPanel`. In fallback mode it stays disabled, because there is
 only ever one exercise to list.
+
+## Report generator (方案B) — `apps-script/Report.gs` + `apps-script/ReportDialog.html`
+
+The committee deliverable, as opposed to `Analysis.html`'s print view (方案A), which
+`#reportHint` itself calls an internal review copy. Container-bound to the 演習評核_設定
+spreadsheet; `onOpen()` builds a 演習評核報告 menu. **A container-bound script needs no
+deployment** — paste, save, reload the sheet. That is the whole point: the owner cannot be
+asked to redeploy a Web App (picking 「新增部署」 silently changes `/exec`), so the report
+feature must not require editing `ConfigWithSubmit.gs` at all. It doesn't: the only coupling
+is one `UrlFetchApp` GET to `action=analysis`.
+
+> **Nobody has ever executed this code**, here or on the owner's machine — there is no way
+> to run Apps Script from this repo. Every API that could not be confirmed from the outside
+> is feature-detected and degrades rather than asserted. Treat the owner's first run as the
+> test; `docs/owner-guide-多醫院多演習.md` §14.9 lists what to check and report back.
+
+- **ES5 only in the `.gs`** (`var`, function declarations, no arrow/template-literal/`let`/
+  `const`/`for…of`/spread) to match `ConfigWithSubmit.gs`. `ReportDialog.html` is browser JS
+  and is not held to that.
+- **No key in the file.** `PropertiesService.getScriptProperties()` supplies
+  `REPORT_ANALYSIS_KEY` / `REPORT_API_URL` / `REPORT_TEMPLATE_DOC_ID` (required) and
+  `REPORT_OUTPUT_FOLDER_ID` / `REPORT_TENANT` / `REPORT_EXERCISE` / `REPORT_TIME_BUDGET_MS`
+  (optional); `REPORT_RUN_STATE` is program-maintained. This is the repo's **only** use of
+  `PropertiesService` — net-new, and deliberate: `.gs` source gets copied, pasted and
+  committed, and plan §6.6 is already paying for `ANALYSIS_KEY` being in git. `ADMIN_KEY` is
+  deliberately absent: this script never calls `selftest` or `flush`.
+- **The template Doc is a requirement, not a convenience.** `DocumentApp` has no page-number
+  API at all, and page numbers are exactly why plan §3.1 ruled 方案A out as an archival
+  record. Page numbers, header logo, fonts, margins, 標題1/2/3 named styles and the signature
+  block live in an owner-owned template; the copy inherits them. The code only appends
+  paragraphs with `setHeading(...)`.
+- **Chapters are template data, not code.** Each `{{SEC_*}}` anchor paragraph is one chapter:
+  deleting an anchor skips that chapter (and lists it in 附錄D), reordering anchors reorders
+  the report. Six are required (摘要/基本資料/評核方法/資料品質/總體結果/附錄C) and a missing
+  one refuses the whole run. An anchor must be a bare top-level body paragraph — inside a
+  table cell, header/footer or list item, `body.getChildIndex` on the found `Text`'s parent
+  silently inserts content in the wrong place, so `scanAnchors_` names each offender and the
+  gate refuses.
+- **Statistics come from the payload, never recomputed** — otherwise the Doc and the
+  dashboard disagree and the owner has no way to tell which is right. The one exception is
+  `verifyIcc_`, a local Shrout–Fleiss recomputation that also reports the included
+  rater/question counts and, when `stats.icc2k` is `null`, names the questions that collapsed
+  the intersection (one single-rater question nulls the whole dataset — plan §4.4).
+- **Charts degrade, never fail.** `chartCapability_()` probes once per run on a hidden
+  `_報告暫存` sheet: `Charts.ChartType['RADAR']` is bracket-accessed (passing `undefined` to
+  `setChartType` throws unreadably), the generated PNG must exceed 1000 bytes (the known
+  failure is a blank image, not an exception). Fallback chain per figure: native embedded
+  chart → COLUMN/BAR redraw of the same numbers → a native Docs table of the same numbers →
+  a paragraph naming the failure. Every degradation lands in `warnings[]`, the dialog, and
+  附錄C. The iso-3D chart is deliberately not reproduced; it is `stats.potentialByS4`, and a
+  grouped column chart carries the identical numbers.
+- **Stepped execution.** Apps Script's 6-minute cap is handled by splitting across
+  `google.script.run` calls (each gets its own quota), not by `try/finally` — a hard-limit
+  kill doesn't run `finally`. Each call stops at `REPORT_TIME_BUDGET_MS` (240000 default) and
+  returns `{runId, step, totalSteps, label, done, warnings, docUrl}`. A budget abort is
+  **labelled in three places**: the draft banner in the Doc, the `（部分完成）` filename
+  suffix, and the 報告狀態 column of 報告快照.
+- **Double-click can't overwrite.** Four layers: `tryLock(0)`, the `REPORT_RUN_STATE`
+  running check, 報告快照 being append-only — and the load-bearing one, **every run copies a
+  brand-new Doc**, so the code never writes into an existing report file. Worst case is two
+  independent reports, never half of one over a good one.
+- **`報告快照` sheet** (on the config spreadsheet, append-only, all columns `'@'` text
+  format) freezes this run's labels and aggregates before a single word is written to the
+  Doc — directly closing D3, and the only possible data source for a future 與前次演習比較
+  chapter. It records **no 人員代號, no per-evaluator score, no 觀察紀錄 text, ever, with no
+  toggle.** The backend reads neither `報告快照` nor `_報告暫存`, so both sheets are
+  zero-impact on the evaluator form and the dashboard.
+- **Privacy follows `54b33dd`, which this must not become a back door around.** Anonymous is
+  the pipeline default: evaluator codes render 評核官 1…N by index into the sorted
+  `meta.evaluatorCodes`, the same rule as `Analysis.html`'s `anonCode()` so screen and paper
+  name the same person. The code→number table is never printed. Identified output needs all
+  three of a dialog checkbox, a `window.confirm()` spelling out the consequence, and a
+  `{{SEC_評核官差異}}` anchor; choosing it marks the cover, 附錄C and `REPORT_RUN_STATE`.
+  附錄B (per-question × per-evaluator matrix) is off by default even anonymised. 附錄C may
+  print file **names** (it sits behind the key-protected payload) but never keys, spreadsheet
+  IDs or the `/exec` URL — the same line the backend's `meta` already draws.
