@@ -165,8 +165,23 @@ button{font-family:inherit;cursor:pointer}
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#161512","options":["#161512","#7a4e0f","#1f7a4d","#2b5fd9"]},"$preview":{"width":390,"height":844}}'>
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec';
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec';
+// ⚠️ 測試分支（dev）：指向個人帳號底下的測試試算表，不是業主正式的那一對。
+// master 上的正式值（合併前務必確認沒有把下面這兩行帶過去）：
+//   CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec'
+//   RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
+//
+// CONFIG_URL 用的是 f2c1c47 之前那個舊部署，已實測它仍然活著、而且讀的就是測試
+// 設定表 1yiZ…（回傳 8 個代號 A01-A07+TEST-USER，與該表的 人員代號 分頁一致），
+// 所以選項目／看評分標準／填分數這段 UI 現在就能測，不需要先部署。
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
+// RECORD_URL 故意留成無效值：舊的 record 部署已經壞掉（回
+// 「Exception: 你沒有存取所要求文件的權限。(第 66 行，檔案名稱：ConfigWithSubmit)」，
+// 因為那個專案現在以公司帳號執行，開不了個人帳號的 1yiZ…），而正式的那一個會把
+// 分數寫進業主的 11HeRK… 正式紀錄表。測試分支寧可「送出失敗」也不能誤寫正式資料。
+// 要測送出：把 apps-script/ConfigWithSubmit.gs 貼進一個 charleslin2003@gmail.com
+// 擁有的 Apps Script 專案，部署成 Web App（執行身分：我／存取權：任何人），
+// 再把它的 /exec 填到這裡與 Analysis.html:40。
+const RECORD_URL = 'REPLACE_WITH_TEST_EXEC_URL';
 
 // config.items 是一棵樹：分組節點是 { name, children }，葉節點（真正的評核項目）
 // 是 { name, questions }。層數由後端依試算表的「層N」欄位決定，可以是 1 層

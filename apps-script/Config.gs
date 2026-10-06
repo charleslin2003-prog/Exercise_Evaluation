@@ -2,7 +2,9 @@
 // Deploy as a Web App (Extensions > Apps Script > Deploy > New deployment > Web app,
 // execute as "Me", access "Anyone"). Start.dc.html fetches the deployed /exec URL.
 
-var CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ';
+// ⚠️ 測試分支（dev）：測試用設定表，master 上的正式值是
+// '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ'。
+var CONFIG_SPREADSHEET_ID = '1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk';  // 演習評核_設定（測試）
 
 function doGet(e) {
   var ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);

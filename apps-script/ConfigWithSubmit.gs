@@ -4,10 +4,15 @@
 // Deploy as a Web App (Extensions > Apps Script > Deploy > New deployment > Web app,
 // execute as "Me", access "Anyone"). Start.dc.html fetches the deployed /exec URL.
 
-var CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ';
+// ⚠️ 測試分支（dev）：這兩個 ID 是個人帳號 charleslin2003@gmail.com 底下的
+// 測試用試算表，不是業主正式的那一對。master 分支上的正式值是：
+//   CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ'
+//   RECORD_SPREADSHEET_ID = '11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8'
+// 合併回 master 前務必確認這兩行沒有被帶過去。
+var CONFIG_SPREADSHEET_ID = '1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk';  // 演習評核_設定（測試）
 
 // 紀錄表是另一個試算表，把這裡改成該檔案的 ID。
-var RECORD_SPREADSHEET_ID = '11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8';
+var RECORD_SPREADSHEET_ID = '1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM';  // 演習評核_紀錄（測試，已有 101 列測試資料）
 var RECORD_SHEET_NAME = '評核紀錄';
 // 評核紀錄 的欄位分成「必要」跟「選填」兩類。必要欄（問題ID/分數/人員代號/
 // 送出時間）一定要存在，缺了就丟錯；選填欄視實際表格有沒有那一欄決定要不要
