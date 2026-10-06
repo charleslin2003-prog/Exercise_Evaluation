@@ -467,7 +467,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 |---|---|---|
 | `REPORT_ANALYSIS_KEY` | **必填** | `WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub` |
 | `REPORT_API_URL` | **必填** | `https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec` |
-| `REPORT_TEMPLATE_DOC_ID` | **必填** | 步驟 6 複製的範本 Doc 檔案 ID（沙箱尚不存在，要自己建） |
+| `REPORT_TEMPLATE_DOC_ID` | **必填** | 步驟 6 複製的範本 Doc 檔案 ID。沙箱已建好一份骨架：`1Vac9zpZ0kTn_GzXJJ6HwFXaUhoP3m3m0eytheD_APh0`（檔名「演習評核_範本」，已含 12 個封面 token 與全部 21 個 `{{SEC_*}}` 錨點，每個各自獨立成段）。**但頁碼、頁首院徽、標題 1/2/3 樣式、封面後的分頁符號都還沒做 —— 那幾項只能在 Google 文件裡手動加，也正是整個範本機制存在的理由。** |
 | `REPORT_OUTPUT_FOLDER_ID` | 選填 | **留空**（預設＝設定試算表所在的資料夾） |
 | `REPORT_TENANT` | 選填 | `wanfang-7f3a2c`（或留空＝單一演習模式） |
 | `REPORT_EXERCISE` | 選填 | `2026a`（只能跟 `REPORT_TENANT` 一起設） |
