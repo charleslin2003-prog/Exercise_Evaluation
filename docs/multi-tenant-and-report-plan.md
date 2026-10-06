@@ -16,7 +16,45 @@
 
 > 這一節是 10-06 補上的。**下面第 0 章起的內容沒有改寫**，仍是 10-05 的評估原貌。
 
-### 已實作（三個檔案都已改好，待部署）
+### ⏸️ 工作暫停點（2026-10-06，關機前）
+
+**`ConfigWithSubmit` 專案已更新並重新部署完成**，`/exec` 網址未變
+（`AKfycbzilnn3…7rjLg`）。部署後實測，讀取的三條路全綠，而且那 101 列測試資料
+算出來的八項數字與換程式前**逐一相同**：
+
+```
+analysisRows 16 / coverageRows 7 / learningRows 0 ；評核官 5 人
+overall n=53 mean=4.170 sd=0.935 ；ICC(2,k)=0.5503 ；within-1=0.7500
+tenantSource='fallback'（尚未建註冊表，走程式內建常數＝與改造前相同）
+設定 payload 從 9 欄變 18 欄，且搜不到 ANALYSIS_KEY（必檢項，通過）
+commentEnabled=true、commentRequiredBelow=0 → 評核單每題都有觀察紀錄欄
+```
+
+**下次繼續時，從這三件事挑：**
+
+1. **驗證寫入路徑（doPost）** —— 目前唯一沒實測的。兩條路：
+   (a) 在 `ConfigWithSubmit.gs:107` 填 `ADMIN_KEY`（不可等於 `ANALYSIS_KEY`、
+   不可出現在任何上架 HTML）再重新部署，然後跑
+   `?action=selftest&adminKey=…` —— 它的寫入探測是 `addDeveloperMetadata`
+   加完即刪，**不會新增任何一列**；或
+   (b) 直接用 `TEST-USER` 送一筆真的評分（會在測試紀錄表加列，列數增加但分析
+   數字不受影響，因為同題同代號以最後一次為準）。
+2. **啟用多租戶** —— 建一份「租戶註冊表」試算表，照
+   `docs/owner-guide-多醫院多演習.md` §2–§3 填好，把檔案 ID 填進
+   `ConfigWithSubmit.gs` 的 `REGISTRY_SPREADSHEET_ID`（目前是 `''`）再部署。
+   在那之前 `?t=` 一律被忽略並退回 fallback，這是刻意的。
+3. **報告方案 B** —— 試算表選單 → 範本 Google 文件 → PDF，見 §3.1。列印版只是
+   內部檢視版。
+
+此外有個一行的順手改動待決定：把 `Start.dc.html:202` 的 `CONFIG_URL` 指向
+`ConfigWithSubmit` 的同一個 `/exec`，即可退役 `Config.gs`（它仍回舊的 9 欄、
+日期仍是 `Sat Oct 03 2026 15:00:00 GMT+0800`，因為 `formatCellValue_` 從未貼進
+那個專案）。但這是取捨不是純賺 —— 合併後一次部署失誤會同時打掉設定載入、送出
+與儀表板，見 §6.5。
+
+分支狀態：`dev` 與 `master` 都已推上 remote，工作區沒有未提交的程式碼。
+
+### 已實作（三個檔案都已改好；ConfigWithSubmit 已部署並驗證）
 
 | 來源 | 項目 | 狀態 |
 |---|---|---|
