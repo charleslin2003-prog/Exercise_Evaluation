@@ -37,11 +37,10 @@
 <script>
 // 跟 apps-script/ConfigWithSubmit.gs 部署後的 RECORD_URL 一致（跟 Start.dc.html
 // 用同一個 /exec 網址，用 action=analysis 參數走分析用的 doGet 分支）。
-// ⚠️ 測試分支（dev）：f2c1c47 之前那個舊 record 部署，要讀的是測試紀錄表
-// 1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM（已有 101 列測試資料）。
-// 2026-10-06 實測這個部署仍然回「你沒有存取所要求文件的權限。(第 66 行)」，
-// 所以本頁目前會停在「讀取失敗」；修法見 Start.dc.html 的 RECORD_URL 註解
-// （兩個檔案必須填同一個值）。
+// ⚠️ 測試分支（dev）：f2c1c47 之前那個舊 record 部署，讀的是測試紀錄表
+// 1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM（101 列測試資料）。
+// 2026-10-06 實測正常：analysisRows=16 / coverageRows=7 / learningRows=0、
+// 評核官 5 人、icc2k=0.5503、within1=0.75。兩個檔案必須填同一個值。
 // master 上的正式值（讀業主的 11HeRK…，不要在測試分支用）：
 //   'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
 const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzilnn3GjBAA6W-CkmFziFhpXW111kxRyyZZGZY9UQ0iihYVGd_QXlArZZpJHQui7rjLg/exec';
