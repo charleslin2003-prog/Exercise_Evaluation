@@ -92,6 +92,12 @@ button{font-family:inherit;cursor:pointer}
   <div style="font-size: 17px; font-weight: 700; color: #b00020;">資料載入失敗</div>
   <div style="font-size: 14px; line-height: 1.5; color: #3a382f;">{{ loadError }}</div>
   <button type="button" onClick="{{ retryLoad }}" style="margin-top: 8px; height: 48px; padding: 0 24px; border: 2px solid #d8d2bf; border-radius: 24px; background: #ffffff; color: #161512; font-size: 15px; font-weight: 700;">重新載入</button>
+  <!-- 從場次清單挑進來、結果那一場的設定載不起來時，沒有這顆按鈕就只剩「重新載入」
+       一條路——評核官回不到清單，只能自己重開網址。另外兩種連結形狀下
+       showSessionSwitch 永遠是 false，所以這顆按鈕不會出現。 -->
+  <sc-if value="{{ showSessionSwitch }}" hint-placeholder-val="{{ false }}">
+  <button type="button" onClick="{{ switchSession }}" style="padding: 0; border: 0; background: transparent; color: #7a4e0f; font-size: 13px; font-weight: 700; text-decoration: underline;">更換場次</button>
+  </sc-if>
 </div>
 </sc-if>
 
@@ -489,16 +495,32 @@ class Component extends DCLogic {
       .then((data) => {
         if (data && data.error) {
           if (data.errorCode === 'REGISTRY_OFF') {
-            this.setState({ screen: 'select', sessions: null, sessionsError: null });
-            this.loadConfig('');
+            this.fallBackToSingleSession();
             return;
           }
           throw new Error(data.error);
         }
+        // 後端還沒部署新版時它不認得 action=sessions，會直接落到設定分支回一份
+        // 設定 payload——既沒有 error、也沒有 sessions。實測確認過（舊版 /exec 收到
+        // action=sessions 回的是 codes/criteria/items 那一包）。這時候絕對不能把它
+        // 當成「這家醫院一場演習都沒有」而讓評核官卡在空清單上：?t= 連結在這個功能
+        // 之前本來就是能用的（後端解析預設演習），退回那條路才是正確行為。
+        // 前端先上、後端後部署是這個專案的常態，所以這不是防禦性冗餘。
+        if (!data || !Array.isArray(data.sessions)) {
+          this.fallBackToSingleSession();
+          return;
+        }
         // 排序是後端做的（DC 樣板沒有排序能力），這裡原樣保留它給的順序。
-        this.setState({ sessions: (data && data.sessions) || [] });
+        this.setState({ sessions: data.sessions });
       })
       .catch((err) => this.setState({ sessionsError: (err && err.message) || String(err) }));
+  }
+  // 場次清單拿不到時的共同退路（註冊表關閉、或後端還是舊版）：維持今天的行為，
+  // 把 ?t= 交給後端解析預設演習。刻意不顯示任何錯誤——對評核官來說這條連結就是
+  // 照常可用，清單只是沒出現。
+  fallBackToSingleSession() {
+    this.setState({ screen: 'select', sessions: null, sessionsError: null });
+    this.loadConfig('');
   }
   // 挑一場。exid 一定要用參數傳進 loadConfig，不能讓它自己去讀 this.state：
   // setState 不保證同步，讀到的可能還是上一場的代號。
@@ -733,6 +755,10 @@ class Component extends DCLogic {
     const sessions = this.state.sessions;
     const sessionExid = this.state.sessionExid;
     const sessionList = sessions || [];
+    // 目前選到那一場是不是註冊表的「預設演習」。只帶 ?t= 的舊連結以前走的就是這
+    // 一場，所以只有它可以把舊 key（演習代號位置是空字串）的「已完成」記錄搬過來
+    // 一次，見 adoptDoneItems。
+    const currentIsDefault = sessionList.some((s) => s.exercise === sessionExid && !!s.isDefault);
     const closedCount = sessionList.filter((s) => sessionStatusKey(s.status) === 'past').length;
     // 已結束的場次後端照樣回傳，但預設收起來，由下面那顆開關展開；過濾在前端做，
     // 後端若先濾掉，開關就印不出「還有幾場被收起來」。
@@ -880,7 +906,15 @@ class Component extends DCLogic {
       // 換代號時連同「已完成」記錄一起換成那個代號自己的進度。
       setCode: (e) => {
         const code = e && e.target ? e.target.value : '';
-        this.setState({ fillerCode: code, codeHint: false, doneItems: loadDoneItems(doneStorageKey(config, code, sessionExid)) });
+        // 「搬移舊 key 的已完成記錄」一定要在這裡做，不能只在 pickSession 裡做：
+        // 選場次的那一刻 fillerCode 還是空字串（代號是下一步才選的），而 localStorage
+        // 的 key 含代號，所以那時候搬的是一個永遠不會有資料的空桶子。真正知道
+        // 「是誰」的時刻就是這裡。沒帶參數／?t=&ex= 時 PICKER_MODE 是 false，走的是
+        // 跟今天一字不差的那一行。
+        const doneItems = (PICKER_MODE && sessionExid)
+          ? this.adoptDoneItems(sessionExid, currentIsDefault, code)
+          : loadDoneItems(doneStorageKey(config, code, sessionExid));
+        this.setState({ fillerCode: code, codeHint: false, doneItems });
       },
       showCodeHint: this.state.codeHint && !this.state.fillerCode,
       // ---- 場次清單畫面 ----
