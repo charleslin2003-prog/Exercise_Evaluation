@@ -585,9 +585,12 @@ function withRequested_(t, hid, exid) {
 // 送出時間窗：只有 doPost 會擋，設定分支不擋（評核官可以提早打開表單看題目）。
 // 設定 payload 改成回報 submitOpen / submitClosedReason，讓前端把「送出」按鈕
 // 變灰——而不是收下分數再丟掉。
-function submitWindowState_(t) {
+// now 是新增的「選填」第二個參數：action=sessions 要把同一個時間戳套到整批
+// 列上（見 handleSessions_），不傳就跟以前一樣自己取 Date.now()。原本兩個呼叫端
+// （設定分支、doPost）一個字都不用改，回傳形狀也完全沒變。
+function submitWindowState_(t, now) {
   if (!t.enabled) return { open: false, reason: '這場演習已結束，不再開放評核。' };
-  var now = Date.now();
+  if (now === null || now === undefined) now = Date.now();
   if (t.openFrom !== null && t.openFrom !== undefined && now < t.openFrom) {
     return { open: false, reason: '目前不在開放送出時間內（' + windowText_(t) + '）。' };
   }
@@ -635,6 +638,10 @@ function doGet(e) {
   if (action === 'selftest') return jsonOut_(handleSelfTest_(e));
   if (action === 'flush') return jsonOut_(handleFlush_(e));
   if (action === 'exercises') return jsonOut_(handleExercises_(e));
+  // action=sessions：評核表的場次選單（見 handleSessions_）。它完全沒有金鑰，所以
+  // 一定要「分完就 return」，絕對不可以掉進下面的設定分支。位置跟其他 action 排
+  // 在一起、且在設定分支之前，所以「認不得的 action 仍然掉到設定分支」這件事沒變。
+  if (action === 'sessions') return jsonOut_(handleSessions_(e));
 
   if (action === 'analysis') {
     var t;
@@ -1541,6 +1548,198 @@ function countItems_(nodes) {
 // ⚠️ 回傳內容永遠不含 設定試算表ID／紀錄試算表ID／紀錄分頁名稱／分析金鑰／
 // 檔案擁有者。啟用=N 的列「要」列出來（enabled:false），那正是「過去演習」
 // 清單需要的東西。
+// action=sessions：給評核表「選擇場次」畫面用的清單。
+//
+// 跟 action=exercises 的分工是刻意分成兩支函式，不是把 exercises 的金鑰放寬：
+//   exercises = 給 Analysis.html 用，有 分析金鑰 保護，所以允許回檔名、也允許
+//               為每一列開設定試算表去讀 演習名稱／演習日期。
+//   sessions  = 給評核官手機用，完全沒有任何金鑰，所以紅線嚴格得多：只回註冊表
+//               裡的文字，一張設定試算表都不開。
+// 三個理由，缺一不可：
+//   (1) exercises 的 fallback 分支刻意「忽略 ?t=」並改開程式內建的那張設定試算
+//       表。那個分支一旦不用金鑰，就等於把 legacy 租戶的 演習名稱／演習日期 發
+//       給連 ?t= 都沒帶的任何人——直接違反「不得跨租戶外洩」。
+//   (2) 一支函式一條紅線才查得動。exercises 的紅線是「有金鑰，可以回檔名」，
+//       sessions 的紅線是「無金鑰，只回註冊表文字」；把兩條紅線塞進同一支函式
+//       再用 if (key) 分岔，以後沒人能一眼看出哪個欄位歸哪一條。
+//   (3) exercises 會為每一列 openById 一次設定試算表（12 場的醫院 = 12 次）。
+//       一支「每支評核官手機都會打、而且不用金鑰」的端點不可以這樣：它跟 doPost
+//       共用同一份 Apps Script 配額，會變成免費的配額放大器。所以 sessions 只讀
+//       readRegistry_()（本來就有 120 秒快取），一次請求最多一趟註冊表讀取、通常
+//       是零趟。這也是為什麼列的標籤用 顯示名稱 而不是 演習名稱——後者在設定試
+//       算表裡，這支拿不到。
+//
+// 憑證就是「知道 醫院代號」這件事本身——跟設定分支今天已經接受的憑證一模一樣
+// （Start.dc.html 的網址裡本來就帶著它，而且從不帶任何金鑰）。新增的曝光面要講
+// 明白而不是假設：帶著 ?t= 的人今天已經可以無認證拿到整份 項目與問題 題庫、整份
+// 人員代號 名冊、全部 評分標準 文字、機構／演習名稱與日期，還能 POST 分數進那一
+// 場的紀錄表。sessions 在這之上只多三樣東西：(a) 這家醫院「還有哪些 演習代號」的
+// 存在與數量、(b) 每一場的 顯示名稱、(c) 每一場的開放狀態與時間窗文字。(b)(c) 本
+// 來知道 演習代號 就看得到（submitClosedReason 早就把 windowText_ 原文印在無認證
+// 的設定分支上）；(a) 才是真正的差異，而且必須寫下來：它把 演習代號 從一個弱共享
+// 秘密變成可列舉的值，所以一個 ?t= 持有者能亂送分數的範圍，從「預設演習」擴大到
+// 「這家醫院所有 啟用=Y 且在時間窗內的場次」。接受的理由是 演習代號 從來就不是憑
+// 證（normSlug_ 允許 32 字，但業主實際上都寫 2026a 這種），而「讓同一家醫院的評核
+// 官自己列舉自己的場次」正是這次要做的功能本身。
+// 邊界也要講清楚：hid 必填且一定過 normSlug_；只看 r.hid === hid 的列；沒有任何端
+// 點列得出「有哪些 醫院代號」、也沒有通用字元，所以沒有跨租戶路徑；代號永遠不會被
+// 拿去 openById；啟用 與 開放送出起/迄 兩道閘門完全沒動，所以一場「列得出來但已關
+// 閉」的演習，設定分支照樣回 DISABLED、doPost 照樣回 OUT_OF_WINDOW。
+//
+// ⚠️ 回傳內容的紅線（比 action=selftest 還嚴，因為這支完全沒有驗證）：絕對不准
+// 出現 設定試算表ID／紀錄試算表ID／任何試算表 ID、分析金鑰（這支也從不跟它比
+// 對）、ADMIN_KEY、紀錄分頁名稱／任何工作表名稱、檔案擁有者、註冊表列號、
+// registryWarning、assertRegistrySane_ 的無效理由字串、任何其他 醫院代號 的列、
+// 人員代號／問題ID／分數／觀察紀錄／任何儲存格內容、任何檔名（這支根本沒開過
+// 檔案，所以物理上拿不到）。程式形狀上也擋了一層：整支端點只有 sessionSortable_
+// 一個地方組得出回傳物件，而排序需要的原始欄位（openFrom/openTo/isDefault/exid）
+// 放在那個 out 的「外面」，不可能跟著 JSON 回去。
+function handleSessions_(e) {
+  // t 必填。沒帶 ?t= 就直接回錯，而且刻意連 readRegistry_() 都不呼叫——「沒帶
+  // 代號就列出所有醫院」這種行為一次都不能發生，連「讀了但沒用」都不要。
+  var rawHid = param_(e, 't');
+  if (!String(rawHid == null ? '' : rawHid).trim()) {
+    return { error: '連結缺少機構代號，請使用主辦單位提供的連結。', errorCode: 'NO_TENANT_CODE' };
+  }
+  var hid = normSlug_(rawHid);
+  if (!hid) {
+    // 下面三個錯誤的中文句子都跟 resolveTenant_ 一字不差：打錯 ?t= 的人在選單上
+    // 看到的句子要跟在表單上看到的一樣，否則同一個錯誤會有兩種說法，業主沒辦法
+    // 照著任一句去查。
+    return { error: '連結裡的機構代號格式不正確，請確認連結是否完整。', errorCode: 'BAD_CODE' };
+  }
+  var reg = readRegistry_();
+  if (!reg || !reg.rows.length) {
+    // 註冊表沒設定（master 上 REGISTRY_SPREADSHEET_ID 還是空字串）或整張表不可
+    // 用。這個 errorCode 刻意跟其他三個分開：前端只對 REGISTRY_OFF 做「不顯示選
+    // 單、照今天的方式直接載入設定」的降級，所以它絕對不能跟 NO_TENANT 混在一起
+    // ——混了就會讓 master 上的 ?t= 連結從「進得去表單」變成「看到錯誤畫面」。
+    // 對這個呼叫端揭露「註冊表沒開」的邊際曝光是零：設定分支本來就回 tenantSource
+    // 給同一支手機。
+    return { error: '目前無法取得場次清單。', errorCode: 'REGISTRY_OFF' };
+  }
+  // 只走 reg.rows（通過五條檢查的列），永遠不列舉 reg.invalidTenants 的內容：
+  // 無效列對選單是完全不存在的，不會變成清單裡的一列，也不會退回 fallback 租戶。
+  var mine = reg.rows.filter(function (r) { return r.hid === hid; });
+  if (!mine.length) {
+    var invalidMatch = (reg.invalidTenants || []).filter(function (r) { return r.hid === hid; });
+    // 有無效列 -> 回通用句子（無效的理由只有 action=selftest 看得到），不是回空清
+    // 單：空清單會讓業主以為自己沒建那一列，而不是建壞了。
+    if (invalidMatch.length) {
+      return { error: '這場演習的註冊資料有問題，請聯絡系統管理者。', errorCode: 'ROW_INVALID' };
+    }
+    return { error: '找不到這家機構的設定（代號：' + hid + '），請確認連結是否正確。', errorCode: 'NO_TENANT' };
+  }
+  // 同一個 now 貫穿整批列。如果讓每一列各自取 Date.now()，剛好落在某一列 開放送出
+  // 起 那一毫秒的請求，可能出現「前一列算已結束、後一列算尚未開放」這種自相矛盾
+  // 的清單；這也是 submitWindowState_ 多收一個選填 now 的唯一理由。
+  var now = Date.now();
+  var sortable = mine.map(function (r) { return sessionSortable_(r, now); });
+  sortable.sort(compareSessions_);
+  return {
+    // 原封不動回 normSlug_ 之後的 ?t=，讓前端確認拿到的是自己要的那一家。這個值
+    // 本來就是呼叫端自己給的，不構成任何外洩。
+    tenant: hid,
+    sessions: sortable.map(function (s) { return s.out; }),
+  };
+}
+
+// 一列註冊資料 -> { 排序用欄位…, out }。
+// out 裡只有七個欄位，而且這是整支端點唯一組得出 out 的地方——想多塞一個欄位只
+// 能改這裡，所以上面那條紅線永遠只有一個地方要查。排序需要的 openFrom／openTo／
+// isDefault／exid 刻意放在 out 外面，物理上不可能跟著 JSON 回去。
+function sessionSortable_(r, now) {
+  var phase = sessionPhase_(r, now);
+  return {
+    phaseRank: sessionPhaseRank_(phase.status),
+    openFrom: r.openFrom,
+    openTo: r.openTo,
+    isDefault: !!r.isDefault,
+    exid: r.exid,
+    out: {
+      exercise: r.exid,
+      // 顯示名稱 是選填欄，空白就退回拿代號當標籤（醜，但看得懂）。刻意不把它升
+      // 級成必填欄位：那會讓現在線上的列變成無效列，連路由一起拖下去。
+      label: String(r.displayName == null ? '' : r.displayName).trim() || r.exid,
+      status: phase.status,
+      statusText: phase.statusText,
+      // 時間窗文字早就在 parseRegistryRow_ 裡用 formatDateTime_ 格式化過
+      // （yyyy/MM/dd HH:mm），這裡不重新格式化，免得選單跟 windowText_ 的寫法漂開。
+      openFromText: r.openFromText || '',
+      openToText: r.openToText || '',
+      isDefault: !!r.isDefault,
+    },
+  };
+}
+
+// 三段狀態。關鍵：「這場收不收分數」這個判斷「不」在這裡重寫，而是直接問
+// submitWindowState_ 並且只讀它的 .open——選單跟 doPost 因此在物理上不可能對同一
+// 場演習有不同看法。
+// submitWindowState_ 把「還沒開始」跟「已經結束」併成同一句 reason，對 doPost 是對
+// 的（它只需要結論「現在不收」），所以 doPost 一行都不動；但選單需要分開：「尚未
+// 開放」是叫人晚點再來，「已結束」不是。所以這裡先拿結論，只在結論是「不開放」時
+// 才回頭看原始上下界，決定要印哪一個標籤。
+// 順序也是刻意的：啟用=N 永遠優先於「開始時間在未來」——一列 啟用=N 但 開放送出起
+// 填了未來時間的，算 已結束 而不是 尚未開放。因為 啟用 是業主的手動總開關，選單絕
+// 對不可以替一場被關掉的演習承諾「它之後會開」。
+function sessionPhase_(t, now) {
+  if (submitWindowState_(t, now).open) return { status: 'open', statusText: '開放中' };
+  if (t.enabled && t.openFrom !== null && t.openFrom !== undefined && now < t.openFrom) {
+    return { status: 'future', statusText: '尚未開放' };
+  }
+  // 剩下兩種成因刻意併成同一個標籤：(a) 啟用=N（不管時間窗）、(b) 啟用=Y 且已經過
+  // 了 開放送出迄。啟用=Y 而 開放送出迄 空白的列永遠走不到這裡——那種列是「永遠開
+  // 放中」，正好就是線上 wanfang-7f3a2c/2026a 那一列（兩格時間窗都空白）今天的行為。
+  return { status: 'past', statusText: '已結束' };
+}
+
+function sessionPhaseRank_(status) {
+  if (status === 'open') return 0;
+  if (status === 'future') return 1;
+  return 2;
+}
+
+// 排序在伺服器做，兩個理由：DC 樣板只有 <sc-if>/<sc-for>，沒有排序能力；而且規則
+// 放一處，將來第二個使用端也不會排得跟評核表不一樣。
+// 開放中 -> 尚未開放 -> 已結束；組內：
+//   開放中   預設演習 在最前（它就是「本場」），再比 開放送出起 由早到晚，再比代號
+//   尚未開放 開放送出起 由早到晚（快要開的排前面）
+//   已結束   開放送出迄 由晚到早（最近結束的排前面），再比代號由大到小
+function compareSessions_(a, b) {
+  if (a.phaseRank !== b.phaseRank) return a.phaseRank - b.phaseRank;
+  if (a.phaseRank === 0) {
+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+    var openCmp = compareTimeNullLast_(a.openFrom, b.openFrom, false);
+    if (openCmp) return openCmp;
+    return compareText_(a.exid, b.exid);
+  }
+  if (a.phaseRank === 1) {
+    var futureCmp = compareTimeNullLast_(a.openFrom, b.openFrom, false);
+    if (futureCmp) return futureCmp;
+    return compareText_(a.exid, b.exid);
+  }
+  var pastCmp = compareTimeNullLast_(a.openTo, b.openTo, true);
+  if (pastCmp) return pastCmp;
+  return compareText_(b.exid, a.exid);
+}
+
+// 空白時間（null）一律排到最後，升冪降冪都一樣。「沒有界限」不是一個可以跟時間比
+// 大小的值，硬把它當成 0 或 Infinity，在升冪跟降冪裡必定各錯一次。
+function compareTimeNullLast_(x, y, desc) {
+  var xn = (x === null || x === undefined);
+  var yn = (y === null || y === undefined);
+  if (xn && yn) return 0;
+  if (xn) return 1;
+  if (yn) return -1;
+  if (x === y) return 0;
+  if (x < y) return desc ? 1 : -1;
+  return desc ? -1 : 1;
+}
+
+function compareText_(x, y) {
+  return x < y ? -1 : (x > y ? 1 : 0);
+}
+
 function handleExercises_(e) {
   var key = param_(e, 'key');
   var hid = normSlug_(param_(e, 't'));

@@ -19,6 +19,68 @@ button{font-family:inherit;cursor:pointer}
 </helmet>
 <div style="width: 390px; height: 844px; box-sizing: border-box; background: #f7f5ee; display: flex; flex-direction: column; overflow: hidden;">
 
+<!-- 場次選擇（只有連結只帶 ?t=、沒帶 ?ex= 時才會出現）：以前一條連結只能對應
+     一場演習，評核官拿到錯的那一條完全看不出來。現在同一家醫院只要發一條
+     ?t= 連結，開放中／尚未開放的場次由後端 action=sessions 列出來讓評核官自己挑。
+     已經發出去的 ?t=&ex= 連結與完全沒帶參數的連結都不會走到這裡。 -->
+<sc-if value="{{ showSessionsLoading }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; flex-grow: 1; padding: 40px 32px; box-sizing: border-box; text-align: center;">
+  <div style="font-size: 17px; font-weight: 700; color: #161512;">場次載入中…</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showSessionsError }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; flex-grow: 1; padding: 40px 32px; box-sizing: border-box; text-align: center;">
+  <div style="font-size: 17px; font-weight: 700; color: #b00020;">場次載入失敗</div>
+  <div style="font-size: 14px; line-height: 1.5; color: #3a382f;">{{ sessionsError }}</div>
+  <button type="button" onClick="{{ retrySessions }}" style="margin-top: 8px; height: 48px; padding: 0 24px; border: 2px solid #d8d2bf; border-radius: 24px; background: #ffffff; color: #161512; font-size: 15px; font-weight: 700;">重新載入</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ showSessions }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+
+  <!-- 註冊表沒有「醫院名稱」欄位（顯示名稱是每一場演習各自的），所以這一頁刻意
+       只放固定標題，不假裝印得出機構名稱；機構名稱下一頁就會從該場演習自己的
+       演習資訊讀出來。 -->
+  <div style="display: flex; flex-direction: column; gap: 4px; padding: 24px 24px 14px; box-sizing: border-box; flex-shrink: 0;">
+    <div style="font-size: 13px; font-weight: 700; color: #8a5a1e; letter-spacing: 1px;">演習評核</div>
+    <div style="font-size: 22px; font-weight: 900; line-height: 1.3;">選擇演習場次</div>
+    <div style="font-size: 13px; font-weight: 700; color: #7a4e0f;">請選擇您參與的場次</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 4px 24px 24px; box-sizing: border-box; flex-grow: 1; min-height: 0; overflow: auto;">
+    <sc-for list="{{ sessionRows }}" as="s" hint-placeholder-count="3">
+      <button type="button" onClick="{{ s.pick }}" disabled="{{ s.disabled }}" style="{{ s.rowStyle }}">
+        <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+          <div style="font-size: 15px; font-weight: 700; line-height: 1.35;">{{ s.label }}</div>
+          <sc-if value="{{ s.showWindow }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ s.windowStyle }}">{{ s.windowText }}</div>
+          </sc-if>
+        </div>
+        <sc-if value="{{ s.showCurrent }}" hint-placeholder-val="{{ false }}">
+        <div style="flex-shrink: 0; padding: 4px 8px; border-radius: 9px; background: #f0e2be; color: #7a4e0f; font-size: 11px; font-weight: 900;">本場</div>
+        </sc-if>
+        <div style="{{ s.statusStyle }}">{{ s.statusText }}</div>
+      </button>
+    </sc-for>
+
+    <sc-if value="{{ showSessionsEmpty }}" hint-placeholder-val="{{ false }}">
+    <div style="padding: 16px; background: #ffffff; border: 2px solid #e6e0cf; border-radius: 14px; font-size: 14px; line-height: 1.6; color: #3a382f;">{{ sessionsEmptyText }}</div>
+    </sc-if>
+
+    <!-- 已結束的場次預設收起來：一年四場、三年就是十二列，390px 的螢幕上評核官
+         要找的是「開放中」那一列。完全不顯示反而更糟——業主把「開放送出迄」早填
+         了一天時，評核官只會覺得連結壞了，所以留一顆可以展開、旁邊印著時間窗的
+         開關。 -->
+    <sc-if value="{{ showClosedToggle }}" hint-placeholder-val="{{ false }}">
+    <button type="button" onClick="{{ toggleClosedSessions }}" style="{{ closedToggleStyle }}">{{ closedToggleLabel }}</button>
+    </sc-if>
+  </div>
+
+</div>
+</sc-if>
+
 <sc-if value="{{ showLoading }}" hint-placeholder-val="{{ false }}">
 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; flex-grow: 1; padding: 40px 32px; box-sizing: border-box; text-align: center;">
   <div style="font-size: 17px; font-weight: 700; color: #161512;">資料載入中…</div>
@@ -46,6 +108,11 @@ button{font-family:inherit;cursor:pointer}
     <div style="font-size: 22px; font-weight: 900; line-height: 1.3;">{{ exerciseName }}</div>
     <sc-if value="{{ showExerciseDate }}" hint-placeholder-val="{{ true }}">
     <div style="font-size: 13px; font-weight: 700; color: #7a4e0f;">演習日期：{{ exerciseDateText }}</div>
+    </sc-if>
+    <!-- 挑錯場次的回頭路。只有從場次清單進來的人才看得到（?t=&ex= 的連結與完全
+         沒帶參數的連結本來就只有一場，不該長出這顆按鈕）。 -->
+    <sc-if value="{{ showSessionSwitch }}" hint-placeholder-val="{{ false }}">
+    <button type="button" onClick="{{ switchSession }}" style="align-self: flex-start; margin-top: 4px; padding: 0; border: 0; background: transparent; color: #7a4e0f; font-size: 13px; font-weight: 700; text-decoration: underline;">更換場次</button>
     </sc-if>
   </div>
 
@@ -217,15 +284,32 @@ const Q_PARAMS = new URLSearchParams(window.location.search);
 const T_PARAM = Q_PARAMS.get('t') || '';
 const EX_PARAM = Q_PARAMS.get('ex') || '';
 const HAS_TENANT_PARAMS = !!(T_PARAM || EX_PARAM);
+// 場次選擇模式：只帶 ?t=、沒帶 ?ex= 的連結才進場次清單。
+//   沒帶參數        -> false，與今天完全相同（打 CONFIG_URL，不送任何 action）
+//   ?t= 且 ?ex=     -> false，拿到的是單場連結的人直接進表單，不多繞一次往返，
+//                      也不把同院其他場次列給只被指派一場的人看
+//   只有 ?t=        -> true，列出該院的場次讓評核官自己挑
+// 刻意做成 module 層的 const 而不是 state：網址不可能在不重新載入的情況下改變，
+// 做成 state 只會多一個可以跟網址不一致的來源。
+const PICKER_MODE = !!T_PARAM && !EX_PARAM;
 // 沒有帶參數時維持今天的行為：原封不動 fetch(CONFIG_URL)，連 '?' 都不加。
 // 帶了參數就得改打 RECORD_URL，因為 CONFIG_URL 指的是另一個 apps-script/Config.gs
 // 專案，它沒有註冊表程式碼，任何 ?t= 都會被它靜靜地當成寫死的那一場。
-function configRequestUrl() {
+// exid 是「目前選到的場次代號」：場次清單選完之後它才有值，沒有時就退回網址上的
+// ?ex=。沒帶參數時兩者都是空字串，所以這個參數不會改變舊連結送出的請求。
+function configRequestUrl(exid) {
   if (!HAS_TENANT_PARAMS) return CONFIG_URL;
+  const ex = exid || EX_PARAM;
   const qs = [];
   if (T_PARAM) qs.push('t=' + encodeURIComponent(T_PARAM));
-  if (EX_PARAM) qs.push('ex=' + encodeURIComponent(EX_PARAM));
+  if (ex) qs.push('ex=' + encodeURIComponent(ex));
   return RECORD_URL + '?' + qs.join('&');
+}
+// 場次清單一定打 RECORD_URL（CONFIG_URL 那個專案完全不看 action，會回設定內容），
+// 而且只送 ?t=：這支檔案永遠不讀、不送任何金鑰，action=sessions 也刻意設計成
+// 不需要金鑰、只回註冊表上的文字。
+function sessionsRequestUrl() {
+  return RECORD_URL + '?action=sessions&t=' + encodeURIComponent(T_PARAM);
 }
 // 情境前綴（預設 SCENE）是由後端給的，所以要先轉義再組 RegExp，否則醫院自訂
 // 成含 . ( ) 等字元的前綴會變成萬用比對。
@@ -282,17 +366,22 @@ function nodeAt(root, path) {
 // 用（無痕模式、配額滿）時一律當成「沒有記錄」處理，只是少了跨重載的記憶，
 // 不影響評分與送出流程。
 const DONE_STORE_PREFIX = 'exerciseEvalDone:';
-function doneStorageKey(config, fillerCode) {
+// exid 是「目前這一刻生效的演習代號」，不是網址上的 EX_PARAM：場次清單選出來的
+// 場次存在 state 裡，呼叫端一定要把它傳進來，否則同一支手機在同院兩場之間切換時
+// 會共用同一個 key，把 A 場的已完成標記算到 B 場頭上。
+function doneStorageKey(config, fillerCode, exid) {
   // 有帶 ?t=/?ex= 就用「醫院代號/演習代號」當 key：那是註冊表裡固定不變的身分，
   // 業主在演習中途改一格演習名稱不會再讓全場評核官的「已完成」記錄蒸發，兩場都
   // 沒填演習名稱也不會共用字面上的 'default'。
   // 沒帶參數時一定要維持舊 key（連四層 fallback 都照抄）：正在演習中、拿的是舊
-  // 連結的評核官，不能因為這次上線就把已完成標記弄丟。
+  // 連結的評核官，不能因為這次上線就把已完成標記弄丟。這裡的條件刻意寫成直接看
+  // 網址上的兩個常數，不看 state：這樣「沒帶參數」的拜訪絕對不可能被場次狀態帶去
+  // 另一個分支。
   if (!T_PARAM && !EX_PARAM) {
     const ex = (config && (config.exerciseName || config.exerciseTopic || config.exerciseCategory)) || 'default';
     return DONE_STORE_PREFIX + ex + ':' + (fillerCode || '');
   }
-  return DONE_STORE_PREFIX + T_PARAM + '/' + EX_PARAM + ':' + (fillerCode || '');
+  return DONE_STORE_PREFIX + T_PARAM + '/' + (exid || EX_PARAM) + ':' + (fillerCode || '');
 }
 function loadDoneItems(key) {
   try {
@@ -311,6 +400,23 @@ function collectLeafNames(nodes, out) {
     else if (n.children) collectLeafNames(n.children, out);
   });
   return out;
+}
+// 場次狀態的配色與備援文字。狀態字串（開放中／尚未開放／已結束）本體由後端給，
+// 跟 doPost 的判斷同一套用語，不會兩邊各說一套；這裡只在後端沒給 statusText 時
+// 才用備援文字，顏色一律用檔案裡已經有的那幾組 token：
+//   開放中  = END 畫面的綠（#1f7a4d / #dcefe3）
+//   尚未開放 = 葉節點徽章的琥珀（#7a4e0f / #f0e2be）
+//   已結束  = 已完成項目的灰（#8a867c / #e6e0cf）
+const SESSION_STATUS_STYLES = {
+  open: { fg: '#1f7a4d', bg: '#dcefe3', text: '開放中' },
+  future: { fg: '#7a4e0f', bg: '#f0e2be', text: '尚未開放' },
+  past: { fg: '#8a867c', bg: '#e6e0cf', text: '已結束' },
+};
+// 後端若回了沒見過的狀態字串，一律當成「已結束」處理：寧可讓它變成不可點的灰色
+// 列，也不要讓一個看不懂的狀態長成可以點進去送分數的樣子。
+function sessionStatusKey(raw) {
+  const s = String(raw == null ? '' : raw);
+  return SESSION_STATUS_STYLES[s] ? s : 'past';
 }
 function flattenRows(nodes, path, depth, openGroupKey, out) {
   nodes.forEach((node, idx) => {
@@ -331,7 +437,9 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = {
-      screen: 'select',
+      // 只帶 ?t=（沒帶 ?ex=）的連結先進場次清單；另外兩種連結形狀（完全沒帶參數、
+      // ?t= 且 ?ex=）的起始畫面與今天完全相同。
+      screen: PICKER_MODE ? 'sessions' : 'select',
       fillerCode: '',
       path: [],
       openGroupKey: null,
@@ -345,15 +453,91 @@ class Component extends DCLogic {
       submitting: false,
       submitError: null,
       submitRefusal: null,
+      // 場次清單。null = 還沒載入（與「這家醫院沒有可顯示的場次」的空陣列不同，
+      // 後者要印空狀態文字而不是轉圈圈）。
+      sessions: null,
+      sessionsError: null,
+      // 目前選到的演習代號。選完才有值；永遠不在沒帶 ?t= 的情況下被讀到。它與
+      // EX_PARAM 合成 (sessionExid || EX_PARAM) 這一個表達式，設定請求的網址、
+      // POST body 的 exercise、localStorage key 三個地方共用，所以不可能各走各的。
+      sessionExid: '',
+      showClosedSessions: false,
     };
     this.submissionId = null;
   }
   componentDidMount() {
-    this.loadConfig();
+    // 場次選擇模式先不抓設定：還沒選場次之前根本不知道要抓哪一場的設定，而且
+    // 只帶 ?t= 去抓設定會被後端解成「預設演習」。
+    if (PICKER_MODE) this.loadSessions();
+    else this.loadConfig();
   }
-  loadConfig() {
+  // 場次清單。失敗分兩種處理：
+  //   REGISTRY_OFF（註冊表還沒設定或暫時讀不到）-> 不給評核官看錯誤畫面，直接退回
+  //     今天只帶 ?t= 的行為（照舊 loadConfig()，送出與今天位元相同的設定請求，由
+  //     後端自己 fallback）。這是整個場次選擇功能可以「只增不改」的關鍵：master 上
+  //     REGISTRY_SPREADSHEET_ID 還是 ''，那邊的 ?t= 連結本來就該走 fallback。
+  //   其他 errorCode（NO_TENANT / BAD_CODE / ROW_INVALID / NO_TENANT_CODE）-> 直接把
+  //     後端那句中文印出來。連結上的醫院代號打錯時，要讓人看到跟今天一樣的句子，
+  //     而不是一張空白的清單。
+  loadSessions() {
+    this.setState({ sessions: null, sessionsError: null });
+    fetch(sessionsRequestUrl())
+      .then((res) => {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        if (data && data.error) {
+          if (data.errorCode === 'REGISTRY_OFF') {
+            this.setState({ screen: 'select', sessions: null, sessionsError: null });
+            this.loadConfig('');
+            return;
+          }
+          throw new Error(data.error);
+        }
+        // 排序是後端做的（DC 樣板沒有排序能力），這裡原樣保留它給的順序。
+        this.setState({ sessions: (data && data.sessions) || [] });
+      })
+      .catch((err) => this.setState({ sessionsError: (err && err.message) || String(err) }));
+  }
+  // 挑一場。exid 一定要用參數傳進 loadConfig，不能讓它自己去讀 this.state：
+  // setState 不保證同步，讀到的可能還是上一場的代號。
+  pickSession(exid, isDefault) {
+    this.submissionId = null;
+    this.setState({
+      sessionExid: exid,
+      screen: 'select',
+      config: null,
+      loadError: null,
+      path: [],
+      openGroupKey: null,
+      answers: {},
+      comments: {},
+      criteriaOpenIds: {},
+      submitError: null,
+      submitRefusal: null,
+      codeHint: false,
+      doneItems: this.adoptDoneItems(exid, isDefault, this.state.fillerCode),
+    });
+    this.loadConfig(exid);
+  }
+  // 只帶 ?t= 的連結以前走的是「預設演習」那條路，localStorage key 裡的演習代號位置
+  // 是空字串；現在多了選場次這一步，key 會變成 '醫院代號/演習代號'，已經記下的
+  // 「已完成」標記會掉一次。選到的就是那場預設演習、而且新 key 還沒有任何記錄時，
+  // 把舊 key 的記錄搬過來一次。isDefault 這個條件是關鍵：沒有它就會把預設演習的
+  // 進度算到不相干的場次頭上。
+  adoptDoneItems(exid, isDefault, code) {
+    const key = doneStorageKey(null, code, exid);
+    const current = loadDoneItems(key);
+    if (!isDefault || Object.keys(current).length) return current;
+    const legacy = loadDoneItems(doneStorageKey(null, code, ''));
+    if (!Object.keys(legacy).length) return current;
+    saveDoneItems(key, legacy);
+    return legacy;
+  }
+  loadConfig(exid) {
     this.setState({ config: null, loadError: null });
-    fetch(configRequestUrl())
+    fetch(configRequestUrl(exid == null ? this.state.sessionExid : exid))
       .then((res) => {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -413,6 +597,9 @@ class Component extends DCLogic {
     // 的代號」底下，否則會記到別人的進度裡（別的代號看到沒評過的項目變成已完
     // 成、甚至被判定全部完成），而真正送出的代號反而沒有記錄。
     const submittedCode = this.state.fillerCode;
+    // 同理把演習代號也固定下來：送出中按「更換場次」會把 sessionExid 清掉，成功
+    // 回來時不能拿新的（或空的）代號去算 localStorage key。
+    const submittedExid = this.state.sessionExid;
     const comments = this.state.comments;
     const payload = {
       submissionId: this.submissionId,
@@ -426,21 +613,29 @@ class Component extends DCLogic {
       })),
       // 身分代號：後端 resolveTenant_ 以 body 的 tenant/exercise 優先於 query。
       // 沒帶參數時兩個都是空字串，後端就走寫死的那一組常數（與今天完全相同）。
+      // exercise 一定要送「目前生效的」演習代號，不是網址上的 EX_PARAM：場次清單
+      // 選出來的場次只存在 state 裡，漏掉這一項的話 picker 模式送出的分數會帶著
+      // 醫院代號、卻沒有演習代號到後端，被靜靜地解成「預設演習」——分數寫進別場
+      // 演習的紀錄表，而且任何一端都不會報錯。沒帶參數時這個表達式是 ''、
+      // ?t=&ex= 時等於 EX_PARAM，所以兩種舊連結送出的 body 完全沒變。
       tenant: T_PARAM,
-      exercise: EX_PARAM,
+      exercise: submittedExid || EX_PARAM,
     };
     this.setState({ submitting: true, submitError: null, submitRefusal: null });
     this.postWithRetry(payload, 1)
       .then(() => {
         this.submissionId = null;
-        const stillSameCode = this.state.fillerCode === submittedCode;
+        // 「還在同一個身分上」= 代號沒換、場次也沒換。送出中按「更換場次」跟換代號
+        // 一樣會讓 this.state.doneItems 變成另一個 key 的內容，累加上去就會把這一場
+        // 的完成記錄算到別場頭上。
+        const stillSameCode = this.state.fillerCode === submittedCode && this.state.sessionExid === submittedExid;
         // 代號沒變就接著目前記憶體裡的那份累加（localStorage 不可用時還是能在
         // 本次操作中累積）；代號已經換掉就改用該代號存在 localStorage 的那份，
         // 不去碰現在選的代號的進度。
-        const base = stillSameCode ? this.state.doneItems : loadDoneItems(doneStorageKey(this.state.config, submittedCode));
+        const base = stillSameCode ? this.state.doneItems : loadDoneItems(doneStorageKey(this.state.config, submittedCode, submittedExid));
         const doneItems = Object.assign({}, base);
         doneItems[item.name] = true;
-        saveDoneItems(doneStorageKey(this.state.config, submittedCode), doneItems);
+        saveDoneItems(doneStorageKey(this.state.config, submittedCode, submittedExid), doneItems);
         if (stillSameCode) {
           this.setState({ submitting: false, screen: 'done', doneItems });
         } else {
@@ -528,6 +723,61 @@ class Component extends DCLogic {
         labelStyle: isGroup
           ? 'font-size: 16px; font-weight: 800; flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'
           : 'font-size: 15px; font-weight: 700; flex-grow: 1; line-height: 1.35;',
+      };
+    });
+
+    // ---- 場次清單 ----
+    // 只有 picker 模式（只帶 ?t=）才會進到 'sessions' 這個畫面，所以下面整段在另外
+    // 兩種連結形狀下都是空陣列／false，一行樣板都不會長出來。
+    const inSessions = PICKER_MODE && screen === 'sessions';
+    const sessions = this.state.sessions;
+    const sessionExid = this.state.sessionExid;
+    const sessionList = sessions || [];
+    const closedCount = sessionList.filter((s) => sessionStatusKey(s.status) === 'past').length;
+    // 已結束的場次後端照樣回傳，但預設收起來，由下面那顆開關展開；過濾在前端做，
+    // 後端若先濾掉，開關就印不出「還有幾場被收起來」。
+    const visibleSessions = this.state.showClosedSessions
+      ? sessionList
+      : sessionList.filter((s) => sessionStatusKey(s.status) !== 'past');
+    const sessionRows = visibleSessions.map((s) => {
+      const statusKey = sessionStatusKey(s.status);
+      const tone = SESSION_STATUS_STYLES[statusKey];
+      const isPast = statusKey === 'past';
+      const from = String(s.openFromText || '');
+      const to = String(s.openToText || '');
+      // 時間窗那一行只在註冊表真的填了起或迄時才出現。兩格都空白（今天線上那一列
+      // 就是這樣）時完全不佔版面，不印「不限 ~ 不限」這種廢話。
+      let windowText = '';
+      if (isPast) {
+        if (to) windowText = '開放送出至 ' + to;
+      } else if (from && to) {
+        windowText = '開放送出：' + from + ' ~ ' + to;
+      } else if (from) {
+        windowText = '開放送出：' + from + ' 起';
+      } else if (to) {
+        windowText = '開放送出：至 ' + to;
+      }
+      return {
+        // 顯示名稱是註冊表的選填欄位，空白時退回演習代號當標籤：寧可標籤醜，也不
+        // 要讓一列從清單上消失（那一列的路由本身是好的）。
+        label: String(s.label || s.exercise || ''),
+        // 狀態用語（開放中／尚未開放／已結束）以後端給的為準，跟 doPost 同一套字；
+        // 後端沒給才用備援文字。
+        statusText: String(s.statusText || tone.text),
+        statusStyle: 'flex-shrink: 0; padding: 5px 9px; border-radius: 10px; background: ' + tone.bg +
+          '; color: ' + tone.fg + '; font-size: 11px; font-weight: 900; white-space: nowrap;',
+        windowText,
+        showWindow: !!windowText,
+        windowStyle: 'font-size: 12px; font-weight: 700; line-height: 1.4; color: ' + (isPast ? '#8a867c' : '#7a4e0f') + ';',
+        // 「本場」只在評核官已經選過、又回到清單時出現，讓人看得出自己剛剛在哪一場。
+        showCurrent: !!sessionExid && s.exercise === sessionExid,
+        rowStyle: baseRowStyle + ' width: 100%; min-height: 52px; padding-top: 12px; padding-bottom: 12px;' +
+          (isPast ? ' background: #efece2; border-color: #ded8c6; color: #8a867c;' : ''),
+        disabled: isPast,
+        // pick 一定要是函式：樣板上的 {{ s.pick }} 找不到值會印成空白，已結束那列
+        // 給一個什麼都不做的函式比留空安全。disabled 綁在 sc-for 裡面的行為沒有
+        // 實測過，所以點擊這一側也一起擋掉，兩層都失手才會出事。
+        pick: isPast ? () => {} : () => this.pickSession(s.exercise, !!s.isDefault),
       };
     });
 
@@ -630,11 +880,53 @@ class Component extends DCLogic {
       // 換代號時連同「已完成」記錄一起換成那個代號自己的進度。
       setCode: (e) => {
         const code = e && e.target ? e.target.value : '';
-        this.setState({ fillerCode: code, codeHint: false, doneItems: loadDoneItems(doneStorageKey(config, code)) });
+        this.setState({ fillerCode: code, codeHint: false, doneItems: loadDoneItems(doneStorageKey(config, code, sessionExid)) });
       },
       showCodeHint: this.state.codeHint && !this.state.fillerCode,
-      showLoading: !loaded && !this.state.loadError,
-      showLoadError: !!this.state.loadError,
+      // ---- 場次清單畫面 ----
+      showSessionsLoading: inSessions && !sessions && !this.state.sessionsError,
+      showSessionsError: inSessions && !!this.state.sessionsError,
+      sessionsError: this.state.sessionsError || '',
+      retrySessions: () => this.loadSessions(),
+      showSessions: inSessions && !!sessions,
+      sessionRows,
+      showSessionsEmpty: inSessions && !!sessions && sessionRows.length === 0,
+      // 全部場次都結束的醫院也不能只看到一片空白：空狀態文字照樣印，下面那顆
+      // 「顯示已結束場次」的開關也照樣在，人才找得到自己要的那一場。
+      sessionsEmptyText: closedCount > 0
+        ? '目前沒有開放中的場次。'
+        : '目前沒有開放中的場次。請聯絡演習主辦單位。',
+      showClosedToggle: inSessions && closedCount > 0,
+      closedToggleLabel: (this.state.showClosedSessions ? '隱藏已結束場次（' : '顯示已結束場次（') + closedCount + '）',
+      closedToggleStyle: 'align-self: center; margin-top: 6px; padding: 10px 16px; border: 2px solid #e6e0cf; border-radius: 12px; background: transparent; color: #7a4e0f; font-size: 13px; font-weight: 700;',
+      toggleClosedSessions: () => this.setState({ showClosedSessions: !this.state.showClosedSessions }),
+      // 挑錯場次的回頭路。清單用記憶體裡那一份，不重抓：不閃載入畫面，清單也不會
+      // 在評核官眼前重新排序（註冊表本來就有 120 秒快取，重抓通常拿到同樣的內容）。
+      showSessionSwitch: PICKER_MODE && !!sessionExid,
+      switchSession: () => {
+        this.submissionId = null;
+        this.setState({
+          screen: 'sessions',
+          sessionExid: '',
+          config: null,
+          loadError: null,
+          path: [],
+          openGroupKey: null,
+          answers: {},
+          comments: {},
+          criteriaOpenIds: {},
+          submitError: null,
+          submitRefusal: null,
+          codeHint: false,
+          doneItems: {},
+        });
+      },
+      // 這兩個要多一層 !inSessions：showLoading 的條件是「設定還沒載入」，而場次清單
+      // 在畫面上時設定本來就還沒載入（也不該載入），少了這層守衛會變成清單和
+      // 「資料載入中…」同時出現。showSelect/showSurvey/showDone/showEnd/showExit 都
+      // 已經綁死某個 screen 值，screen 是 'sessions' 時自然都是 false，不需要守衛。
+      showLoading: !inSessions && !loaded && !this.state.loadError,
+      showLoadError: !inSessions && !!this.state.loadError,
       loadError: this.state.loadError || '',
       retryLoad: () => this.loadConfig(),
       showSelect: loaded && screen === 'select',
