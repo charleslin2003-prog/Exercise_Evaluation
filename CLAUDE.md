@@ -26,6 +26,9 @@ submitting.
 `dev` points at a **test sandbox** owned by `charleslin2003@gmail.com`, not the client's
 production files. The constants that differ from `master` are commented inline in each
 file with the production value next to them — check those comments before merging.
+Not every pre-merge decision is a constant. See **"The `action=sessions` exposure"** below —
+accepted on `dev`, and a posture question that has to be re-answered before `master` serves
+a real hospital.
 
 | | dev (test sandbox) | master (production) |
 |---|---|---|
@@ -345,6 +348,80 @@ tenant. The specific reason strings are returned **only** by `action=selftest`.
 project, which has no registry code and would silently serve the hardcoded tenant for any
 `?t=`. Do not "simplify" this into one unconditional URL.
 
+### The `action=sessions` exposure (accepted on `dev`; **re-confirm before merging to `master`**)
+
+`action=sessions` is the **second** branch with no auth of any kind. It is fetched by every
+evaluator's phone on a `?t=`-only link, and it reads the registry. It is deliberately a
+separate function from `action=exercises` rather than that endpoint with its key relaxed,
+for three reasons, none of them optional:
+
+1. `exercises`'s fallback branch **ignores `?t=`** and opens the hardcoded config
+   spreadsheet. Unauthenticated, that branch alone would hand the legacy tenant's
+   演習名稱／演習日期 to anyone, including a caller with no `?t=` at all.
+2. One function, one red line. `exercises` may return file names because it sits behind
+   分析金鑰; `sessions` may return nothing but registry text. Both lines inside one
+   function behind an `if (key)` is unauditable.
+3. `exercises` calls `openById` once per row (a 12-exercise hospital = 12 opens). An
+   endpoint every phone hits without a key, sharing `doPost`'s quota, would be a free
+   quota amplifier. `sessions` reads only `readRegistry_()` (already cached 120s) and
+   opens **zero** spreadsheets — which is also why a row's label is 顯示名稱 and not
+   演習名稱: the latter lives in the config spreadsheet, which this branch never opens.
+
+The credential is knowing the 醫院代號 — exactly what the config branch already accepts,
+and what `Start.dc.html` already carries in its URL while sending no key at all.
+
+**State the delta rather than assuming it.** A `?t=` holder could already fetch the entire
+項目與問題 question bank, the entire 人員代號 roster, every 評分標準 string, the
+機構／演習 names and date, and POST scores into that exercise. `sessions` adds:
+
+- **(a) the existence, count and codes of that hospital's other 演習代號.** This is the
+  real change: it turns 演習代號 from a weak shared secret into an enumerable value, so the
+  range of exercises one `?t=` holder can push scores into widens from 預設演習 to **every
+  `啟用=Y` row of that hospital inside its submission window**.
+- **(b) each one's 顯示名稱** — already visible to anyone who knew the 演習代號, since the
+  config payload has always returned `displayName`.
+- **(c) each one's status and window text** — *half* of this is new. For a session that is
+  **not** open, `submitClosedReason` has always printed `windowText_` verbatim on the
+  unauthenticated config branch. But `submitWindowState_` returns `reason: ''` while a
+  session **is** open, and it collapses 尚未開放 and 已結束 into one identical sentence. So
+  `sessions` newly exposes an open session's window text, and the distinction between
+  「尚未開放」 and 「已結束」. Both are low-sensitivity; neither was previously derivable.
+
+Accepted because 演習代號 was never a credential (`normSlug_` allows 32 chars, but owners
+write `2026a`), and because letting one hospital's evaluators enumerate their own sessions
+*is* the feature — there is no session picker without it.
+
+Boundaries that do hold, and must keep holding:
+
+- `hid` is required and always passes `normSlug_`; a missing `t` returns `NO_TENANT_CODE`
+  **without calling `readRegistry_()` at all**.
+- Only rows with `r.hid === hid` are considered. **No endpoint anywhere enumerates
+  醫院代號**, and there is no wildcard, so there is no cross-tenant path.
+- A slug is never passed to `openById`. Rows failing `assertRegistrySane_` are invisible
+  (`ROW_INVALID`, generic message) — never another row's data, never the fallback tenant.
+- Neither post-resolution gate moved, but they do not guard the same places. `啟用=N` still
+  returns `DISABLED` from **both** the config branch and `doPost`. An out-of-window session
+  is refused **only by `doPost`** (`OUT_OF_WINDOW`); the config branch serves it in full
+  with `submitOpen:false` + `submitClosedReason`, exactly as it always has. So a session
+  this endpoint lists but which is closed cannot have scores written, but *can* still have
+  its form fetched — which was already true before the picker existed.
+- `sessionSortable_` is the **only** place in the endpoint that builds a returned object,
+  and the sort-only fields (`openFrom`, `openTo`, `isDefault`, `exid`) sit *outside* its
+  `out`, so they physically cannot ride along in the JSON. Adding a returned field means
+  editing that one function — which is what keeps the red line below checkable.
+
+> ⚠️ **Return-value red line, stricter than `action=selftest` because this branch has no
+> auth at all.** Never: any spreadsheet ID, 分析金鑰 (this branch never even compares one),
+> `ADMIN_KEY`, 紀錄分頁名稱 or any sheet name, 檔案擁有者, registry row numbers,
+> `registryWarning`, `assertRegistrySane_` reason strings, any other 醫院代號's row,
+> 人員代號／問題ID／分數／觀察紀錄 or any cell contents, or any file name (it opens no
+> file, so it cannot physically reach one).
+
+> **Before merging to `master`, re-confirm this exposure is still the decision you want.**
+> `dev` is a sandbox owned by one developer; `master` serves a real hospital. Nothing about
+> the code changes at merge — this is a posture question, not a defect, and it belongs on
+> the pre-merge checklist beside the spreadsheet IDs and keys.
+
 ### Config spreadsheet (per-tenant `設定試算表ID`, fallback `CONFIG_SPREADSHEET_ID`) — read by `doGet`
 
 | Sheet | Columns (header row) | Read as |
@@ -376,10 +453,13 @@ nine additive fields: `tenant`, `exercise`, `displayName`, `scenePrefix`,
 `tenantSource` (`'fallback' | 'registry'`, diagnostic only — clients must not branch on
 it for data).
 
-> **This branch has no auth and every evaluator's phone fetches it.** The payload must
-> never contain: `分析金鑰`/`ANALYSIS_KEY`, `ADMIN_KEY`, any spreadsheet ID, the record
-> sheet name, registry row numbers, `registryWarning`, `檔案擁有者`, or file names.
-> Assert this mechanically when changing the branch.
+> **Two branches have no auth at all and every evaluator's phone fetches them: the config
+> branch and `action=sessions`.** Neither payload may ever contain: `分析金鑰`/`ANALYSIS_KEY`,
+> `ADMIN_KEY`, any spreadsheet ID, the record sheet name, registry row numbers,
+> `registryWarning`, `assertRegistrySane_` reason strings, `檔案擁有者`, or file names.
+> Assert this mechanically when changing **either** branch, and when adding a third.
+> `docs/setup-三支apps-script.md` §3.1 驗證 item 2 is the only such check anyone actually
+> runs, and it had no `action=sessions` item for the entire time that branch was live.
 
 The whole branch is wrapped in try/catch returning
 `{error:…, errorCode:'CONFIG_READ_FAILED'}`; it used to be bare, so a renamed sheet showed
@@ -501,7 +581,7 @@ over `analysisRows + coverageRows` (`consistencyRows`). Three keys are **added**
 |---|---|---|
 | `selftest` | `?adminKey=` exact match against `ADMIN_KEY`. **Shipped value `''` = disabled**: returns `ADMIN_DISABLED` and touches no spreadsheet | `{ok, tenant, exercise, displayName, tenantSource, registry:{configured, readable, sheetFound, rowCount, validRowCount, invalidRows:[{rowNumber,reasons}], warning}, config:{…counts…}, record:{readable, writable, fileName, sheetName, headerColumns, rowCount, missingRequired, presentOptional, absentOptional}, messages:[zh-TW]}`. **File names, sheet names, header names and counts only** — no IDs, no keys, no 人員代號, no 問題ID, no scores, no cell contents. The write probe is `addDeveloperMetadata` + remove: it never appends a row and never sets a cell. This is the **only** place registry invalid-row reasons and the fallback-case-(ii) warning are ever visible |
 | `exercises` | `?t=` + `?key=`, authorized iff the key matches the `分析金鑰` of at least one valid row with that `醫院代號` (sanity rule 3 is what makes this safe). Fallback mode ignores `t` and compares against `ANALYSIS_KEY` | `{tenant, exercises:[{exercise, displayName, exerciseName, exerciseDate, enabled, isDefault}]}` sorted by `演習代號`. **Includes `啟用=N` rows** with `enabled:false` — that's what a 過去演習 picker needs. Never returns IDs, sheet names, keys or 檔案擁有者. A row whose config file won't open contributes `''` names rather than failing the list |
-| `sessions` | **none — no key of any kind.** `?t=` required (`NO_TENANT_CODE` without it, and the registry isn't even read). The second unauthenticated branch after the config branch; the trade-off it accepts (演習代號 becomes enumerable per hospital) is argued in the comment above `handleSessions_` | `{tenant, sessions:[{exercise, label, status, statusText, openFromText, openToText, isDefault}]}` — only that `醫院代號`'s valid rows, including `啟用=N` ones as `status:'past'`. `label` is `顯示名稱`, falling back to the bare `演習代號`. `status` is `open`/`future`/`past`, derived from `submitWindowState_` so it can't disagree with `doPost`. Sorted server-side (open → future → past; 預設演習 first among open). Reads only the cached registry and **opens no spreadsheet**. Errors: `BAD_CODE`, `NO_TENANT`, `ROW_INVALID`, and `REGISTRY_OFF` (registry unset or unusable — the client's cue to fall back silently) |
+| `sessions` | **none — no key of any kind.** `?t=` required (`NO_TENANT_CODE` without it, and the registry isn't even read). The second unauthenticated branch after the config branch; the trade-off it accepts (演習代號 becomes enumerable per hospital) is recorded in "The `action=sessions` exposure" above | `{tenant, sessions:[{exercise, label, status, statusText, openFromText, openToText, isDefault}]}` — only that `醫院代號`'s valid rows, including `啟用=N` ones as `status:'past'`. `label` is `顯示名稱`, falling back to the bare `演習代號`. `status` is `open`/`future`/`past`, derived from `submitWindowState_` so it can't disagree with `doPost`. Sorted server-side (open → future → past; 預設演習 first among open). Reads only the cached registry and **opens no spreadsheet**. Errors: `BAD_CODE`, `NO_TENANT`, `ROW_INVALID`, and `REGISTRY_OFF` (registry unset or unusable — the client's cue to fall back silently) |
 | `flush` | same as `selftest` | `{ok:true, flushed:['reg:v2']}`. Scoped to the registry cache key **only** — it must never clear `sub_*`, or an in-flight retry would append duplicate rows |
 
 `ADMIN_KEY` must not equal `ANALYSIS_KEY` and must appear in neither shipped HTML file.

@@ -218,9 +218,16 @@
    預期：一片 JSON，開頭是 `orgName`，裡面有 `"tenantSource":"fallback"`、`"tenant":""`、
    `"exercise":""`、`"submitOpen":true`，`codes` 陣列**8 筆**（A01–A07＋TEST-USER）。
    看到登入頁 ＝ 存取權不是「任何人」。
-2. **外洩檢查**（這條分支沒有驗證、每支手機都抓得到）：在同一片 JSON 裡 Ctrl+F 搜
+2. **外洩檢查**（這兩條分支都沒有驗證、每支手機都抓得到）：在同一片 JSON 裡 Ctrl+F 搜
    `1yiZDn`、`1jD6DX`、`1oab1W`、`WrHSeTn`、`評核紀錄`、`租戶註冊表`。
    預期：**六項全部 0 筆**。
+   接著把網址改成 `?action=sessions&t=wanfang-7f3a2c`，對回來那一片 JSON **搜同樣六個
+   字串**，同樣預期**六項全 0 筆**，而且整個回應只該有 `tenant` 和 `sessions` 兩個鍵。
+   〔**未實測**——寫這一條時含 `action=sessions` 的版本還沒部署。〕還沒部署那一版的後端
+   會把這個網址當成設定分支，回一整份 `orgName`／`codes`／`items`，所以「只有兩個鍵」這
+   一條同時也是「新版有沒有真的上線」的檢查。
+   這一條是後來才補的：`action=sessions` 是第二條無金鑰分支，它上線時這份清單只檢查了
+   設定分支——而 `CLAUDE.md` 的規則本來就要求每一條無認證分支都要機械式驗一次。
 3. **路由**：加上 `?t=wanfang-7f3a2c&ex=2026a`。預期：同樣的資料，但
    `"tenantSource":"registry"`、`"tenant":"wanfang-7f3a2c"`、`"exercise":"2026a"`。
    帶了參數還是 `fallback` ＝ 註冊表分頁名錯了，或那一列無效。
