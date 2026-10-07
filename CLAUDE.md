@@ -31,7 +31,7 @@ file with the production value next to them — check those comments before merg
 |---|---|---|
 | `CONFIG_SPREADSHEET_ID` | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
 | `RECORD_SPREADSHEET_ID` | `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` |
-| `CONFIG_URL` / `RECORD_URL` | the two `AKfycbwIoR80…` / `AKfycbzilnn3…` deployments | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments |
+| `CONFIG_URL` / `RECORD_URL` | the two `AKfycbwIoR80…` / `AKfycbzQLAJCv3…` deployments | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments |
 
 Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
 (A01–A07 + TEST-USER); `doPost` writes; `action=analysis` returns

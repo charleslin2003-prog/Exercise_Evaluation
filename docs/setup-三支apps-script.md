@@ -190,7 +190,7 @@
    （從編輯器執行 `doGet` 沒有網址參數，程式對此是安全的：它會走 fallback 租戶、只讀設定表。）
 9. **部署（這一步已經害過我們一次）**：
    「部署」→「**管理部署作業**」→ 在清單裡對**既有那一筆**（網址結尾是
-   `…AKfycbzilnn3…JHQui7rjLg/exec`）點**鉛筆（編輯）**→「版本」選「**新版本**」→「部署」。
+   `…AKfycbzQLAJCv3…DDs5ykytX/exec`）點**鉛筆（編輯）**→「版本」選「**新版本**」→「部署」。
    **永遠不要按「新增部署作業」**。
    （只有全新安裝、清單是空的那一次例外：那時才按「新增部署作業」→ 齒輪「選取類型」→
    **網頁應用程式**。之後一輩子都走「管理部署作業 → 鉛筆 → 新版本」。）
@@ -476,7 +476,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 
 重點說明：
 
-- `REPORT_API_URL` **必須是 ConfigWithSubmit 的 `/exec`**（`AKfycbzilnn3…`）。
+- `REPORT_API_URL` **必須是 ConfigWithSubmit 的 `/exec`**（`AKfycbzQLAJCv3…`）。
   貼成 Config 專案的 `AKfycbwIoR80…` 會通過格式檢查（都是
   `https://script.google.com/…/exec`），但它沒有 `action=analysis`，所以要等到跑一半才死在
   「後端回傳的資料缺少 meta 或 stats」。
@@ -623,7 +623,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 7. 把對話框顯示的 `/exec` 和檔案裡的常數**逐字元**比對。**別用眼睛比**：開一張空白試算表，
    A1 貼對話框那一串、A2 貼檔案裡那一串、A3 打 `=EXACT(A1,A2)`，必須顯示 `TRUE`。
    - ConfigWithSubmit → `Start.dc.html` 第 210 行 **和** `Analysis.html` 第 163 行，
-     開頭應為 `AKfycbzilnn3…`
+     開頭應為 `AKfycbzQLAJCv3…`
    - Config → `Start.dc.html` 第 202 行，開頭應為 `AKfycbwIoR80…`
 8. 回到「管理部署作業」，確認清單裡**仍然只有一筆**網頁應用程式部署。
 
@@ -688,7 +688,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 | 20 | 腳本被繫結到**錯的試算表**（例如 演習評核_紀錄）。報告還是產得出來、看起來也完整，只是第 3 章的 1–5 評分尺度表被換成一行警示註解，而 `報告快照`／`_報告暫存` 分頁出現在紀錄檔案裡（沒人會去那裡找）。檢查設定每一列仍然是綠的 | 讀 `評分標準` 的函式在分頁不存在時回傳一個 `{error}` 而不是丟例外；而「設定檔名稱比對」那一列是**無條件以通過狀態推進**的——不一致只會讓那一列的文字變成一句警示句 | 在檢查設定裡**讀那一列的文字，不要看顏色**：必須是「一致（演習評核_設定）」。它指出兩個不同檔名，就是繫結錯了——到 演習評核_設定 底下重建，並把跑錯檔案裡的那兩個分頁刪掉 |
 | 21 | 有人從 Apps Script 編輯器按「執行」而不是從試算表選單啟動。編輯器說「執行完畢」，卻沒有任何對話框打開；更糟的情況是直接執行 `reportStart`，於是真的建了一份文件和 23 列 `報告快照`，並且**永遠停在「產生中」** | 跳對話框需要「目前文件」的 UI，沒有時它連要往哪裡講都沒有，於是失敗被吞掉。而 `reportStart` 只寫第一批——章節是由對話框反覆呼叫驅動的，單獨跑它只會留下一份永久的半成品 | **一律從試算表最上方選單列的「演習評核報告 → 產生評核報告…」啟動**（不是「擴充功能」底下，也不是編輯器的「▶ 執行」）。 已經誤跑了：用「開啟上一份報告」找出那份孤兒文件 → 執行「重設產生狀態」（只清執行紀錄和 `_報告暫存`，不刪任何檔案、不刪 `報告快照` 的任何一列）→ 手動刪掉那份孤兒文件 → 重新產生 |
 | 22 | 一輪產生中止，訊息是「產生期間資料已經變動…已中止這一輪」；或明明沒人在產生卻說「報告正在產生中，請稍候再試」，留下一份草稿文件和一批標成「中斷」的 `報告快照` 列 | 程式會比對各批之間的資料指紋，**拒絕把兩份快照混成一份報告**——一位評核官在產生途中送出分數就足以觸發。第二句則是鎖的保護，或是 15 分鐘內還有一筆標成執行中的紀錄（通常是產生途中把瀏覽器分頁關掉） | 選單列的 演習評核報告 → 重設產生狀態 → 確認，然後重新產生——而且**在演習結束、沒人再送出之後**才產生。那些「中斷」列和草稿文件是**刻意留下來當證據**的，不想要就自己刪掉文件。半成品一定會在三個地方自己招認：草稿橫幅、檔名的「（部分完成）」後綴、附錄D |
-| 23 | 報告跑到一半死在「後端回傳的資料缺少 meta 或 stats，無法產生報告。」、「後端回傳的是一頁 HTML 而不是資料」、或「分析金鑰不正確（後端回 unauthorized）」 | 第一句：`REPORT_API_URL` 被設成 `CONFIG_URL`（`AKfycbwIoR80…`）。Config 專案沒有 `action=analysis`，而那個網址仍然通過 `/exec` 格式檢查，所以錯誤要到很後面才浮現。第二句：部署的存取權不是「任何人」，請求被導到 Google 登入頁。第三句：`REPORT_ANALYSIS_KEY` 跟後端解析出來的 `分析金鑰` 不一致 | `REPORT_API_URL` 必須是 ConfigWithSubmit 的 `AKfycbzilnn3…/exec`。驗法：把 `<REPORT_API_URL>?action=analysis&key=<REPORT_ANALYSIS_KEY>` 貼進瀏覽器——JSON 含 `"recordRowCount":101` ＝ 對；看到有 codes/items 但沒有 stats 的設定資料 ＝ 網址錯了；登入頁 ＝ 存取權設定；`{"error":"unauthorized"}` ＝ 金鑰錯。**修屬性，不要重新部署任何東西** |
+| 23 | 報告跑到一半死在「後端回傳的資料缺少 meta 或 stats，無法產生報告。」、「後端回傳的是一頁 HTML 而不是資料」、或「分析金鑰不正確（後端回 unauthorized）」 | 第一句：`REPORT_API_URL` 被設成 `CONFIG_URL`（`AKfycbwIoR80…`）。Config 專案沒有 `action=analysis`，而那個網址仍然通過 `/exec` 格式檢查，所以錯誤要到很後面才浮現。第二句：部署的存取權不是「任何人」，請求被導到 Google 登入頁。第三句：`REPORT_ANALYSIS_KEY` 跟後端解析出來的 `分析金鑰` 不一致 | `REPORT_API_URL` 必須是 ConfigWithSubmit 的 `AKfycbzQLAJCv3…/exec`。驗法：把 `<REPORT_API_URL>?action=analysis&key=<REPORT_ANALYSIS_KEY>` 貼進瀏覽器——JSON 含 `"recordRowCount":101` ＝ 對；看到有 codes/items 但沒有 stats 的設定資料 ＝ 網址錯了；登入頁 ＝ 存取權設定；`{"error":"unauthorized"}` ＝ 金鑰錯。**修屬性，不要重新部署任何東西** |
 | 24 | 分數存得好、報告也畫得出來，但 `評核紀錄` 裡的 `測試情境`／`評核潛能`／`4S 元素`／`評核題目`／`觀察紀錄`／`醫院代號`／`演習代號` 是空的或根本沒有那些欄，報告的標籤來源那一行說全部來自 `join` | 這是設計，不是 bug：那些欄是**選填**的，找不到就整欄略過、不報錯。但後果是真的——沒有快照欄，下一場演習改設定表會**回頭改寫上一場已發出報告的標籤**；`觀察紀錄` 的文字則是直接被丟掉 | 把想要的欄標頭加進 `評核紀錄` 第 1 列（用正確字串或任一別名）再重新送出。**不需要重新部署**——欄位是在請求當下靠標頭文字比對的 |
 
 ---
@@ -740,8 +740,8 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 | `ConfigWithSubmit.gs` | 21 | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
 | `ConfigWithSubmit.gs` | 24 | `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` |
 | `Config.gs` | 7 | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
-| `Start.dc.html` | 202 / 210 | `AKfycbwIoR80…` / `AKfycbzilnn3…` | 正式的那兩個部署（值記在檔案的註解裡） |
-| `Analysis.html` | 163 / 166 | `AKfycbzilnn3…` / `WrHSeTn1…` | 正式部署 ／ 正式金鑰 |
+| `Start.dc.html` | 202 / 210 | `AKfycbwIoR80…` / `AKfycbzQLAJCv3…` | 正式的那兩個部署（值記在檔案的註解裡） |
+| `Analysis.html` | 163 / 166 | `AKfycbzQLAJCv3…` / `WrHSeTn1…` | 正式部署 ／ 正式金鑰 |
 | `Report.gs` 的指令碼屬性（在**容器繫結那個專案**的 ⚙ 專案設定裡，不在程式碼裡） | — | `REPORT_API_URL`、`REPORT_ANALYSIS_KEY` 指沙箱 | 指正式 |
 
 改完**每一支改過的網頁應用程式都要以「版本：新版本」重新部署**，然後重跑第 3 節對應的
