@@ -29,8 +29,8 @@
 | **專案類型** | 獨立（standalone）網頁應用程式 | 獨立（standalone）網頁應用程式 | **容器繫結**（container-bound，附在試算表上） |
 | **掛在哪** | 不掛在任何檔案。用 `SpreadsheetApp.openById()` 以 ID 開設定表（第 10 行） | 不掛在任何檔案。三個試算表全部以 ID 開啟（設定／紀錄／註冊表） | **掛在「演習評核_設定」這張試算表上**（`1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk`） |
 | **要不要部署** | **要**（否則手機抓不到網址） | **要**（否則手機抓不到網址） | **絕對不要部署。碰都不要碰「部署」按鈕** |
-| **入口函式** | `doGet`（第 9 行）＝只讀設定 | `doGet`（第 632 行）＋ `doPost`（第 702 行）＝讀設定、寫分數、出分析 | `onOpen`（第 140 行）＝開啟試算表時長出選單 |
-| **產出什麼** | 一個 `/exec` 網址 → 填進 `Start.dc.html` 第 202 行 `CONFIG_URL` | 一個 `/exec` 網址 → 填進 `Start.dc.html` 第 210 行 `RECORD_URL` **和** `Analysis.html` 第 163 行 `RECORD_URL` | 試算表**最上方選單列**多一個「演習評核報告」選單（在「說明」右邊，**不是**在「擴充功能」底下），沒有任何網址 |
+| **入口函式** | `doGet`＝只讀設定 | `doGet` ＋ `doPost`＝讀設定、寫分數、出分析 | `onOpen`＝開啟試算表時長出選單 |
+| **產出什麼** | 一個 `/exec` 網址 → 填進 `Start.dc.html` 的 `const CONFIG_URL` | 一個 `/exec` 網址 → 填進 `Start.dc.html` 的 `const RECORD_URL` **和** `Analysis.html` 的 `const RECORD_URL` | 試算表**最上方選單列**多一個「演習評核報告」選單（在「說明」右邊，**不是**在「擴充功能」底下），沒有任何網址 |
 | **誰在用它** | 評核官手機，而且只在連結**沒帶** `?t=`／`?ex=` 時 | 評核官手機（送出分數）＋ 儀表板 `Analysis.html` ＋ 報告產生器 | 只有業主自己，在試算表裡點選單 |
 | **目前沙箱的網址** | `…/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec` | `…/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec` | 無 |
 
@@ -70,10 +70,10 @@
         ↓  ConfigWithSubmit 只認 ID，試算表不存在就無從談起
 ② ConfigWithSubmit 專案 → 部署 → 得到 RECORD_URL
         ↓                        ↓                       ↓
-③ Start.dc.html 第 210 行    ④ Analysis.html        ⑤ Report.gs 的
-   RECORD_URL                   第 163 行 RECORD_URL     REPORT_API_URL
-        ↓                        第 166 行 ANALYSIS_KEY
-⑥（可選）Config.gs 專案 → 部署 → Start.dc.html 第 202 行 CONFIG_URL
+③ Start.dc.html              ④ Analysis.html        ⑤ Report.gs 的
+   RECORD_URL                   RECORD_URL               REPORT_API_URL
+        ↓                        ANALYSIS_KEY
+⑥（可選）Config.gs 專案 → 部署 → Start.dc.html 的 CONFIG_URL
         ↓
 ⑦ 報告範本 Google 文件（六個必要錨點）
         ↓
@@ -196,7 +196,7 @@
    **網頁應用程式**。之後一輩子都走「管理部署作業 → 鉛筆 → 新版本」。）
 10. 在同一個編輯視窗確認：**執行身分 = 我**（`charleslin2003@gmail.com`）、
     **具有存取權的使用者 = 任何人**。不是「任何知道連結的 Google 使用者」，不是「僅限自己」。
-11. 部署後，把對話框顯示的 `/exec` 跟 `Start.dc.html` 第 210 行、`Analysis.html` 第 163 行
+11. 部署後，把對話框顯示的 `/exec` 跟 `Start.dc.html` 的 `const RECORD_URL`（目前約第 283 行）、`Analysis.html` 的 `const RECORD_URL`（目前約第 163 行）
     **逐字元比對**。不一樣就是你按到了「新增部署作業」。
     **不要用眼睛比**（這兩串有 70 幾個字元）：開一張空白試算表，A1 貼對話框那一串、
     A2 貼檔案裡那一串、A3 打 `=EXACT(A1,A2)`。必須顯示 `TRUE`。
@@ -249,7 +249,7 @@
    你作答的題數、`送出時間` 是今天、`問題ID` 顯示成文字（例如 `1-1`）而不是日期。
    再按一次送出：列數**不可以**再增加（冪等快取）。
 10. **只有一筆部署**：「部署 → 管理部署作業」，清單裡應該只有**一個**網頁應用程式部署，
-    且 `/exec` 等於 `Start.dc.html` 第 210 行。有兩筆就是按錯按鈕的指紋。
+    且 `/exec` 等於 `Start.dc.html` 的 `const RECORD_URL`（目前約第 283 行）。有兩筆就是按錯按鈕的指紋。
 
 ---
 
@@ -270,9 +270,9 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 `2026/10/03`。它還會**安靜忽略** `啟用觀察紀錄`／`低分需說明門檻` 這兩個政策列，而且用
 最寬鬆的方式讀標頭（欄名改一個字，整張分頁會讀成空的，沒有任何錯誤）。
 
-**退役做法（0 分鐘 Apps Script 工作）**：用文字編輯器開 `Start.dc.html`，把**第 202 行**
-`CONFIG_URL` 的字串換成**第 210 行** `RECORD_URL` 的字串。**其他什麼都不要改**——
-第 216–229 行的 `T_PARAM`／`EX_PARAM`／`configRequestUrl()` 原封不動，那個 if 分支不要刪。
+**退役做法（0 分鐘 Apps Script 工作）**：用文字編輯器開 `Start.dc.html`，把
+**`const CONFIG_URL`**（目前約第 275 行）的字串換成 **`const RECORD_URL`**（目前約第 283 行）的字串。**其他什麼都不要改**——
+`T_PARAM`／`EX_PARAM`／`configRequestUrl()`（目前約第 290–313 行）原封不動，那個 if 分支不要刪。
 存檔。兩個常數現在都指向懂註冊表的 ConfigWithSubmit 部署，而 Config 專案一輩子不用建。
 **然後跳過本節其餘內容。**
 
@@ -306,7 +306,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 7. 部署 → 新增部署作業 → 齒輪（選取類型）→ 網頁應用程式。
    執行身分：**我**（第 6 步那個帳號）。具有存取權的使用者：**任何人**。
    按「部署」，複製 `/exec` 網址。
-8. 把那個 `/exec` 貼進 `Start.dc.html` 第 202 行的單引號內，保留結尾的 `/exec`。存檔。
+8. 把那個 `/exec` 貼進 `Start.dc.html` 的 `const CONFIG_URL`（目前約第 275 行）的單引號內，保留結尾的 `/exec`。存檔。
 9. **以後每一次改這支檔案**：部署 → 管理部署作業 → 既有那筆點鉛筆 → 版本：新版本 → 部署。
    永遠不要再按「新增部署作業」。
 
@@ -319,7 +319,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 
 #### 驗證（1–3、5 是 2026-10-06〔實測〕過的）
 
-1. 把 `Start.dc.html` 第 202 行的網址貼進瀏覽器。預期：純 JSON，開頭正好是
+1. 把 `Start.dc.html` 的 `const CONFIG_URL`（目前約第 275 行）的網址貼進瀏覽器。預期：純 JSON，開頭正好是
    `{"orgName":"萬芳醫院","exerciseName":"","exerciseTopic":"社區急救站實兵演練","exerciseCategory":"實兵演練","exerciseDate":…`
    （2026-10-06 實測）。出現 Google 登入頁 ＝ 存取權不是「任何人」。
 2. 同一片 JSON Ctrl+F `TEST-USER` → 預期找到 1 次，是 `codes` 的第 8 筆也是最後一筆。
@@ -352,12 +352,12 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 
 不是腳本，但這四個值錯了，什麼都不會動。
 
-| 檔案 | 行 | 值 |
+| 檔案 | 常數 | 值 |
 |---|---|---|
-| `Start.dc.html` | 202 | `CONFIG_URL` ＝ Config 專案的 `/exec`（或退役時填 RECORD_URL 同一串） |
-| `Start.dc.html` | 210 | `RECORD_URL` ＝ ConfigWithSubmit 的 `/exec` |
-| `Analysis.html` | 163 | `RECORD_URL` ＝ **同一串**，與 Start 第 210 行逐字相同 |
-| `Analysis.html` | 166 | `ANALYSIS_KEY` ＝ `'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub'`，與 `ConfigWithSubmit.gs` 第 86 行逐字相同 |
+| `Start.dc.html` | `CONFIG_URL` | ＝ Config 專案的 `/exec`（或退役時填 RECORD_URL 同一串） |
+| `Start.dc.html` | `RECORD_URL` | ＝ ConfigWithSubmit 的 `/exec` |
+| `Analysis.html` | `RECORD_URL` | ＝ **同一串**，與 `Start.dc.html` 的 `RECORD_URL` 逐字相同 |
+| `Analysis.html` | `ANALYSIS_KEY` | ＝ `'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub'`，與 `ConfigWithSubmit.gs` 的 `ANALYSIS_KEY` 逐字相同 |
 
 ⚠️ **這四個值在那兩個 HTML 檔案裡，不在 Google 上。** 要改它們得先拿到檔案：在 Windows
 檔案總管對檔案按**右鍵 → 開啟方式 → 記事本**就能看和改（**不要用 Word 開**，它會破壞檔案）。
@@ -622,9 +622,9 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 6. 按「部署」。
 7. 把對話框顯示的 `/exec` 和檔案裡的常數**逐字元**比對。**別用眼睛比**：開一張空白試算表，
    A1 貼對話框那一串、A2 貼檔案裡那一串、A3 打 `=EXACT(A1,A2)`，必須顯示 `TRUE`。
-   - ConfigWithSubmit → `Start.dc.html` 第 210 行 **和** `Analysis.html` 第 163 行，
+   - ConfigWithSubmit → `Start.dc.html` 的 `const RECORD_URL` **和** `Analysis.html` 的 `const RECORD_URL`，
      開頭應為 `AKfycbzQLAJCv3…`
-   - Config → `Start.dc.html` 第 202 行，開頭應為 `AKfycbwIoR80…`
+   - Config → `Start.dc.html` 的 `const CONFIG_URL`，開頭應為 `AKfycbwIoR80…`
 8. 回到「管理部署作業」，確認清單裡**仍然只有一筆**網頁應用程式部署。
 
 ### 絕對不要按「新增部署作業」
@@ -668,7 +668,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 |---|---|---|---|
 | 1 | 多醫院好像設好了：`?t=` 的連結照常載入、分數照常存、儀表板也對——但設定 JSON 裡仍是 `"tenantSource":"fallback"`，而故意打錯的 `?t=` 竟然回正常資料而不是錯誤 | 註冊表的**檔案 ID 對了，但檔案裡的分頁還叫 `工作表1`**，沒有改成 `租戶註冊表`（第 96 行）。`getSheetByName` 回 null → 被收斂成一個「警告」→ 整個控制面默默退回單一演習模式。送進來的代號還會被原樣回填到回應裡，所以回應「看起來」是租戶感知的。**這件事已經真的發生過一次。** 註冊表 ID 打錯、檔案被丟垃圾桶、帳號失去讀取權、五個必要欄標頭缺一個，全部收斂成同一個無聲結果 | 在註冊表檔案裡右鍵分頁 → 重新命名 → `租戶註冊表`。**等滿 2 分鐘**（快取 120 秒），再重跑 `?t=zzz` 檢查，必須得到 `NO_TENANT`。唯一會講出真正原因的診斷是 `action=selftest`，而它在 `ADMIN_KEY` 是 `''` 時是關閉的 |
 | 2 | 業主把 `Report.gs` 貼進了 **ConfigWithSubmit** 這個網頁應用程式專案，`REPORT_*` 屬性也設在那裡。完全沒有任何錯誤——試算表就是永遠長不出「演習評核報告」選單，而沒人把這兩件事連起來 | `onOpen` 是**簡單觸發器**，Google 只對**容器繫結**腳本觸發它；`PropertiesService` 是**每個專案獨立**的，所以設在獨立專案裡的屬性對繫結專案完全不可見。什麼都沒跑，所以什麼都不會錯 | 在 ConfigWithSubmit 專案刪掉 `Report.gs` 和 `ReportDialog.html`（各自 `⋮` → 刪除 → 確認；刪除立即生效，不必再存檔），**然後不要碰「部署」**（線上 `/exec` 服務的是釘住的版本快照，刪 HEAD 的檔案動不到它）。到 演習評核_設定 → 擴充功能 → Apps Script 重新貼上兩個檔案，並在**那裡**重設屬性。重新載入試算表後，選單會出現在**最上方選單列、「說明」的右邊**（永遠不會在「擴充功能」底下）。用「演習評核報告 → 設定說明（指令碼屬性）」確認三個必填都是「已設定」而不是紅色「尚未設定」 |
-| 3 | 合併 dev 到 master 看起來很乾淨，然後業主的正式系統開始讀寫**開發者個人沙箱的試算表**。或者反過來：線上程式裡還留著另一個帳號的試算表 ID，於是永遠回「你沒有存取所要求文件的權限。(第 66 行)」，**重新部署怎麼試都修不好**（那個「第 66 行」是**當時線上那一版**的行號，不是今天 `ConfigWithSubmit.gs` 的第 66 行——今天第 66 行只是一句註解。Apps Script 的錯誤行號一律指線上那一版，別拿它去對照本專案的檔案） | 試算表 ID 是寫在程式碼裡的（`ConfigWithSubmit.gs` 第 21／24／95 行、`Config.gs` 第 7 行），金鑰在第 86 行，兩個 `/exec` 在 `Start.dc.html` 第 202／210 行和 `Analysis.html` 第 163 行。**程式無法分辨自己手上拿的是哪一組。** 之前 RECORD 部署壞掉的真正原因就是這個：專案以個人帳號執行，程式裡卻還是公司帳號的 `1j3UCb…` | 合併前**逐行比對**那幾行，換回註解裡記錄的正式值：`CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ'`、`RECORD_SPREADSHEET_ID = '11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8'`。然後對正式環境重跑「裸 `/exec`」檢查，確認人員代號清單是業主的，不是 A01–A07＋TEST-USER。**要改的永遠是專案裡的 ID，不是重新部署** |
+| 3 | 合併 dev 到 master 看起來很乾淨，然後業主的正式系統開始讀寫**開發者個人沙箱的試算表**。或者反過來：線上程式裡還留著另一個帳號的試算表 ID，於是永遠回「你沒有存取所要求文件的權限。(第 66 行)」，**重新部署怎麼試都修不好**（那個「第 66 行」是**當時線上那一版**的行號，不是今天 `ConfigWithSubmit.gs` 的第 66 行——今天第 66 行只是一句註解。Apps Script 的錯誤行號一律指線上那一版，別拿它去對照本專案的檔案） | 試算表 ID 是寫在程式碼裡的（`ConfigWithSubmit.gs` 第 21／24／95 行、`Config.gs` 第 7 行），金鑰在第 86 行，兩個 `/exec` 在 `Start.dc.html` 的 `CONFIG_URL`／`RECORD_URL`（目前約第 275／283 行）和 `Analysis.html` 的 `RECORD_URL`（第 163 行）。**程式無法分辨自己手上拿的是哪一組。** 之前 RECORD 部署壞掉的真正原因就是這個：專案以個人帳號執行，程式裡卻還是公司帳號的 `1j3UCb…` | 合併前**逐行比對**那幾行，換回註解裡記錄的正式值：`CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ'`、`RECORD_SPREADSHEET_ID = '11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8'`。然後對正式環境重跑「裸 `/exec`」檢查，確認人員代號清單是業主的，不是 A01–A07＋TEST-USER。**要改的永遠是專案裡的 ID，不是重新部署** |
 | 4 | 評核官手機上的「人員代號」下拉**完全是空的**，沒人能選代號、沒人能送出。端點還是 HTTP 200、JSON 也合法，只是 `codes:[]`，而 `人員代號` 分頁明明有資料 | `Config.gs` 第 57 行是嚴格的 `values[0].indexOf('代號')`。有人把標頭格子改成 `代號(評核官)`、或多了一個尾隨空格、或裡面有換行 → `indexOf` 回 −1 → 第 60 行讀 `values[i][-1]` 是 undefined → 每一列都被跳過 → 回空陣列，**全程沒有錯誤**。同一張表 ConfigWithSubmit 讀得正確，因為它用 `safeHeaderCol_`，讀不到會丟出「人員代號 缺少欄位：代號」 | 把標頭格子改回**正好** `代號`（沒有空格、沒有括號、沒有換行），重載表單，選項數必須等於分頁裡非空白的列數。長期解：把 Config 專案退役（3.2 的第 0 步），讓嚴格的那一支成為唯一的讀取者 |
 | 5 | 評核官整場演習都沒有評分標準可看：每張題卡的「評分標準」摺疊打開是空的。分數照樣送出、儀表板看起來正常，所以業主永遠不知道量尺不見了 | `Config.gs` 第 70–72 行是三個裸 `indexOf`，找 `分數`／`標籤`／`說明`。欄名被改或重排 → `scoreCol = -1` → 每列被跳過 → `criteria` 在 HTTP 200 下回 `[]`。下游沒有任何地方要求 `criteria` 非空 | 把 `評分標準` 的三個標頭改回正好 `分數`、`標籤`、`說明`。驗法：在裸 `/exec` 的 JSON 裡 Ctrl+F `"criteria":[{` ——如果看到的是 `"criteria":[],` 就是這個故障 |
 | 6 | 業主在 `演習資訊` 加了 `啟用觀察紀錄 = N`（或 `低分需說明門檻 = 3`），表單卻完全當那一列不存在。沒有錯誤，那一列就擺在表上 | `Config.gs` 的 `readExerciseInfo_` 只掃六個標籤，它的回應裡沒有 `commentEnabled` 也沒有 `commentRequiredBelow`，`Start.dc.html` 於是退回預設（觀察紀錄開、門檻 0）。帶 `?t=`／`?ex=` 的連結走的是 ConfigWithSubmit，**那邊兩列都會生效**——同一張設定表因為手上拿到哪種連結而產生兩種政策 | 只發帶 `?t=&ex=` 的連結（那些完全繞過 Config 專案），或乾脆把 Config 退役（3.2 第 0 步）。**不要「順手在這裡也加上那兩個標籤」**——那是把一個已經漂移的函式再分叉一次。驗法：兩個 `/exec` 各搜 `commentRequiredBelow`，這邊沒有、`RECORD_URL` 有 |
@@ -676,7 +676,7 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 | 8 | 兩位評核官在同一場演習看到**不同的演習日期**——一個 2026/10/03、一個 2026/10/02——而表上只有一個值 | 因為 `formatCellValue_` 不在線上程式裡，原始 Date 字串被送到手機，由 `Start.dc.html` 用**瀏覽器當地時區**換算。`2026-10-03 15:00 GMT+0800` 在設成美國時區的手機上會算成 2026/10/02 | 部署現在的檔案：第 36 行在伺服器端以 Asia/Taipei 格式化，每支手機收到的就是字串 `2026/10/03`，不做任何運算 |
 | 9 | 有人為了「讓兩支腳本保持同步」，把 `ConfigWithSubmit.gs` 當成第二個檔案加進 Config 專案。端點看起來還在動，然後設定分支開始表現得像「最後載入的那個檔案」 | 同一個 Apps Script 專案裡所有 `.gs` **共用一個全域範圍**。`doGet`、`formatCellValue_`、`readExerciseInfo_`、`readCodes_`、`readCriteria_`、`findHeaderCol_`、`readItems_`、`stripGroupInternals_` 和四個別名變數，兩個檔案都有——**包含第二個 `doGet`**。重複宣告不會報錯，後定義的那個贏，而誰算「後」取決於編輯器裡的檔案順序。這跟把 `Report.gs` 貼進 ConfigWithSubmit 是同一類錯誤 | **一個專案一個檔。** 想要 ConfigWithSubmit 的行為，就刪掉這個專案、把 `CONFIG_URL` 指向 `RECORD_URL`（3.2 第 0 步）。判斷某個專案是哪一支：在裸 `/exec` 的回應裡搜 `tenantSource` —— 有 ＝ ConfigWithSubmit，沒有 ＝ Config.gs |
 | 10 | 新醫院的評核官打開連結，看到一份完整、能用、看起來很合理的表單——**萬芳醫院、社區急救站實兵演練、A01–A07**，也就是別人的測試演習。他們認真打完分，分數落到沒有人在看的地方 | `CONFIG_SPREADSHEET_ID`（`Config.gs` 第 7 行／`ConfigWithSubmit.gs` 第 21 行）留在沙箱值，或誤抄了註解裡的 master 值。程式裡**沒有任何機制**驗證那張試算表屬於連結上那家醫院 | 部署完**先自己打開裸 `/exec`**，讀前 100 個字元的 `orgName`／`exerciseTopic`，必須是**這一家**醫院的演習 |
-| 11 | 多醫院連結 `…/exec?t=otherhospital&ex=2026b` 被**成功**回應，內容卻是萬芳醫院的題庫和代號。沒有錯誤、沒有警告 | 這是 `Config.gs` 的行為：它的 `doGet(e)` 收下 `e` 卻完全不讀。整個檔案裡沒有註冊表程式碼、沒有 `resolveTenant_`、沒有 `normSlug_`，`?t=`／`?ex=` 被靜靜丟掉 | **絕對不要把 Config 專案的 `/exec` 交給任何人**，它只該透過 `Start.dc.html` 第 202 行被使用。不要動 `configRequestUrl()`（第 223–229 行），讓任何 `?t=`／`?ex=` 都去 `RECORD_URL`。真的想只留一個網址，就留 `RECORD_URL`，**絕不反向** |
+| 11 | 多醫院連結 `…/exec?t=otherhospital&ex=2026b` 被**成功**回應，內容卻是萬芳醫院的題庫和代號。沒有錯誤、沒有警告 | 這是 `Config.gs` 的行為：它的 `doGet(e)` 收下 `e` 卻完全不讀。整個檔案裡沒有註冊表程式碼、沒有 `resolveTenant_`、沒有 `normSlug_`，`?t=`／`?ex=` 被靜靜丟掉 | **絕對不要把 Config 專案的 `/exec` 交給任何人**，它只該透過 `Start.dc.html` 的 `CONFIG_URL` 被使用。不要動 `configRequestUrl()`，讓任何 `?t=`／`?ex=` 都去 `RECORD_URL`。真的想只留一個網址，就留 `RECORD_URL`，**絕不反向** |
 | 12 | 表單完美載入、題目都在，然後每位評核官的「送出」都失敗，訊息是「找不到工作表：評核紀錄」或「紀錄表缺少欄位：…」——而且是在演習進行中才發現 | 設定分支和紀錄分支讀的是**不同檔案**。`doGet` 從不碰紀錄表，所以紀錄表分頁被改名（對不上第 25 行）、缺必要標頭欄、或帳號只有檢視權限，全部要到第一次送出才看得見 | 每一場演習前，用 TEST-USER 做一次**真的**端到端送出，確認列真的出現在 `評核紀錄`。四個必要標頭 `問題ID`（或 `評核題號`）／`分數`／`人員代號`／`送出時間` 要在，執行帳號要有紀錄檔的**編輯者** |
 | 13 | 改了註冊表某一格，重載測試網址兩次還是錯的——於是你又「順手修」了別的東西，現在有兩個地方是錯的 | 註冊表整份解析結果被快取在 `reg:v2`，**120 秒**（第 101–102 行）。任何註冊表修改後的前兩分鐘按設計就是舊的。`action=flush` 可以清，但 `ADMIN_KEY` 是 `''` 時它是關閉的 | **一次只改一件事，等滿兩分鐘，再測。** 注意：**設定試算表從不快取**——「改一格、手機重整就生效」只適用於 演習評核_設定，不適用於註冊表 |
 | 14 | 兩種連結都能用。用不帶參數連結和用 `?t=` 連結的評核官都看到表單、都收到「送出成功」。事後儀表板總數偏低，有些題顯示從未被作答 | 註冊表那一列的 `設定試算表ID`／`紀錄試算表ID` **跟第 21／24 行不是同一組 ID**，於是兩種連結形狀解析到兩個不同的紀錄檔案。這在請求當下**完全無法偵測** | 把遷移列那兩格改成跟第 21／24 行**逐字相同**，然後用 `?action=analysis&key=…` 分別在「有／沒有 `&t=&ex=`」兩種情況下跑，確認 `analysisRows`／`coverageRows`／`overall`／`icc2k`／`within1` 完全一致（16 / 7 / n=53 mean 4.169811 / 0.550349 / 0.750000）。**在發出任何 `?t=` 連結之前做這件事** |
@@ -735,13 +735,13 @@ Config 程式碼**已經跟本專案裡的檔案不一致**——同一張設定
 
 要改的只有這幾行（其他一律不動）：
 
-| 檔案 | 行 | dev（沙箱） | master（正式） |
+| 檔案 | 常數 | dev（沙箱） | master（正式） |
 |---|---|---|---|
-| `ConfigWithSubmit.gs` | 21 | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
-| `ConfigWithSubmit.gs` | 24 | `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` |
-| `Config.gs` | 7 | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
-| `Start.dc.html` | 202 / 210 | `AKfycbwIoR80…` / `AKfycbzQLAJCv3…` | 正式的那兩個部署（值記在檔案的註解裡） |
-| `Analysis.html` | 163 / 166 | `AKfycbzQLAJCv3…` / `WrHSeTn1…` | 正式部署 ／ 正式金鑰 |
+| `ConfigWithSubmit.gs` | `CONFIG_SPREADSHEET_ID` | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
+| `ConfigWithSubmit.gs` | `RECORD_SPREADSHEET_ID` | `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` |
+| `Config.gs` | `CONFIG_SPREADSHEET_ID` | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
+| `Start.dc.html` | `CONFIG_URL` / `RECORD_URL` | `AKfycbwIoR80…` / `AKfycbzQLAJCv3…` | 正式的那兩個部署（值記在檔案的註解裡） |
+| `Analysis.html` | `RECORD_URL` / `ANALYSIS_KEY` | `AKfycbzQLAJCv3…` / `WrHSeTn1…` | 正式部署 ／ 正式金鑰 |
 | `Report.gs` 的指令碼屬性（在**容器繫結那個專案**的 ⚙ 專案設定裡，不在程式碼裡） | — | `REPORT_API_URL`、`REPORT_ANALYSIS_KEY` 指沙箱 | 指正式 |
 
 改完**每一支改過的網頁應用程式都要以「版本：新版本」重新部署**，然後重跑第 3 節對應的
