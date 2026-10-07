@@ -269,10 +269,11 @@ button{font-family:inherit;cursor:pointer}
 //   CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec'
 //   RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
 //
-// CONFIG_URL（f2c1c47 之前那個舊部署）：已實測仍然活著，讀的就是測試設定表
-// 1yiZ…（回傳 8 個代號 A01-A07+TEST-USER，與該表 人員代號 分頁一致），所以
-// 選項目／看評分標準／填分數這段 UI 不需要先部署就能測。
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbwIoR80BmRBvRWM2-dRrUcN0R6gEL_In1Ko4sBqbCBaixdgl_EDwOYgg5C-0Aft-yYx/exec';
+// CONFIG_URL（沙箱 Config 專案，2026-10-08 由業主重新部署後提供的網址）：讀的是
+// 測試設定表 1yiZ…（回傳 8 個代號 A01-A07+TEST-USER，與該表 人員代號 分頁一致）。
+// 與前一個沙箱網址 AKfycbwIoR80… 實測回傳位元組完全相同（9 欄、同一份設定表），
+// 換成這個只是對齊業主手上現行的部署，不影響行為。
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxuIddvtDOkaqDw7Hua07VnekLO85W6_u47UZzVVfl0ngSen_ps4-V4rHVVLX1jddwP8A/exec';
 // RECORD_URL（f2c1c47 之前那個舊 record 部署，ConfigWithSubmit 專案第 14 版）：
 // 2026-10-06 實測三條路都正常 —— 設定分支回 8 個代號、doPost 可寫、
 // action=analysis 讀得到 1jD6… 的 101 列測試資料（icc2k=0.5503、within1=0.75）。

@@ -34,7 +34,7 @@ a real hospital.
 |---|---|---|
 | `CONFIG_SPREADSHEET_ID` | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
 | `RECORD_SPREADSHEET_ID` | `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` |
-| `CONFIG_URL` / `RECORD_URL` | the two `AKfycbwIoR80…` / `AKfycbzQLAJCv3…` deployments | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments |
+| `CONFIG_URL` / `RECORD_URL` | the two `AKfycbxuIddv…` / `AKfycbzQLAJCv3…` deployments | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments |
 | `REGISTRY_SPREADSHEET_ID` | `1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk` (sandbox registry) | **absent** — `master` predates the registry. Merge it as `''` (registry off, every request takes the fallback tenant) until a production registry exists |
 
 Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
