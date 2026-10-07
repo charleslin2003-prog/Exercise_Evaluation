@@ -39,15 +39,15 @@ var RECORD_ITEM_ALIASES_ = ['項目名稱'];
 var RECORD_STAGE_ALIASES_ = ['情境階段'];
 var RECORD_SCENE_ALIASES_ = ['演練單元'];
 var RECORD_INDICATOR_ALIASES_ = ['指標代號'];
-// 以下八欄全部是「新增的選填欄」：業主現在那張 6 欄表一欄都沒有，findHeaderCol_
-// 會回 -1，寫入時整欄跳過（跟上面那批選填欄同一套 :155-159 / :175-180 模式），
+// 以下七欄全部是「新增的選填欄」：業主現在那張 6 欄表一欄都沒有，findHeaderCol_
+// 會回 -1，寫入時整欄跳過（跟上面那批選填欄同一套模式，見 appendSubmission_），
 // 所以不動試算表也不會有任何行為變化。要用就在 評核紀錄 補上對應欄名即可。
 // 這些欄的用途是「送出當時就把標籤寫死」，直接補掉 plan §1.1 的缺陷 D3
 // （標籤是讀取時才 join 設定表，業主為下一場改題庫就會回頭改寫上一場的報告）。
 var RECORD_COMMENT_ALIASES_ = ['觀察紀錄', '觀察意見', '質性觀察', '備註'];
 var RECORD_EXERCISEID_ALIASES_ = ['演習代號', '場次代號'];
 var RECORD_TENANT_ALIASES_ = ['醫院代號', '機構代號'];
-// 注意：這個別名陣列跟設定表那邊的 GOAL_HEADER_ALIASES_（:551 附近）刻意分開
+// 注意：這個別名陣列跟設定表那邊的 GOAL_HEADER_ALIASES_（在 readItems_ 上方）刻意分開
 // 宣告、不共用變數——一邊是「設定表的來源欄」，一邊是「紀錄表的快照欄」，
 // 兩邊將來很可能被業主改成不同欄名。
 var RECORD_GOAL_ALIASES_ = ['測試情境與目標', '測試情境'];
@@ -89,9 +89,11 @@ var ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
 // docs/multi-tenant-and-report-plan.md §2.1 原本建議「刪掉上面那四個常數」。
 // 這裡刻意不刪：本次改動的硬規則是「沒有 ?t=/?ex=、而且還沒建註冊表時，每一
 // 個端點的行為都要跟今天完全一樣」，所以那四個常數留下來當作永久的
-// 「legacy／第一場」租戶（見 fallbackTenant_）。業主還沒建註冊表，
-// REGISTRY_SPREADSHEET_ID 就先留空字串——空字串的意思是「整個註冊表機制關閉，
+// 「legacy／第一場」租戶（見 fallbackTenant_）。還沒建註冊表時
+// REGISTRY_SPREADSHEET_ID 就留空字串——空字串的意思是「整個註冊表機制關閉，
 // 一律走 fallback」，連 openById 都不會打一次。
+// dev：沙箱註冊表。master（正式）沒有這個常數（早於註冊表）；合併時改回 ''，
+// 等正式註冊表建好再填。
 var REGISTRY_SPREADSHEET_ID = '1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk';
 var REGISTRY_SHEET_NAME = '租戶註冊表';
 var DEFAULT_RECORD_SHEET_NAME = '評核紀錄';
@@ -804,7 +806,7 @@ function appendSubmission_(body, t) {
   var stageCol = findHeaderCol_(header, RECORD_STAGE_ALIASES_);
   var sceneCol = findHeaderCol_(header, RECORD_SCENE_ALIASES_);
   var indicatorCol = findHeaderCol_(header, RECORD_INDICATOR_ALIASES_);
-  // 以下八欄都是新增的選填欄，業主那張 6 欄表全部會回 -1 而被跳過。
+  // 以下七欄都是新增的選填欄，業主那張 6 欄表全部會回 -1 而被跳過。
   var commentCol = findHeaderCol_(header, RECORD_COMMENT_ALIASES_);
   var exerciseIdCol = findHeaderCol_(header, RECORD_EXERCISEID_ALIASES_);
   var tenantCol = findHeaderCol_(header, RECORD_TENANT_ALIASES_);
@@ -1829,7 +1831,7 @@ function readExerciseInfo_(ss) {
     else if (key === '演習日期') info.date = val;
     else if (key === '說明') info.desc = val;
     else if (key === '啟用觀察紀錄') {
-      // 只有明確寫 N／否／關閉 才關掉；空白或任何其他值都當成開啟，
+      // 只有明確寫 N／否／關閉（或 FALSE，含沒打勾的核取方塊）才關掉；空白或任何其他值都當成開啟，
       // 因為「少一個留言框」比「意外關掉報告唯一的質性資料來源」好修。
       info.commentEnabled = !(val === 'N' || val === 'n' || val === '否' || val === '關閉' ||
         val === 'FALSE' || val === 'False' || val === 'false');
@@ -1909,7 +1911,7 @@ var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'
 // 選填欄：每個葉節點（最底層分組，例如 SCENE）的簡要說明，取自這一欄的第一
 // 筆值，掛在葉節點的 goal 上，給 Start.dc.html 選擇畫面當作該情境的列表文字
 // 用（配合數字徽章顯示）。沒有這欄就是空字串，前端會退回原本只顯示編號。
-// 這是「真的選填」，所以刻意不用 safeHeaderCol_，-1 由 :605 的判斷吸收。
+// 這是「真的選填」，所以刻意不用 safeHeaderCol_，-1 由 readItems_ 裡 goalCol !== -1 的判斷吸收。
 var GOAL_HEADER_ALIASES_ = ['測試情境與目標', '測試情境'];
 // 找標頭列裡符合任一別名的欄位：先找「完全相等」，全部欄位都找過一輪都沒
 // 命中，才退而求其次找「開頭比對」。一定要先做完整的完全相等再做開頭比對

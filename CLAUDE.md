@@ -32,6 +32,7 @@ file with the production value next to them — check those comments before merg
 | `CONFIG_SPREADSHEET_ID` | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
 | `RECORD_SPREADSHEET_ID` | `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` |
 | `CONFIG_URL` / `RECORD_URL` | the two `AKfycbwIoR80…` / `AKfycbzQLAJCv3…` deployments | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments |
+| `REGISTRY_SPREADSHEET_ID` | `1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk` (sandbox registry) | **absent** — `master` predates the registry. Merge it as `''` (registry off, every request takes the fallback tenant) until a production registry exists |
 
 Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
 (A01–A07 + TEST-USER); `doPost` writes; `action=analysis` returns
@@ -67,7 +68,8 @@ Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
   branch" below).
 - `apps-script/ConfigWithSubmit.gs` — the script deployed behind `RECORD_URL` and the one
   that gets edited. Serves the config branch, `action=analysis`, `action=selftest`,
-  `action=exercises`, `action=flush`, and `doPost`.
+  `action=exercises`, `action=sessions` (**no key** — see "Admin / listing endpoints"),
+  `action=flush`, and `doPost`.
 - `apps-script/Report.gs` — **container-bound** report generator (plan §3.1's 方案B), pasted
   under the 演習評核_設定 spreadsheet (擴充功能 > Apps Script), **not** a Web App and **not**
   deployed: save, reload the sheet, the 演習評核報告 menu appears. It never touches
@@ -143,12 +145,16 @@ before multi-tenancy existed. That is a hard compatibility requirement, not an a
 
 ### Screens
 
-`this.state.screen` is `'select' | 'survey' | 'done' | 'exit'`. **There is no `criteria`
-screen** — picking a leaf item goes straight to `'survey'`. `renderVals()` returns five
-mutually-exclusive `<sc-if>` booleans plus two loading states:
+`this.state.screen` is `'sessions' | 'select' | 'survey' | 'done' | 'exit'`. **There is no
+`criteria` screen** — picking a leaf item goes straight to `'survey'`. `'sessions'` is the
+initial screen only when `PICKER_MODE` (`?t=` present, `?ex=` absent); every other link
+shape starts on `'select'` exactly as before. `renderVals()` returns five
+mutually-exclusive `<sc-if>` booleans plus two loading states, and a sessions group:
 
 | boolean | when |
 |---|---|
+| `showSessionsLoading` / `showSessionsError` / `showSessions` / `showSessionsEmpty` | `PICKER_MODE && screen === 'sessions'` — the `action=sessions` list. Past (`已結束`) rows are folded behind `showClosedToggle` and are not clickable. If the backend answers `REGISTRY_OFF`, or answers with no `sessions` array at all (an `/exec` deployed before `action=sessions` existed falls through to the config branch), `fallBackToSingleSession()` goes straight to `'select'` with the old `?t=`-only request, showing no error |
+| `showSessionSwitch` | `PICKER_MODE` and a session has been picked — the 更換場次 link (on the select screen and the load-error screen) |
 | `showLoading` / `showLoadError` | config fetch in flight / failed (`loadError` holds the message, `retryLoad` retries) |
 | `showSelect` | `screen === 'select'` — the identity header, code dropdown, and the item accordion |
 | `showSurvey` | `screen === 'survey'` — the per-question cards |
@@ -216,16 +222,24 @@ const EX_PARAM = Q_PARAMS.get('ex') || '';
 This file **never reads `?key=` and never sends any key** — the config branch is
 unauthenticated and every evaluator's phone fetches it.
 
-`configRequestUrl()`: with no params it returns `CONFIG_URL` unchanged (no `?` appended
-at all); with either param it returns `RECORD_URL + '?t=…&ex=…'`. See "Which deployment
-serves the config branch" for why.
+`configRequestUrl(exid)`: with no params it returns `CONFIG_URL` unchanged (no `?` appended
+at all); with either param it returns `RECORD_URL + '?t=…&ex=…'`, where `ex` is
+`exid || EX_PARAM` — `exid` is the session picked in `PICKER_MODE` (`this.state.sessionExid`),
+blank otherwise. See "Which deployment serves the config branch" for why.
 
-`doneStorageKey(config, fillerCode)` has two branches on purpose:
+`doneStorageKey(config, fillerCode, exid)` has two branches on purpose. **`exid` is
+required** at every call site: drop it and two sessions of the same hospital share one key,
+so 已完成 flags from one drill show up on the other:
 
 ```
 no params  -> 'exerciseEvalDone:' + (exerciseName||exerciseTopic||exerciseCategory||'default') + ':' + code
-with params-> 'exerciseEvalDone:' + T_PARAM + '/' + EX_PARAM + ':' + code
+with params-> 'exerciseEvalDone:' + T_PARAM + '/' + (exid || EX_PARAM) + ':' + code
 ```
+
+`adoptDoneItems` copies a `?t=`-only link's old key (演習代號 slot `''`) into the picked
+session's key once — only when the picked session is the registry's `預設演習` (the one the
+old link resolved to) and the new key is still empty. It must run once `fillerCode` is known
+(`setCode`), since the key contains the code.
 
 The legacy branch is mandatory: an evaluator mid-drill on an already-distributed
 no-param link must not lose their 已完成 flags on deploy. The param branch fixes defect
@@ -487,6 +501,7 @@ over `analysisRows + coverageRows` (`consistencyRows`). Three keys are **added**
 |---|---|---|
 | `selftest` | `?adminKey=` exact match against `ADMIN_KEY`. **Shipped value `''` = disabled**: returns `ADMIN_DISABLED` and touches no spreadsheet | `{ok, tenant, exercise, displayName, tenantSource, registry:{configured, readable, sheetFound, rowCount, validRowCount, invalidRows:[{rowNumber,reasons}], warning}, config:{…counts…}, record:{readable, writable, fileName, sheetName, headerColumns, rowCount, missingRequired, presentOptional, absentOptional}, messages:[zh-TW]}`. **File names, sheet names, header names and counts only** — no IDs, no keys, no 人員代號, no 問題ID, no scores, no cell contents. The write probe is `addDeveloperMetadata` + remove: it never appends a row and never sets a cell. This is the **only** place registry invalid-row reasons and the fallback-case-(ii) warning are ever visible |
 | `exercises` | `?t=` + `?key=`, authorized iff the key matches the `分析金鑰` of at least one valid row with that `醫院代號` (sanity rule 3 is what makes this safe). Fallback mode ignores `t` and compares against `ANALYSIS_KEY` | `{tenant, exercises:[{exercise, displayName, exerciseName, exerciseDate, enabled, isDefault}]}` sorted by `演習代號`. **Includes `啟用=N` rows** with `enabled:false` — that's what a 過去演習 picker needs. Never returns IDs, sheet names, keys or 檔案擁有者. A row whose config file won't open contributes `''` names rather than failing the list |
+| `sessions` | **none — no key of any kind.** `?t=` required (`NO_TENANT_CODE` without it, and the registry isn't even read). The second unauthenticated branch after the config branch; the trade-off it accepts (演習代號 becomes enumerable per hospital) is argued in the comment above `handleSessions_` | `{tenant, sessions:[{exercise, label, status, statusText, openFromText, openToText, isDefault}]}` — only that `醫院代號`'s valid rows, including `啟用=N` ones as `status:'past'`. `label` is `顯示名稱`, falling back to the bare `演習代號`. `status` is `open`/`future`/`past`, derived from `submitWindowState_` so it can't disagree with `doPost`. Sorted server-side (open → future → past; 預設演習 first among open). Reads only the cached registry and **opens no spreadsheet**. Errors: `BAD_CODE`, `NO_TENANT`, `ROW_INVALID`, and `REGISTRY_OFF` (registry unset or unusable — the client's cue to fall back silently) |
 | `flush` | same as `selftest` | `{ok:true, flushed:['reg:v2']}`. Scoped to the registry cache key **only** — it must never clear `sub_*`, or an in-flight retry would append duplicate rows |
 
 `ADMIN_KEY` must not equal `ANALYSIS_KEY` and must appear in neither shipped HTML file.
