@@ -81,6 +81,15 @@ var COVER_TOKENS_ = [
   '{{報告產生時間}}', '{{報告編號}}', '{{匿名模式}}'
 ];
 
+// **刻意不填**的 token：報告版次／文件編號／製表／審核／核定 是留給業主在產生出來
+// 的文件裡自己簽的（附錄C 最後一段就是這樣寫的）。
+// 它們必須被排除在收尾的殘留掃描之外，否則每一份報告都會固定跳出一則
+// 「文件裡仍有未被替換的 {{…}}」—— 而那一則正是用來抓「範本 token 打錯字」的。
+// 一個每次都響的警告等於沒有警告，而且會訓練操作者忽略它。
+// 2026-10-09 第一次真的產生報告時就是這樣：整份文件唯一的殘留是 {{報告版次}}，
+// 警告照響，真正的瑕疵（如果有）就會混在裡面看不出來。
+var OWNER_FILLED_TOKENS_ = ['{{報告版次}}', '{{文件編號}}', '{{製表}}', '{{審核}}', '{{核定}}'];
+
 // 章節錨點。**章節順序＝錨點在範本裡的先後順序**，刪掉錨點＝不產生那一章，
 // 所以業主要加減章節或調順序時動的是文件、不是程式碼。
 // required:true 的六個缺任一就整個拒絕產生（沒有摘要、基本資料、方法、品質、
@@ -630,6 +639,28 @@ function writeRunState_(st) {
     } catch (err2) {}
     return false;
   }
+}
+
+// 列出文件裡所有還沒被替換掉的 {{…}}，去重後回傳。
+// 回傳「是哪幾個」而不是「有沒有」：token 打錯字時 replaceText 完全靜默，
+// 只說「有殘留」等於要操作者自己 Ctrl+F 去翻 35 頁。
+// [^{}] 讓比對不會跨過下一個 token；guard 擋住 findText 沒有前進時的無窮迴圈。
+function leftoverTokens_(body) {
+  var out = [], seen = {}, guard = 0, r = null;
+  var pattern = '\\{\\{[^{}]*\\}\\}';
+  try { r = body.findText(pattern); } catch (err) { return out; }
+  while (r && guard++ < 200) {
+    try {
+      var el = r.getElement().asText();
+      var s = r.getStartOffset(), e = r.getEndOffsetInclusive();
+      if (s >= 0 && e >= s) {
+        var txt = el.getText().substring(s, e + 1);
+        if (txt && !seen[txt]) { seen[txt] = true; out.push(txt); }
+      }
+    } catch (err2) {}
+    try { r = body.findText(pattern, r); } catch (err3) { break; }
+  }
+  return out;
 }
 
 function addWarning_(st, text) {
@@ -2372,12 +2403,39 @@ function finalizeReport_(doc, st, ctx, aborted) {
 
   // 4) 殘留的 {{ 掃描：token 打錯字時 replaceText 完全靜默，PDF 上就會留著
   //    一串 {{機構名稱}}。這一關是最後一次抓到它的機會。
+  //    改成「列出實際殘留的 token、並扣掉刻意不填的那幾個」：原本只做
+  //    findText('\\{\\{') 的存在性判斷，於是 {{報告版次}} 讓它每次都響（見
+  //    OWNER_FILLED_TOKENS_ 的註解），而且就算真的響了也不說是哪一個。
   if (body) {
     try {
-      if (body.findText('\\{\\{')) {
-        addWarning_(st, '文件裡仍有未被替換的 {{…}} 字樣，請檢查範本的 token 是否打錯字。');
+      var leftovers = leftoverTokens_(body);
+      var unexpected = [];
+      for (var li = 0; li < leftovers.length; li++) {
+        if (OWNER_FILLED_TOKENS_.indexOf(leftovers[li]) === -1) unexpected.push(leftovers[li]);
+      }
+      if (unexpected.length) {
+        addWarning_(st, '文件裡有未被替換的 token：' + unexpected.join('、') +
+          '　範本把 token 打錯字時 replaceText 是完全靜默的，會原樣印在 PDF 上。');
       }
     } catch (err6) {}
+  }
+
+  // 4b) 附錄C 是在章節階段產生的，但上面第 3、4 步的警告是收尾階段才加的 ——
+  //     它們**永遠**趕不上附錄C。2026-10-09 的實測正是如此：對話框顯示兩則警告，
+  //     報告裡只記了一則。而委員會看到的是報告，不是對話框；對話框一關就沒了。
+  //     交付物漏記已知瑕疵，比位置不漂亮嚴重得多，所以補在文件最後。
+  if (body) {
+    try {
+      var printed = st.warningsPrintedCount || 0;
+      var late = (st.warnings || []).slice(printed);
+      if (late.length) {
+        var tail = { body: body, index: body.getNumChildren() };
+        heading_(tail, '附錄C 補記：產生收尾階段的警告', 2);
+        para_(tail, '以下警告在附錄C 產生之後才發生，因此沒有列在上面那一節裡。');
+        for (var lw = 0; lw < late.length; lw++) bullet_(tail, late[lw]);
+        st.warningsPrintedCount = st.warnings.length;
+      }
+    } catch (err6b) {}
   }
 
   // 5) 改名。
@@ -3408,6 +3466,9 @@ function sectionAppendixC_(cursor, ctx) {
   } else {
     for (var w = 0; w < warnings.length; w++) bullet_(cursor, warnings[w]);
   }
+  // 記住這一節印到第幾則。收尾階段（finalizeRun_ 第 4b 步）還會再加警告，
+  // 那些在這一刻還不存在；靠這個計數才知道有哪些漏掉、要補在文件最後。
+  st.warningsPrintedCount = warnings.length;
 
   var skipped = st.skipped || [];
   heading_(cursor, '被跳過或降級的章節', 2);

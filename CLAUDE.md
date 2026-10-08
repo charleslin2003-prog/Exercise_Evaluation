@@ -861,22 +861,35 @@ asked to redeploy a Web App (picking 「新增部署」 silently changes `/exec`
 feature must not require editing `ConfigWithSubmit.gs` at all. It doesn't: the only coupling
 is one `UrlFetchApp` GET to `action=analysis`.
 
-> **This code has still never completed a run.** The first attempt (2026-10-08) never got
-> past the menu: `showModalDialog` threw 「你沒有呼叫「Ui.showModalDialog」的權限。必要權限：
-> .../auth/script.container.ui」. A container-bound script needs that scope granted
-> interactively, and the consent screen can only be clicked by a human in a browser — no
-> tooling, cloud agent included, can get past it. Fix: in the Apps Script editor pick
-> `onOpen` from the function dropdown, Run, and approve. **Everything downstream of the
-> dialog — the whole chapter pipeline, every chart fallback, the time-budget split — is
-> therefore still unverified.** Every API that could not be confirmed from outside is
-> feature-detected and degrades rather than asserted. `docs/owner-guide-多醫院多演習.md`
-> §14.9 and `docs/manual-test-checklist.md` M3 list what to check and report back.
+> **First verified end-to-end run: 2026-10-09.** 檢查設定 passed all 14 items and
+> 產生評核報告 completed 21/21 chapters plus appendices A–D, exported a 35-page PDF, and did
+> **not** stop at 「（部分完成）」. The single most valuable result, because it cannot be
+> predicted from outside: `chartCapability_()` reported **COLUMN and RADAR both available**,
+> so figures are native Google Charts — the table and text fallbacks never engaged. The local
+> ICC(2,k) recomputation agreed with `stats.icc2k`.
 >
-> That first attempt also found a real defect, now fixed: `openDialog_`'s catch appended
-> 「請確認…ReportDialog 檔案」 to *every* failure, so an authorization error told the tester
-> to go verify a file that was present all along. `dialogFailureHint_` now branches on the
-> message. **A wrong hint is worse than no hint** — it sends people to check the one thing
-> that isn't broken. `Setup.gs`'s dialog got the same treatment pre-emptively.
+> Getting there took three wrong diagnoses, all now fixed in the error messages:
+> - `showModalDialog` threw a `script.container.ui` permission error. `openDialog_`'s catch
+>   appended 「請確認…ReportDialog 檔案」 to *every* failure, so an auth error sent the tester
+>   to verify a file that was present all along.
+> - The replacement hint said to run `onOpen` and approve. That cannot work: adding a menu is
+>   permitted in the restricted auth mode and does not need `script.container.ui`, so Apps
+>   Script never requests it for that function. Running **`showReportCheckDialog`** (which
+>   actually calls the dialog API) is what triggers consent; declaring `oauthScopes` in
+>   `appsscript.json` is the fallback.
+> - `Setup.gs` got a guard asserting 「是獨立專案」, on a project that was correctly bound.
+>
+> **A wrong hint is worse than no hint** — each of these sent someone to check the one thing
+> that wasn't broken. When the cause isn't provable from the message, list the candidates.
+>
+> The run also found two real defects, both fixed (see `leftoverTokens_` and
+> `finalizeRun_` step 4b): the leftover-`{{` scan fired on the intentionally-unfilled
+> `{{報告版次}}` on *every* report, and warnings raised during finalize could never reach
+> 附錄C because that appendix is written earlier in the chapter pass.
+>
+> Still unverified: the time-budget split across `reportContinue` calls (this run finished in
+> one pass), and every chart fallback path (none engaged). `docs/manual-test-checklist.md` M3
+> is the checklist.
 
 - **ES5 only in the `.gs`** (`var`, function declarations, no arrow/template-literal/`let`/
   `const`/`for…of`/spread) to match `ConfigWithSubmit.gs`. `ReportDialog.html` is browser JS
