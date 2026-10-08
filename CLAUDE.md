@@ -861,10 +861,22 @@ asked to redeploy a Web App (picking 「新增部署」 silently changes `/exec`
 feature must not require editing `ConfigWithSubmit.gs` at all. It doesn't: the only coupling
 is one `UrlFetchApp` GET to `action=analysis`.
 
-> **Nobody has ever executed this code**, here or on the owner's machine — there is no way
-> to run Apps Script from this repo. Every API that could not be confirmed from the outside
-> is feature-detected and degrades rather than asserted. Treat the owner's first run as the
-> test; `docs/owner-guide-多醫院多演習.md` §14.9 lists what to check and report back.
+> **This code has still never completed a run.** The first attempt (2026-10-08) never got
+> past the menu: `showModalDialog` threw 「你沒有呼叫「Ui.showModalDialog」的權限。必要權限：
+> .../auth/script.container.ui」. A container-bound script needs that scope granted
+> interactively, and the consent screen can only be clicked by a human in a browser — no
+> tooling, cloud agent included, can get past it. Fix: in the Apps Script editor pick
+> `onOpen` from the function dropdown, Run, and approve. **Everything downstream of the
+> dialog — the whole chapter pipeline, every chart fallback, the time-budget split — is
+> therefore still unverified.** Every API that could not be confirmed from outside is
+> feature-detected and degrades rather than asserted. `docs/owner-guide-多醫院多演習.md`
+> §14.9 and `docs/manual-test-checklist.md` M3 list what to check and report back.
+>
+> That first attempt also found a real defect, now fixed: `openDialog_`'s catch appended
+> 「請確認…ReportDialog 檔案」 to *every* failure, so an authorization error told the tester
+> to go verify a file that was present all along. `dialogFailureHint_` now branches on the
+> message. **A wrong hint is worse than no hint** — it sends people to check the one thing
+> that isn't broken. `Setup.gs`'s dialog got the same treatment pre-emptively.
 
 - **ES5 only in the `.gs`** (`var`, function declarations, no arrow/template-literal/`let`/
   `const`/`for…of`/spread) to match `ConfigWithSubmit.gs`. `ReportDialog.html` is browser JS

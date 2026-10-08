@@ -173,10 +173,28 @@ function openDialog_(mode, title) {
     var html = t.evaluate().setWidth(560).setHeight(680);
     SpreadsheetApp.getUi().showModalDialog(html, title);
   } catch (err) {
-    alertError_('無法開啟對話框：' + msg_(err) +
-      '\n\n請確認這個 Apps Script 專案裡有一個名為「ReportDialog」的 HTML 檔案' +
-      '（檔案 → 新增 → HTML，命名 ReportDialog，再把 apps-script/ReportDialog.html 的內容貼進去）。');
+    alertError_('無法開啟對話框：' + msg_(err) + '\n\n' + dialogFailureHint_(msg_(err)));
   }
+}
+
+// 兩種完全不同的失敗會被同一個 catch 接住，而**給錯提示比不給提示更糟**。
+// 2026-10-08 第一次有人真的執行這支程式時就踩到了：真正的原因是容器綁定腳本
+// 還沒被授權 script.container.ui，提示卻叫人去確認 ReportDialog 檔案在不在，
+// 於是測試的人跑去檢查了一個本來就沒問題的東西，然後卡住。
+function dialogFailureHint_(m) {
+  var authSigns = ['script.container.ui', '權限', '授權', 'permission', 'Authorization', 'authoriz'];
+  for (var i = 0; i < authSigns.length; i++) {
+    if (m.indexOf(authSigns[i]) !== -1) {
+      return '這是「授權」問題，不是檔案缺失 —— ReportDialog 檔案在不在都一樣會出現這個錯誤。\n\n'
+        + '容器綁定腳本第一次要開對話框時，必須由你本人同意 script.container.ui 這個範圍，'
+        + '而這個同意畫面只能用瀏覽器點，沒有別的方式可以代勞。\n\n'
+        + '做法：在 Apps Script 編輯器上方的函式下拉選單選「onOpen」，按「執行」，'
+        + '跳出 Google 授權視窗時按「允許」（權限清單看起來會有點多，那是正常的）。'
+        + '授權完回到試算表重新整理，再點一次這個選單項目。';
+    }
+  }
+  return '請確認這個 Apps Script 專案裡有一個名為「ReportDialog」的 HTML 檔案'
+    + '（檔案 → 新增 → HTML，命名 ReportDialog，再把 apps-script/ReportDialog.html 的內容貼進去）。';
 }
 
 // 只讀、不寫。上一輪被瀏覽器關掉時，這是找回那份半成品文件的入口。

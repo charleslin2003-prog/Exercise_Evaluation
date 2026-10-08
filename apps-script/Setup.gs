@@ -97,9 +97,29 @@ function onOpen() {
 }
 
 function showSetupDialog() {
-  var t = HtmlService.createTemplateFromFile('SetupDialog');
-  var html = t.evaluate().setWidth(720).setHeight(760);
-  SpreadsheetApp.getUi().showModalDialog(html, '新增一場演習');
+  try {
+    var t = HtmlService.createTemplateFromFile('SetupDialog');
+    var html = t.evaluate().setWidth(720).setHeight(760);
+    SpreadsheetApp.getUi().showModalDialog(html, '新增一場演習');
+  } catch (err) {
+    // Report.gs 在 2026-10-08 踩過這個坑：容器綁定腳本第一次開對話框時若還沒被
+    // 授權 script.container.ui，丟出來的是權限錯誤，但它的提示一律叫人去確認
+    // HTML 檔案在不在 —— 測試的人因此去檢查了一個本來就沒問題的東西。
+    // 這裡先分辨錯誤類型再給提示，不要重蹈覆轍。
+    var m = String((err && err.message) || err);
+    var hint = '請確認這個專案裡有名為「SetupDialog」與「QrLib」的 HTML 檔案'
+      + '（檔案 → 新增 → HTML，名稱必須完全一致）。';
+    var authSigns = ['script.container.ui', '權限', '授權', 'permission', 'Authorization', 'authoriz'];
+    for (var i = 0; i < authSigns.length; i++) {
+      if (m.indexOf(authSigns[i]) !== -1) {
+        hint = '這是「授權」問題，不是檔案缺失 —— 檔案在不在都一樣會出現這個錯誤。\n\n'
+          + '做法：在 Apps Script 編輯器上方的函式下拉選單選「onOpen」，按「執行」，'
+          + '跳出 Google 授權視窗時按「允許」。授權完回到試算表重新整理，再點一次選單。';
+        break;
+      }
+    }
+    SpreadsheetApp.getUi().alert('無法開啟對話框：' + m + '\n\n' + hint);
+  }
 }
 
 // SetupDialog.html 用 <?!= include('QrLib') ?> 把 QR 函式庫整個內嵌進來。
