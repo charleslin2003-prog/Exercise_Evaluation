@@ -16,6 +16,11 @@ function doGet(e) {
     exerciseCategory: info.category,
     exerciseDate: info.date,
     exerciseDesc: info.desc,
+    // 這兩個欄位 ConfigWithSubmit.gs 的設定分支一直都有回；這支沒有，所以
+    // Start.dc.html 讀到 undefined，而它的判斷是 config.commentEnabled !== false
+    // ——undefined !== false 成立，留言框就一直開著。補上之後兩條路徑才一致。
+    commentEnabled: info.commentEnabled,
+    commentRequiredBelow: info.commentRequiredBelow,
     codes: readCodes_(ss),
     criteria: readCriteria_(ss),
     items: readItems_(ss),
@@ -38,7 +43,10 @@ function formatCellValue_(val) {
 }
 function readExerciseInfo_(ss) {
   var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
-  var info = { org: '', name: '', topic: '', category: '', date: '', desc: '' };
+  // commentEnabled 預設 true、commentRequiredBelow 預設 0：沒填那兩列就跟以前
+  // 一模一樣（留言框開著、永不強制）。
+  var info = { org: '', name: '', topic: '', category: '', date: '', desc: '',
+    commentEnabled: true, commentRequiredBelow: 0 };
   for (var i = 0; i < values.length; i++) {
     var key = values[i][0];
     var val = formatCellValue_(values[i][1]);
@@ -48,6 +56,20 @@ function readExerciseInfo_(ss) {
     else if (key === '演習類別') info.category = val;
     else if (key === '演習日期') info.date = val;
     else if (key === '說明') info.desc = val;
+    // 下面兩個標籤原本只有 ConfigWithSubmit.gs 認得，於是「關掉觀察紀錄」只在帶
+    // ?t= 的連結上生效，不帶參數的舊連結留言框照樣在 —— 因為那條走的是這支
+    // Config.gs。兩邊的判斷必須一字不差，否則同一張設定表會因為連結形狀不同而
+    // 有兩種行為，而那是沒有人會想到要去查的。
+    else if (key === '啟用觀察紀錄') {
+      // 只有明確寫 N／否／關閉（或 FALSE，含沒打勾的核取方塊）才關掉；空白或任何
+      // 其他值都當成開啟，因為「少一個留言框」比「意外關掉報告唯一的質性資料來源」好修。
+      info.commentEnabled = !(val === 'N' || val === 'n' || val === '否' || val === '關閉' ||
+        val === 'FALSE' || val === 'False' || val === 'false');
+    } else if (key === '低分需說明門檻') {
+      // 2 的意思是「評 1 或 2 分要寫說明」。空白、非數字都當 0（永不強制）。
+      var threshold = Number(val);
+      info.commentRequiredBelow = isNaN(threshold) ? 0 : threshold;
+    }
   }
   return info;
 }

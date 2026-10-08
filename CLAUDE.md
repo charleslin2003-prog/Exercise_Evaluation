@@ -145,11 +145,18 @@ path 404s — URLs must name the file (`/Start.dc.html?t=…`).
   the deployed site happening to carry the file, and it currently exists only on `dev`.
 - `apps-script/Config.gs` — `doGet`-only backend (reads config, no `doPost`), deployed
   behind `CONFIG_URL`. **It has drifted** from `ConfigWithSubmit.gs`: it has no registry
-  code, no `啟用觀察紀錄`/`低分需說明門檻` labels, and no `nullSafeSheet_`/`safeHeaderCol_`
-  guards. Seven functions used to be byte-identical between the two files; they no longer
-  are. `Start.dc.html` only hits `CONFIG_URL` when the page URL carries **no** `?t=`/`?ex=`
-  — which is exactly why the drift is tolerable (see "Which deployment serves the config
-  branch" below).
+  code and no `nullSafeSheet_`/`safeHeaderCol_` guards. Seven functions used to be
+  byte-identical between the two files; they no longer are. `Start.dc.html` only hits
+  `CONFIG_URL` when the page URL carries **no** `?t=`/`?ex=` — which is exactly why the
+  rest of the drift is tolerable (see "Which deployment serves the config branch" below).
+  The `啟用觀察紀錄`/`低分需說明門檻` labels **were** part of the drift and are now synced
+  (2026-10-08): without them this file returned no `commentEnabled`, `Start.dc.html` read
+  `undefined`, and its `config.commentEnabled !== false` test left the comment box showing.
+  So one spreadsheet cell turned the box off for `?t=` links and silently did nothing for
+  no-param links — two behaviours from one sheet, keyed on link shape, which nobody would
+  think to check. Verified by a differential harness over 10 label combinations: both
+  copies of `readExerciseInfo_` now return byte-identical objects. **Keep them in sync** —
+  and note this needs the Config project redeployed separately from `RECORD_URL`'s.
 - `apps-script/ConfigWithSubmit.gs` — the script deployed behind `RECORD_URL` and the one
   that gets edited. Serves the config branch, `action=analysis`, `action=selftest`,
   `action=exercises`, `action=sessions` (**no key** — see "Admin / listing endpoints"),
