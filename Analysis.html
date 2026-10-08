@@ -45,10 +45,10 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 .quote{border-left:3px solid var(--teal);background:#f6fbfb;padding:8px 12px;border-radius:0 8px 8px 0;margin:8px 0 0;font-size:13px;line-height:1.75}
 .quote .who{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px}
 .qLine{font-size:12.5px;font-weight:700;color:#45616a;margin-top:10px}
-#pastList{display:grid;gap:8px;margin-top:10px}
-#pastList a{display:block;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--ink);text-decoration:none;background:#fbfdfd}
-#pastList a:hover{background:#f1f8f8}
-#pastList a.off{opacity:.62}
+/* 場次下拉。刻意用白底深字而不是沿用 .viewTab 的半透明白框：select 的選項
+   清單由系統繪製，繼承了白字就會變成白底白字，在某些瀏覽器上整張看不見。 */
+.exPicker{border:1px solid rgba(255,255,255,.5);background:#fff;color:var(--ink);padding:8px 12px;border-radius:999px;font-weight:700;font-size:13px;cursor:pointer;max-width:320px}
+.exPicker:disabled{opacity:.5;cursor:wait}
 /* 沿用 .viewTab:disabled 完全相同的處理（opacity .4 + not-allowed），讓
    「產生報告」在資料讀取完成前的停用狀態看起來跟其他停用按鈕一致。 */
 .refreshBtn:disabled{opacity:.4;cursor:not-allowed}
@@ -68,7 +68,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
   #detail{display:none!important}
   body:not(.withRanking) #ranking{display:none!important}
   body:not(.withRanking) #rankingHead{display:none!important}
-  .tabs,.viewTabs,.refreshBtn,.controls,#reportHint,#pastPanel,.foot,[data-screenonly]{display:none!important}
+  .tabs,.viewTabs,.refreshBtn,.controls,#reportHint,.foot,[data-screenonly]{display:none!important}
   .chartbox{min-height:0!important}
   .chartbox svg,#iso3dChart svg{width:100%!important;height:auto!important;min-height:0!important;max-height:150mm}
   .table-wrap{overflow:visible!important;border:0}
@@ -106,7 +106,11 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
     <div class="headActions">
       <div class="viewTabs">
         <button class="viewTab active" id="viewCurrent" type="button">當次演習</button>
-        <button class="viewTab" id="viewPast" type="button" disabled title="需要連結帶有機構代號（?t=）才能列出其他場次">過去演習</button>
+        <!-- 場次下拉：取代了原本的「過去演習」按鈕＋連結清單。切換場次不再是
+             換一條帶金鑰的網址（那會把 ?key= 留在網址列與瀏覽紀錄裡），而是
+             就地改 currentExid 再重抓一次 analysis。只有後端真的從註冊表解析
+             到機構代號時才會出現，回退模式下只有一場，沒有東西可選。 -->
+        <select class="exPicker" id="exPicker" style="display:none" title="切換要檢視的演習場次"></select>
         <button class="viewTab" type="button" disabled title="之後開放">演習回饋管理</button>
         <button class="refreshBtn" id="refreshBtn">重新整理</button>
         <!-- 預設 disabled：按下「產生報告」會把網址列的 ?key= 清掉（見
@@ -122,7 +126,6 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
   <div class="pills" id="infoPills"></div>
 </div></header>
 <div class="wrap">
-<div id="pastPanel" class="card" data-screenonly="1" style="display:none;margin-bottom:16px"></div>
 <div id="stateArea"></div>
 <div id="app" style="display:none">
 <div class="tabs"><button class="tab active" data-tab="overview">綜合評比</button><button class="tab" data-tab="s4">4S 分析</button><button class="tab" data-tab="radars">三項潛能雷達圖</button><button class="tab" data-tab="coverage">演習覆蓋率</button><button class="tab" data-tab="method">統計方法</button></div>
@@ -179,6 +182,13 @@ const Q = new URLSearchParams(location.search);
 const T_PARAM = Q.get('t') || '';
 const EX_PARAM = Q.get('ex') || '';
 const KEY = Q.get('key') || ANALYSIS_KEY;
+// 目前正在檢視的演習代號。初值是網址上的 ?ex=，之後由場次下拉改寫。做成變數
+// 而不是每次讀網址，是因為切換場次刻意「不」動網址——換網址就等於把 ?key=
+// 寫進網址列與瀏覽紀錄，而 enterReport() 存在的理由正是要把它清掉。
+let currentExid = EX_PARAM;
+// 場次清單只抓一次；重新整理分析資料不需要連帶重抓註冊表（它本來就有 120 秒
+// 快取，而且場次在一場演習進行中不會變動）。
+let exListLoaded = false;
 const WANT_REPORT = Q.get('view') === 'report';
 
 let DATA = null;
@@ -399,12 +409,14 @@ function init(){
   document.getElementById('overviewS4Chart').innerHTML=barsSVG(overviewS4Items);
   renderRadars();renderCoverage();renderS4();renderDetail();renderRanking();
 
-  // 「過去演習」按鈕：只有後端真的從註冊表解析到機構代號時才開放，否則維持
-  // disabled（回退模式下只有一場演習，列出來也沒有意義）。
-  const pastBtn = document.getElementById('viewPast');
-  const hid = DATA.meta.tenant || '';
-  pastBtn.disabled = !hid;
-  pastBtn.title = hid ? '列出這家機構的其他演習場次' : '需要連結帶有機構代號（?t=）才能列出其他場次';
+  // 場次下拉：只有後端真的從註冊表解析到機構代號時才有意義（回退模式下只有
+  // 一場演習，列出來也沒東西可選）。不需要使用者先按一顆按鈕——第一次讀到
+  // 資料就自動把清單填好，這整個功能的目的就是「少按一次」。
+  if (DATA.meta.tenant && !exListLoaded) loadExercises();
+  // 後端這次解析到的場次代號才是真的，拿它回寫比對用的狀態：使用者可能是
+  // 用 ?t= 不帶 ?ex= 進來的，這時真正在看的是「預設演習」而不是空字串。
+  if (DATA.meta.exercise) currentExid = DATA.meta.exercise;
+  syncPickerSelection();
 
   renderReport();
   // 報告按鈕要到這裡（資料已經在記憶體、報告區塊也都填好了）才解鎖，否則
@@ -691,7 +703,6 @@ function enterReport(){
   document.body.classList.add('reportMode');
   document.getElementById('reportBtn').style.display='none';
   document.getElementById('backBtn').style.display='';
-  document.getElementById('pastPanel').style.display='none';
   // 把網址列的查詢字串（key / t / ex）清掉，這樣 Chrome 列印頁尾印出來的網址
   // 就不含金鑰。DATA 已經在記憶體裡，不會重新發出任何請求；代價是此時按
   // 重新整理會失去參數——#reportHint 裡有把這個代價寫明。
@@ -705,48 +716,63 @@ function exitReport(){
   window.scrollTo(0,0);
 }
 
-// 「過去演習」：打後端的 action=exercises，列出同一家機構的所有場次（含已結束
-// 的，enabled:false 只是標示為已結束——那正是「過去演習」要的）。回傳裡不會有
-// 任何試算表 ID 或金鑰，所以可以直接渲染。切換場次就是換一條 ?t=&ex=&key= 的
-// 連結，沒有額外的狀態要維護。
+// 場次清單：打後端的 action=exercises，列出同一家機構的所有場次（含已結束
+// 的——enabled:false 只是標示為已結束，那正是要列出來的東西）。回傳裡不會有
+// 任何試算表 ID 或金鑰，所以可以直接渲染。
+//
+// 失敗一律是「安靜降級」：下拉維持隱藏，儀表板本身照常運作。這個清單只是
+// 便利功能，讀不到它不該讓人連當次的報表都看不成。
 function loadExercises(){
   const hid=(DATA&&DATA.meta&&DATA.meta.tenant)||'';
   if(!hid) return;
-  const btn=document.getElementById('viewPast'),panel=document.getElementById('pastPanel');
-  panel.style.display='';
-  panel.innerHTML='<div class="sec">演習場次</div><div class="small">讀取中…</div>';
-  btn.disabled=true;
+  const sel=document.getElementById('exPicker');
+  sel.disabled=true;
   fetch(RECORD_URL+'?action=exercises&t='+encodeURIComponent(hid)+'&key='+encodeURIComponent(KEY))
     .then(r=>r.json())
     .then(json=>{
-      btn.disabled=false;
-      if(json.error){panel.innerHTML='<div class="sec">演習場次</div><div class="small" style="color:var(--red)">讀取失敗：'+esc(json.error)+'</div>';return;}
-      const list=json.exercises||[];
-      if(!list.length){panel.innerHTML='<div class="sec">演習場次</div><div class="small">這家機構目前沒有登記任何演習場次。</div>';return;}
-      panel.innerHTML='<div class="sec">演習場次（點選切換）</div><div id="pastList">'+list.map(x=>{
-        const href=location.pathname+'?t='+encodeURIComponent(hid)+(x.exercise?'&ex='+encodeURIComponent(x.exercise):'')+'&key='+encodeURIComponent(KEY);
-        const tags=[x.exercise?'代號 '+esc(x.exercise):'',x.exerciseDate?esc(fmtExerciseDate(x.exerciseDate)):'',x.enabled?'':'已結束',x.isDefault?'預設':''].filter(Boolean).join('｜');
-        const cur=(DATA.meta.exercise||'')===(x.exercise||'');
-        return `<a class="${x.enabled?'':'off'}" href="${esc(href)}">${esc(x.displayName||x.exerciseName||x.exercise||'（未命名）')}${cur?'　<b>（目前檢視中）</b>':''}<div class="small">${tags}</div></a>`;
-      }).join('')+'</div><div class="small" style="margin-top:10px">清單只含場次代號與名稱，不含任何試算表 ID 或金鑰。</div>';
+      sel.disabled=false;
+      if(json.error||!(json.exercises||[]).length) return;
+      exListLoaded=true;
+      sel.innerHTML=json.exercises.map(x=>{
+        // 標籤順序＝使用者掃視的順序：名字在前，狀態註記在後。已結束的場次
+        // 照樣可選，報告本來就是演習結束後才做的。
+        const tags=[x.exercise?'代號 '+x.exercise:'',x.exerciseDate?fmtExerciseDate(x.exerciseDate):'',x.enabled?'':'已結束',x.isDefault?'預設':''].filter(Boolean).join('｜');
+        const name=x.displayName||x.exerciseName||x.exercise||'（未命名）';
+        return '<option value="'+esc(x.exercise||'')+'">'+esc(name)+(tags?'（'+esc(tags)+'）':'')+'</option>';
+      }).join('');
+      sel.style.display='';
+      syncPickerSelection();
     })
-    .catch(err=>{
-      btn.disabled=false;
-      panel.innerHTML='<div class="sec">演習場次</div><div class="small" style="color:var(--red)">讀取失敗，請確認網路連線或稍後重試。<br>'+esc(String(err))+'</div>';
-    });
+    .catch(()=>{ sel.disabled=false; });
 }
 
-// 目前只有「當次演習」與「過去演習」兩個資料來源；「演習回饋管理」按鈕仍停用。
+// 把下拉的選取狀態對齊「後端這次實際解析到的場次」。單獨拉出來是因為有兩個
+// 時機要做：清單剛填好時，以及每次 init() 之後（切換場次重抓完資料）。
+function syncPickerSelection(){
+  const sel=document.getElementById('exPicker');
+  if(!exListLoaded) return;
+  const want=(DATA&&DATA.meta&&DATA.meta.exercise)||currentExid||'';
+  for(let i=0;i<sel.options.length;i++){
+    if(sel.options[i].value===want){ sel.selectedIndex=i; return; }
+  }
+}
+
+// 切換場次＝改 currentExid 再重抓，網址完全不動（見 currentExid 的註解）。
+document.getElementById('exPicker').onchange=function(){
+  currentExid=this.value;
+  load();
+};
+
+// 「當次演習」與「重新整理」是同一件事（都重抓目前這一場）；場次切換走上面
+// 那個下拉，「演習回饋管理」按鈕仍停用。
 // 點「當次演習」就是重新整理目前資料，行為上等同 refreshBtn。
 document.getElementById('viewCurrent').onclick=load;
 document.getElementById('refreshBtn').onclick=load;
-document.getElementById('viewPast').onclick=loadExercises;
 document.getElementById('reportBtn').onclick=enterReport;
 document.getElementById('backBtn').onclick=exitReport;
 
 function load(){
   document.getElementById('app').style.display='none';
-  document.getElementById('pastPanel').style.display='none';
   // 重新整理期間先把報告按鈕鎖回去：讀取失敗時 DATA 可能是舊的或根本沒有，
   // 這時候產生報告只會印出與畫面不一致的內容。init() 成功後會再解鎖。
   document.getElementById('reportBtn').disabled=true;
@@ -754,7 +780,7 @@ function load(){
   document.getElementById('stateArea').innerHTML='<div class="state">資料讀取中…</div>';
   fetch(RECORD_URL + '?action=analysis&key=' + encodeURIComponent(KEY)
         + (T_PARAM ? '&t=' + encodeURIComponent(T_PARAM) : '')
-        + (EX_PARAM ? '&ex=' + encodeURIComponent(EX_PARAM) : ''))
+        + (currentExid ? '&ex=' + encodeURIComponent(currentExid) : ''))
     .then(r=>r.json())
     .then(json=>{
       if (json.error) { document.getElementById('stateArea').innerHTML = `<div class="state err">讀取失敗：${esc(json.error)}</div>`; return; }

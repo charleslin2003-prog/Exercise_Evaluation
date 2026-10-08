@@ -756,12 +756,35 @@ exercise, tenantSource, generatedAt — **no key, no spreadsheet ID, no URL**).
   still has to be ticked by the user or the iso3D cubes and HSL spectrum print white —
   `#reportHint` says so.
 
-### 過去演習 button
+### 場次下拉 (`#exPicker`)
 
-`#viewPast` is enabled only when `meta.tenant` is non-empty (i.e. the backend actually
-routed through the registry); it calls `action=exercises` and renders a list of
-`?t=&ex=&key=` links in `#pastPanel`. In fallback mode it stays disabled, because there is
-only ever one exercise to list.
+Replaced the old 過去演習 button + `#pastPanel` link list, both of which are **gone** —
+`#viewPast`, `#pastPanel` and the `#pastList` CSS no longer exist anywhere in the file.
+Stale notes may still describe them.
+
+`loadExercises()` is called automatically from `init()` the first time `meta.tenant` is
+non-empty (guarded by `exListLoaded`, so refreshing the analysis doesn't re-fetch the
+registry). It fills a `<select>` in the header with one `<option>` per `action=exercises`
+row, labelled `顯示名稱（代號 X｜日期｜已結束｜預設）`. Archived (`enabled:false`) sessions
+stay selectable on purpose — the report is what a finished drill is for.
+
+Two things to preserve:
+
+- **Switching a session must not change the URL.** `currentExid` is a module-level
+  variable that `load()` reads instead of `EX_PARAM`; `onchange` sets it and re-fetches in
+  place. The old link-list navigated to `?t=&ex=&key=`, which wrote `ANALYSIS_KEY` into the
+  address bar and browser history on every switch — the exact thing `enterReport()`'s
+  `history.replaceState` exists to undo.
+- **Every failure path is a silent degrade**: on error, or an empty list, or fallback mode,
+  the `<select>` simply stays hidden and the dashboard works as before. The picker is a
+  convenience; losing it must never cost the operator the current drill's report.
+
+`init()` also copies `DATA.meta.exercise` back into `currentExid` before calling
+`syncPickerSelection()`, because a `?t=`-only link resolves server-side to the 預設演習 —
+the client would otherwise think it was viewing `''`.
+
+In fallback mode (today's `master`, and any link with no `?t=`) `meta.tenant` is empty, so
+the picker never appears. That is correct: there is only one exercise to show.
 
 ## Report generator (方案B) — `apps-script/Report.gs` + `apps-script/ReportDialog.html`
 
