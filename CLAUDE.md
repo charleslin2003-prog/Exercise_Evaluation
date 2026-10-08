@@ -370,15 +370,39 @@ Full owner-facing meanings and examples are in `docs/owner-guide-多醫院多演
 
 | # | rule | scope |
 |---|---|---|
-| 1 | duplicate `醫院代號`+`演習代號` → **all rows in the group** invalid (not "first wins": identity must not depend on row order) | `啟用=Y` rows only |
-| 2 | duplicate `紀錄試算表ID`+`紀錄分頁名稱` (blank sheet name substituted with the default) → all rows in the group invalid. This is the hard block on defect D1 | `啟用=Y` rows only |
-| 3 | the same `分析金鑰` under two **different** `醫院代號` → all sharing rows invalid. Same key across two exercises of the *same* hospital is allowed | all rows (an archived key is still a live credential) |
+| 1 | duplicate `醫院代號`+`演習代號` → **all rows in the group** invalid (not "first wins": identity must not depend on row order) | all rows |
+| 2 | duplicate `紀錄試算表ID`+`紀錄分頁名稱` (blank sheet name substituted with the default) → all rows in the group invalid. This is the hard block on defect D1 | all rows |
+| 3 | the same `分析金鑰` under two **different** `醫院代號` → all sharing rows invalid. Same key across two exercises of the *same* hospital is allowed. A row whose `醫院代號` is blank or unparsable is **skipped on both sides** — it is not "a second hospital", it is a row rule 4/5 already rejected | all rows (an archived key is still a live credential) |
 | 4 | any required cell blank | that row |
 | 5 | slug / spreadsheet-ID / datetime parse failure | that row |
 
 An invalid row is **invisible to `resolveTenant_`** — a request matching it gets
 `ROW_INVALID` with a generic message, never another row's data and never the fallback
 tenant. The specific reason strings are returned **only** by `action=selftest`.
+
+> **Rules 1 and 2 were `啟用=Y`-only until 2026-10-08.** The justification in the code was
+> 「已封存（啟用=N）的列不可能被路由到」, and that was simply false about this file:
+> `resolveTenant_`'s `valid`/`pair` filters never look at `enabled`, 啟用 is a
+> *post*-resolution gate, and `action=analysis` deliberately exempts itself from it so a
+> finished drill's report stays readable. So an archived row is fully routable, and
+> `buildAnalysis_` reads its record sheet end to end.
+>
+> The consequence an adversarial audit found: an owner follows the guide, archives 2026a,
+> copies the row to 2027a next year and forgets to change `紀錄分頁名稱`. Rule 2 stayed
+> silent — and on a record sheet with no `演習代號` column (today's shape) `buildAnalysis_`'s
+> dedup key collapses to the bare `問題ID`, so the new drill's score **overwrites** last
+> year's. That is defect D1, the exact thing rule 2 exists to hard-block. Rule 1 had the
+> twin failure: one `啟用=Y` and one `啟用=N` row sharing a `(醫院代號, 演習代號)` both
+> stayed valid, `resolveTenant_` then threw `ROW_INVALID` for every link carrying that
+> `?ex=`, and `action=selftest` reported `invalidRows: []` — the only diagnostic lying
+> about the only state it exists to explain.
+>
+> `buildAnalysis_` additionally skips a record row whose own `醫院代號`/`演習代號` are
+> non-blank and don't match the resolved tenant. That is defence in depth behind rule 2,
+> not the primary guard. **Both `&&` conditions are load-bearing**: a blank value means
+> "written before those columns existed" and must be kept, and a blank `t.hid`/`t.exid`
+> means fallback mode, where there is no exercise identity to filter on. On today's
+> 6-column sheet both columns resolve to `-1`, so this changes no current number.
 
 ### Which deployment serves the config branch
 
@@ -493,13 +517,25 @@ nine additive fields: `tenant`, `exercise`, `displayName`, `scenePrefix`,
 `tenantSource` (`'fallback' | 'registry'`, diagnostic only — clients must not branch on
 it for data).
 
-> **Two branches have no auth at all and every evaluator's phone fetches them: the config
-> branch and `action=sessions`.** Neither payload may ever contain: `分析金鑰`/`ANALYSIS_KEY`,
-> `ADMIN_KEY`, any spreadsheet ID, the record sheet name, registry row numbers,
-> `registryWarning`, `assertRegistrySane_` reason strings, `檔案擁有者`, or file names.
-> Assert this mechanically when changing **either** branch, and when adding a third.
-> `docs/setup-三支apps-script.md` §3.1 驗證 item 2 is the only such check anyone actually
-> runs, and it had no `action=sessions` item for the entire time that branch was live.
+> **THREE branches have no auth at all and every evaluator's phone hits them: the config
+> branch, `action=sessions`, and `doPost`.** No payload of any of the three may ever
+> contain: `分析金鑰`/`ANALYSIS_KEY`, `ADMIN_KEY`, any spreadsheet ID, the record sheet
+> name, registry row numbers, `registryWarning`, `assertRegistrySane_` reason strings,
+> `檔案擁有者`, or file names. Assert this mechanically when changing **any** of them, and
+> when adding a fourth. `docs/setup-三支apps-script.md` §3.1 驗證 item 2 is the only such
+> check anyone actually runs, and it had no `action=sessions` item for the entire time that
+> branch was live.
+>
+> `doPost` was missed for exactly this reason — it predates the rule, so nobody put it
+> through the check. It returns `String(err.message)` verbatim, and `tenantSheetRecord_`
+> used to throw `'找不到工作表：' + t.recordSheet`, so any holder of a `?t=` link could read
+> the tenant's `紀錄分頁名稱` out of one failed POST (observed live on 2026-10-08:
+> `找不到工作表：評核紀錄_clinic`). Fixed by making that message generic; `action=selftest`
+> still reports the name via `record.sheetName`, which reads `t.recordSheet` directly rather
+> than through the exception. **`appendSubmission_`'s and `nullSafeSheet_`/`safeHeaderCol_`'s
+> messages were deliberately left alone** — they interpolate only hardcoded alias constants
+> (`評核紀錄`, `演習資訊`, `人員代號`…), which are identical for every tenant and already
+> published in `README.md`, so they carry no per-tenant information.
 
 The whole branch is wrapped in try/catch returning
 `{error:…, errorCode:'CONFIG_READ_FAILED'}`; it used to be bare, so a renamed sheet showed

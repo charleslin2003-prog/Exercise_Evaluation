@@ -446,12 +446,27 @@ var KEY_SEP_ = '\u241F';
 // 規則 4/5（必填空白、格式不合）在 parseRegistryRow_ 裡就處理完了，這裡做的是
 // 需要「跨列比對」的三條。
 function assertRegistrySane_(rows) {
-  // 規則 1、2 只比對 啟用=Y 的列：已封存（啟用=N）的列不可能被路由到，讓它跟
-  // 進行中的列相撞只會害業主不能把舊場次留著當歷史。代號還沒填好的列也跳過
-  // （它已經因為規則 4/5 無效了，再加一條「重複」只是雜訊）。
-  var enabled = rows.filter(function (r) { return r.enabled; });
+  // 三條規則全部比對「全部」列，不分啟用與否。
+  //
+  // 規則 1、2 原本只比對 啟用=Y 的列，理由寫的是「已封存（啟用=N）的列不可能被
+  // 路由到」。2026-10-08 的稽核證明那句話對不上這支程式：resolveTenant_ 挑列時
+  // 完全沒看 enabled（見 valid／pair 兩個 filter），啟用 是解析「之後」才跑的閘門，
+  // 而且 action=analysis 刻意不擋 啟用=N（演習結束才要做報告）。封存列照樣會被
+  // 路由到，照樣會被 buildAnalysis_ 整張表讀進去。
+  //
+  // 放著不管的後果正是規則 2 存在的唯一理由（缺陷 D1）：業主照 owner guide §6 把
+  // 2026a 設成 啟用=N，隔年複製那一列改成 2027a／啟用=Y，卻忘了換 紀錄分頁名稱。
+  // 舊版規則 2 不會響，兩場演習寫進同一張分頁，而今天這種沒有 演習代號 欄的紀錄
+  // 表會讓 buildAnalysis_ 的去重鍵塌成只剩 問題ID，新演習的分數直接蓋掉去年的，
+  // 已經發出去的報告重跑會變成另一個數字。
+  //
+  // 規則 1 同理：同一組 醫院代號+演習代號 一列 啟用=Y、一列 啟用=N 時，舊版兩列都
+  // 判為有效，resolveTenant_ 收到 pair.length === 2 只能丟 ROW_INVALID，而
+  // action=selftest 會回報 invalidRows: [] ——唯一的診斷工具在這個狀況下會說謊。
+  //
+  // 代號還沒填好的列仍然跳過（它已經因為規則 4/5 無效了，再加一條「重複」只是雜訊）。
   markDuplicates_(
-    enabled.filter(function (r) { return r.hid && r.exid; }),
+    rows.filter(function (r) { return r.hid && r.exid; }),
     function (r) { return r.hid + KEY_SEP_ + r.exid; },
     function (others) { return '醫院代號+演習代號 與第 ' + others + ' 列重複'; });
   // 這一條是 plan §2.1 要求「必須硬擋」的那一條：「複製了一列但忘記換紀錄檔」
@@ -459,10 +474,10 @@ function assertRegistrySane_(rows) {
   // 刻意不是「第一列優先」而是「整組都標無效」，否則身分會取決於列的順序，
   // 同一個 ?t=X&ex=Y 會變成不確定的結果。
   markDuplicates_(
-    enabled.filter(function (r) { return r.recordId; }),
+    rows.filter(function (r) { return r.recordId; }),
     function (r) { return r.recordId + KEY_SEP_ + r.recordSheet; },
     function (others) { return '紀錄試算表ID+分頁名稱 與第 ' + others + ' 列重複，兩場演習會互相覆蓋分數'; });
-  // 規則 3 比對「全部」列，不分啟用與否：已封存那列的 分析金鑰 仍然是一把活的
+  // 規則 3：已封存那列的 分析金鑰 仍然是一把活的
   // 憑證。同一把金鑰出現在同一個 醫院代號 的不同 演習代號 是「刻意允許」的
   // （一家醫院一把儀表板金鑰、跨場次共用），這也正是遷移那一列能沿用今天這把
   // ANALYSIS_KEY 的原因；出現在不同 醫院代號 才是漏洞（A 院只要改個 ?t= 就能
@@ -476,7 +491,15 @@ function assertRegistrySane_(rows) {
   Object.keys(byKey).forEach(function (k) {
     var group = byKey[k];
     group.forEach(function (r) {
-      var others = group.filter(function (o) { return o !== r && o.hid !== r.hid; });
+      // 醫院代號 空白（或格式不合，readSlugCell_ 讓它變成 ''）的列不參與這條比對，
+      // 兩個方向都不參與。少了這兩個 && 守衛，'' !== 'wanfang-…' 會成立，於是一列
+      // 還沒填完的草稿會把「同一把金鑰」的好列也一起標成無效——違反這個函式開頭
+      // 寫的「單一列壞掉不該害其他醫院一起不能用」。觸發方式平凡到可怕：業主複製
+      // 一列準備下一場、醫院代號還沒填就存檔，120 秒內全院連結回 ROW_INVALID，而
+      // 解釋原因的 action=selftest 預設是關的（ADMIN_KEY 為空字串）。
+      // 空代號那一列本來就已經被規則 4/5 判無效了，不需要這裡再補一刀。
+      if (!r.hid) return;
+      var others = group.filter(function (o) { return o !== r && o.hid && o.hid !== r.hid; });
       if (!others.length) return;
       r.reasons.push('分析金鑰 與第 ' + others.map(rowNumberOf_).join('、') + ' 列（不同醫院代號）相同');
     });
@@ -625,8 +648,14 @@ function tenantSheetRecord_(t) {
   } catch (err) {
     throw new Error('無法開啟紀錄試算表，請確認檔案權限。');
   }
+  // 這裡刻意「不」把 t.recordSheet 寫進訊息。doPost 是第三個完全沒有金鑰的分支
+  // （另外兩個是設定分支與 action=sessions），而它的 catch 會把 err.message 原封
+  // 不動放進回傳的 error 欄位，直接印在評核官畫面上。紀錄分頁名稱在這份專案的
+  // 紅線清單裡，只要有 ?t= 連結的人就能靠一次失敗的 POST 把它讀出來。
+  // 診斷用的分頁名稱仍然看得到：action=selftest 的 record.sheetName 是直接從
+  // t.recordSheet 取的，不經過這個例外，所以這個改動不影響除錯能力。
   var sheet = ss.getSheetByName(t.recordSheet);
-  if (!sheet) throw new Error('找不到工作表：' + t.recordSheet);
+  if (!sheet) throw new Error('紀錄試算表裡找不到指定的工作表，請聯絡系統管理者。');
   return { ss: ss, sheet: sheet };
 }
 
@@ -994,6 +1023,19 @@ function buildAnalysis_(t) {
     if (!id || !code || isNaN(score)) continue;
     var rowHid = rowTenantCol !== -1 ? String(row[rowTenantCol] || '') : '';
     var rowExid = rowExerciseIdCol !== -1 ? String(row[rowExerciseIdCol] || '') : '';
+    // 縱深防禦，不是主要防線：規則 2 已經擋掉「兩列共用同一張紀錄分頁」的註冊表
+    // 設定，這裡是第二道。萬一還是有兩場演習的資料躺在同一張分頁上（例如業主手動
+    // 把舊資料貼了進來），報告也不該把別場的分數算進自己的平均、ICC 與評核官人數。
+    //
+    // 兩個 && 守衛都是必要的，少一個就會變成破壞性改動：
+    //   rowHid/rowExid 空字串 -> 一律保留。這兩欄是後來才加的選填欄，加欄位之前
+    //     寫進去的歷史資料那兩格是空的，過濾掉會讓舊分數整批從報告上消失。
+    //   t.hid/t.exid 空字串   -> fallback 模式（註冊表關閉或沒帶 ?t=），這時沒有
+    //     「屬於哪一場」的概念，照樣全部保留，行為與今天位元相同。
+    // 今天線上那張 6 欄紀錄表兩個欄位都不存在（兩個 col 都是 -1），所以這段在目前
+    // 的資料上完全不會觸發，數字一個都不會變。
+    if (rowHid && t.hid && rowHid !== t.hid) continue;
+    if (rowExid && t.exid && rowExid !== t.exid) continue;
     var key = rowHid + KEY_SEP_ + rowExid + KEY_SEP_ + id;
     if (!byQuestion[key]) {
       byQuestion[key] = {
