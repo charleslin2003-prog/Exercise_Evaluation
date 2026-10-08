@@ -118,20 +118,45 @@ commentEnabled=true、commentRequiredBelow=0 → 評核單每題都有觀察紀�
 
 **下次繼續時，從這三件事挑：**
 
-1. **驗證寫入路徑（doPost）** —— 目前唯一沒實測的。兩條路：
-   (a) 在 `ConfigWithSubmit.gs:107` 填 `ADMIN_KEY`（不可等於 `ANALYSIS_KEY`、
-   不可出現在任何上架 HTML）再重新部署，然後跑
-   `?action=selftest&adminKey=…` —— 它的寫入探測是 `addDeveloperMetadata`
-   加完即刪，**不會新增任何一列**；或
-   (b) 直接用 `TEST-USER` 送一筆真的評分（會在測試紀錄表加列，列數增加但分析
-   數字不受影響，因為同題同代號以最後一次為準）。
-2. **啟用多租戶** —— 建一份「租戶註冊表」試算表，照
-   `docs/owner-guide-多醫院多演習.md` §2–§3 填好，把檔案 ID 填進
-   `ConfigWithSubmit.gs` 的 `REGISTRY_SPREADSHEET_ID`（目前是 `''`）再部署。
-   在那之前 `?t=` 一律被忽略並退回 fallback，這是刻意的。
+1. ~~**驗證寫入路徑（doPost）** —— 目前唯一沒實測的。~~ → **已完成，見下方
+   「2026-10-08 驗證結果」。** 走的是 (b) 路線（`TEST-USER` 實送），(a) 的
+   `action=selftest` 仍不可用，因為 `ADMIN_KEY` 還是空字串。
+2. ~~**啟用多租戶**~~ → **沙箱已啟用**：`REGISTRY_SPREADSHEET_ID` 現在是
+   `1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk`，`action=sessions` 已上線並回傳
+   一場（`2026a`／開放中／`isDefault`）。**正式環境仍是 `''`**（＝註冊表關閉、
+   行為與改造前相同），合併回 master 前要確認要不要一起開。
 3. ~~**報告方案 B** —— 試算表選單 → 範本 Google 文件 → PDF，見 §3.1。列印版只是
    內部檢視版。~~ → **程式已寫完**（`apps-script/Report.gs`＋`ReportDialog.html`），
    但**一次都沒執行過**；剩下的是業主端的安裝與第一次實跑，見上面那一節。
+
+### ✅ 2026-10-08 驗證結果（沙箱，正式環境完全未碰）
+
+端點：`ConfigWithSubmit` = `AKfycbzQLAJCv3…`（業主當日重新部署為第 2 版，
+`action=sessions` 隨之上線）；`Config` = `AKfycbxuIddv…`（新網址，與前一個
+`AKfycbwIoR80…` 回傳位元組完全相同）。第三支 `Report` 的部署
+（`AKfycbzilnn3…`，本專案搬家前的舊正式網址）回
+`找不到以下指令碼函式：doGet` —— 正確，它是容器繫結腳本，**不該被填進任何
+URL 常數**。
+
+`doPost` 全部通過：
+
+| 項目 | 結果 |
+|---|---|
+| 寫入生效 | `{ok:true,rows:2}`，分數確實改變 |
+| 同題同代號覆寫 | 總題數維持 16，未長出重複列 |
+| 冪等（重送同 `submissionId`） | `rows:0, duplicate:true`，故意改掉的分數未被寫入 |
+| 冪等（真實重試） | 回應抓取失敗觸發重送時正確判為 duplicate，未重複寫入 |
+| 白名單 | 偽造代號／題號／項目名稱皆擋下並回中文錯誤 |
+| 觀察紀錄寫入 | 需先在 `評核紀錄` 加 `觀察紀錄` 欄（2026-10-08 已加）；之後寫入與讀回皆正常 |
+| 公式注入 | 送 `=1+1`，讀回仍是字串 `=1+1` 而非數字 `2` → `sanitizeCell_` 的前置單引號生效 |
+| 500 字截斷 | 送 600 字，存入 500 字 |
+| 租戶路由 | 帶 `tenant`/`exercise` 送出正常寫入 |
+
+> **觀察紀錄是選填欄位，缺欄時靜默丟棄**（`if (commentCol !== -1)`）。這是這次
+> 唯一踩到的坑：欄位沒加之前，送出一律回 `ok:true`，但文字不會進試算表，全表
+> 0/23 題有觀察紀錄，而且沒有任何錯誤訊息。換新紀錄表時務必先確認這一欄。
+
+測試資料已還原（分數回原值、測試用觀察紀錄清空、題數 16 不變）。
 
 此外有個一行的順手改動待決定：把 `Start.dc.html:202` 的 `CONFIG_URL` 指向
 `ConfigWithSubmit` 的同一個 `/exec`，即可退役 `Config.gs`（它仍回舊的 9 欄、
