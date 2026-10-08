@@ -102,6 +102,17 @@ path 404s — URLs must name the file (`/Start.dc.html?t=…`).
   the result with React.
 - `vendor/react.js`, `vendor/react-dom.js` — vendored React 18 UMD builds used by
   `support.js`. Not part of the design; don't modify.
+- `vendor/qrcode.js` — vendored verbatim from `kazuhikoarase/qrcode-generator`
+  (`js/dist/qrcode.js`, MIT, SHA-256 `79ec86f8…f791c`). Don't hand-edit. Generates QR codes
+  **entirely in the browser**: an online QR image service would hand every 醫院代號 to a
+  third party and leave it in their logs, which is the one thing the `?t=` code must not do.
+  Call `qrcode(0,'M')` → `addData(url)` → `make()` → `createSvgTag({scalable:true})`, which
+  returns one `<rect>` background plus a single `<path>`. That matters for print: an SVG
+  path is *content*, so it survives Chrome's 「背景圖形」 checkbox being unticked — the trap
+  `Analysis.html`'s iso-3D chart already fell into. Verified at 72 bytes of URL: 33×33
+  modules at ECC L, 37×37 at M, with all three finder patterns structurally correct.
+  (nayuki/QR-Code-generator was the first choice and was **rejected**: that repo ships only
+  `.ts` plus a `build.sh`, so vendoring it would mean adding a TypeScript compile step.)
 - `apps-script/Config.gs` — `doGet`-only backend (reads config, no `doPost`), deployed
   behind `CONFIG_URL`. **It has drifted** from `ConfigWithSubmit.gs`: it has no registry
   code, no `啟用觀察紀錄`/`低分需說明門檻` labels, and no `nullSafeSheet_`/`safeHeaderCol_`
