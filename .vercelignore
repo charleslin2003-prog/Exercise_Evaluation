@@ -16,6 +16,10 @@ apps-script
 docs
 *.md
 
+# 回歸測試腳本。它本身沒有金鑰（金鑰走環境變數），但它寫明了端點、醫院代號與
+# 怎麼取得金鑰，沒有理由放在公開網站上。
+scripts
+
 # 暫存／草稿檔。
 *.tsv
 prototype-dynamic-layers.html

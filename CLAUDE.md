@@ -186,6 +186,23 @@ path 404s — URLs must name the file (`/Start.dc.html?t=…`).
 - `README.md` — the **owner-facing spreadsheet-filling contract**: what each sheet and
   column in 演習評核_設定 and 評核紀錄 means. If you change what the backend reads or
   writes, this file is part of the change.
+- `scripts/smoke.sh` — the **only** automated regression this project has. There is no CI
+  and Apps Script has no deploy hook, so "did the redeploy break anything" otherwise depends
+  on someone remembering to retype a dozen curls. Read-only by default and safe to re-run or
+  schedule; `--with-write` adds the write-isolation and idempotency checks. Exit code 0/1.
+  Keys come from `EVAL_KEY_MAIN`/`EVAL_KEY_CLINIC` env vars, never the file; without them the
+  key-dependent checks SKIP rather than fail. It refuses to run against the production
+  `/exec` ids outright. **It automates the one check CLAUDE.md says nobody actually runs**:
+  asserting the keyless `action=sessions` payload carries no spreadsheet ID, key, sheet name,
+  row number or 檔案擁有者. It also derives which session is `future`/`past` from the live
+  registry instead of hardcoding 演習代號, so editing the registry doesn't silently rot it.
+  Listed in `.vercelignore` — `scripts/` must never be served.
+- `docs/manual-test-checklist.md` — the complement: only what genuinely cannot be automated,
+  with the reason stated for each (Apps Script's `SpreadsheetApp`/`DriveApp`/`DocumentApp`
+  exist only inside Google's runtime — no external tool, cloud agent included, can drive
+  them; and QR scanning / print layout need a real screen and camera). Covers the wizard's
+  untried copy-template path, the 預設演習 auto-clear, `Report.gs`'s whole pipeline, the
+  phone flow, and printing. Don't duplicate anything `smoke.sh` already covers into it.
 - `docs/owner-guide-多醫院多演習.md` — owner-facing zh-TW runbook for the tenant registry:
   the 租戶註冊表 columns, 新增一家醫院 / 同院新增一場演習 / 結束演習 / 換金鑰 procedures,
   how to read `action=selftest`, and the hard rule about not editing the config
