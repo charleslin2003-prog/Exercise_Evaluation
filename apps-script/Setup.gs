@@ -318,18 +318,25 @@ function setupCreateSession(payload) {
     var notes = [];
 
     if (payload.configMode === 'copy') {
-      var copy = DriveApp.getFileById(p.getProperty(PROP_CONFIG_TEMPLATE_)).makeCopy(copiedConfigName);
+      // 一次把目的資料夾指定給 makeCopy，不要先複製再 addFile/removeFile：
+      // makeCopy(name) 把檔案放在哪個資料夾是沒有保證的，所以「從根目錄移除」
+      // 在檔案根本不在根目錄時會丟錯，而那時設定檔已經建好了 —— 失敗點落在
+      // 最尷尬的位置。指定資料夾失敗就退回不指定，並把這件事講出來。
+      var template = DriveApp.getFileById(p.getProperty(PROP_CONFIG_TEMPLATE_));
       var folderId = p.getProperty(PROP_TARGET_FOLDER_);
+      var copy;
       if (folderId) {
         try {
-          DriveApp.getFolderById(folderId).addFile(copy);
-          DriveApp.getRootFolder().removeFile(copy);
+          copy = template.makeCopy(copiedConfigName, DriveApp.getFolderById(folderId));
         } catch (errFolder) {
-          notes.push('設定檔已建立，但搬進指定資料夾時失敗：' + errFolder.message);
+          copy = template.makeCopy(copiedConfigName);
+          notes.push('指定的資料夾無法使用，設定檔已建在雲端硬碟預設位置：' + errFolder.message);
         }
+      } else {
+        copy = template.makeCopy(copiedConfigName);
       }
       configId = copy.getId();
-      notes.push('已複製設定試算表：' + copiedConfigName);
+      notes.push('已複製設定試算表：' + copiedConfigName + '（ID ' + configId + '）');
 
       var cfgProblems2 = checkConfigSpreadsheet_(configId);
       if (cfgProblems2.length) {
