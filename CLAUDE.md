@@ -102,8 +102,33 @@ path 404s — URLs must name the file (`/Start.dc.html?t=…`).
   the result with React.
 - `vendor/react.js`, `vendor/react-dom.js` — vendored React 18 UMD builds used by
   `support.js`. Not part of the design; don't modify.
-- `vendor/qrcode.js` — vendored verbatim from `kazuhikoarase/qrcode-generator`
-  (`js/dist/qrcode.js`, MIT, SHA-256 `79ec86f8…f791c`). Don't hand-edit. Generates QR codes
+- `apps-script/Setup.gs` + `apps-script/SetupDialog.html` + `apps-script/QrLib.html` —
+  **container-bound** 新增一場演習 wizard, pasted under the **租戶註冊表** spreadsheet
+  (*not* the config spreadsheet — that's `Report.gs`'s home). Like `Report.gs` it needs no
+  deployment: paste, save, reload the sheet, the 演習場次管理 menu appears. It exists
+  because opening a drill by hand is five error-prone steps (copy the config spreadsheet,
+  add a record tab, invent a key, fill 13 registry columns, hand-assemble two URLs) whose
+  failure mode is a cryptic `ROW_INVALID` on drill morning. One dialog does all five, runs
+  the five sanity rules **before writing anything**, and ends with the evaluator URL + QR.
+  - Writes in the order copy-config → create-record-tab → append-registry-row, deliberately:
+    the registry row is written last, so a failure never leaves a row pointing at a file
+    that doesn't exist.
+  - 開放送出起/迄 are **mandatory in the wizard** even though the registry treats them as
+    optional. Blank means "open forever", so every past drill shows 開放中 in the
+    evaluator's session list and can still be submitted into.
+  - Mirrors `normSlug_`, `isSpreadsheetId_`, `findHeaderCol_`, `formatDateTime_` and all
+    five sanity rules from `ConfigWithSubmit.gs`. **That duplication is the file's one
+    hidden coupling** — change the backend's copy and this must change too. Verified by a
+    differential harness: 43/43 identical outputs on the three helpers, and identical
+    invalid-row sets on five registry scenarios.
+  - 醫院代號 is generated as `<醫事機構代碼>-<6 hex>`, never the bare public institution
+    code. The code is public government data, and `?t=` is the only barrier between a
+    stranger and submitting scores that overwrite a real evaluator's.
+  - 地點 is folded into 說明 because `readExerciseInfo_` has no 地點 label; giving it one
+    means editing and redeploying two Apps Script projects.
+- `apps-script/QrLib.html` — vendored verbatim from `kazuhikoarase/qrcode-generator`
+  (`js/dist/qrcode.js`, MIT, SHA-256 `79ec86f8…f791c`), wrapped in `<script>` so
+  `SetupDialog.html` can `<?!= include('QrLib') ?>` it. Don't hand-edit. Generates QR codes
   **entirely in the browser**: an online QR image service would hand every 醫院代號 to a
   third party and leave it in their logs, which is the one thing the `?t=` code must not do.
   Call `qrcode(0,'M')` → `addData(url)` → `make()` → `createSvgTag({scalable:true})`, which
@@ -113,6 +138,11 @@ path 404s — URLs must name the file (`/Start.dc.html?t=…`).
   modules at ECC L, 37×37 at M, with all three finder patterns structurally correct.
   (nayuki/QR-Code-generator was the first choice and was **rejected**: that repo ships only
   `.ts` plus a `build.sh`, so vendoring it would mean adding a TypeScript compile step.)
+  It lives in `apps-script/` rather than `vendor/` because only the Apps Script dialog uses
+  it, and `apps-script/` is `.vercelignore`d — so the public site doesn't ship 56 KB nobody
+  loads. It is **inlined** into the dialog rather than loaded as
+  `<script src="https://…/vendor/qrcode.js">`, because that would make the dialog depend on
+  the deployed site happening to carry the file, and it currently exists only on `dev`.
 - `apps-script/Config.gs` — `doGet`-only backend (reads config, no `doPost`), deployed
   behind `CONFIG_URL`. **It has drifted** from `ConfigWithSubmit.gs`: it has no registry
   code, no `啟用觀察紀錄`/`低分需說明門檻` labels, and no `nullSafeSheet_`/`safeHeaderCol_`

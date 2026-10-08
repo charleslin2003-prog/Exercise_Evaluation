@@ -1,3 +1,11 @@
+<!-- QR 產生器，vendor 自 kazuhikoarase/qrcode-generator 的 js/dist/qrcode.js（MIT）。
+     逐字複製，不要手改；來源、版本與 SHA-256 記在引入它的那個 commit 訊息裡。
+     放在 apps-script/ 而不是 vendor/ 的理由：只有這個 Apps Script 對話框用得到它，
+     而 apps-script/ 被 .vercelignore 擋在部署之外，不會白白多傳 56KB 給每個訪客。
+     SetupDialog.html 用 <?!= include(QrLib) ?> 把它整段內嵌 —— 刻意不用
+     <script src="https://…/vendor/qrcode.js">，那會讓對話框相依於「正式站上剛好有
+     那個檔案」，而它目前只在 dev 分支上。 -->
+<script>
 //---------------------------------------------------------------------
 //
 // QR Code Generator for JavaScript
@@ -2295,3 +2303,4 @@ var qrcode = function() {
 }(function () {
     return qrcode;
 }));
+</script>

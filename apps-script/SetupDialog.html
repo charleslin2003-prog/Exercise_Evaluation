@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<!-- 「新增一場演習」對話框。這裡是瀏覽器環境（HtmlService 的 iframe），不是
+     V8 .gs 執行環境，所以 .gs 檔案那套 ES5 house style 不適用 —— 跟
+     ReportDialog.html 一樣可以用現代語法。 -->
+<html><head><base target="_top"><meta charset="utf-8">
+<style>
+  :root{--ink:#18323a;--muted:#67808a;--line:#d8e4e7;--teal:#147d83;--red:#a84646;--green:#2f7d5b;--amber:#b97816}
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;font:13px/1.65 "Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink);background:#f3f7f8}
+  h2{font-size:16px;margin:0 0 12px}
+  .card{background:#fff;border:1px solid #e3ecee;border-radius:12px;padding:14px;margin-bottom:12px}
+  .row{display:grid;grid-template-columns:132px 1fr;gap:10px;align-items:center;margin:9px 0}
+  .row>label{color:var(--muted);font-weight:700;font-size:12px}
+  input[type=text],input[type=datetime-local],input[type=date],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;color:var(--ink)}
+  textarea{min-height:52px;resize:vertical}
+  .hint{font-size:11px;color:var(--muted);margin-top:3px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg label{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer;background:#fff;font-size:12px}
+  .seg input{margin:0}
+  button{font:inherit;border:1px solid var(--teal);background:var(--teal);color:#fff;border-radius:9px;padding:9px 16px;font-weight:700;cursor:pointer}
+  button.ghost{background:#fff;color:var(--teal)}
+  button:disabled{opacity:.45;cursor:wait}
+  .msg{border-left:4px solid var(--red);background:#fdf1f1;padding:10px 12px;border-radius:8px;margin-bottom:10px;font-size:12px}
+  .msg.ok{border-color:var(--green);background:#eef8f3}
+  .msg div{margin:2px 0}
+  .urlbox{display:flex;gap:6px;align-items:center;margin:7px 0}
+  .urlbox input{font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .qrgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}
+  .qrcard{border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;background:#fff}
+  .qrcard .cap{font-weight:700;font-size:12px;margin-bottom:2px}
+  .qrcard .sub{font-size:11px;color:var(--muted);margin-bottom:8px;min-height:30px}
+  .qrcard svg{width:190px;height:190px}
+  .warn{border-left:4px solid var(--amber);background:#fdf6ea;padding:9px 11px;border-radius:8px;font-size:12px;margin-top:10px}
+  @media print{
+    body{background:#fff;padding:0}
+    .noprint{display:none!important}
+    .qrgrid{grid-template-columns:1fr 1fr}
+    .qrcard{border:none}
+  }
+</style></head>
+<body>
+
+<div id="form">
+  <div id="errs"></div>
+
+  <div class="card noprint">
+    <h2>1. 這場演習屬於哪家醫院</h2>
+    <div class="seg" style="margin-bottom:8px">
+      <label><input type="radio" name="hmode" value="existing" checked> 既有醫院</label>
+      <label><input type="radio" name="hmode" value="new"> 新增醫院</label>
+    </div>
+    <div id="hExisting">
+      <div class="row"><label>醫院</label><select id="hidSelect"></select></div>
+    </div>
+    <div id="hNew" style="display:none">
+      <div class="row"><label>醫事機構代碼</label><div>
+        <input type="text" id="instCode" placeholder="1301200010">
+        <div class="hint">衛福部公開名單上的 10 碼代碼。萬芳醫院是 1301200010。</div>
+      </div></div>
+      <div class="row"><label>醫院代號</label><div>
+        <input type="text" id="hidNew" placeholder="按右邊按鈕產生">
+        <div class="hint">
+          公開代碼當前綴 + 6 位隨機碼。<b>刻意不直接用公開代碼</b>：這串是陌生人與
+          「讀到完整題庫、評核官名單，並對開放中的場次送出分數」之間的唯一屏障，
+          可被查到就等於沒有屏障。
+        </div>
+      </div></div>
+      <div class="row"><label></label><div><button type="button" class="ghost" id="genHid">產生醫院代號</button></div></div>
+    </div>
+  </div>
+
+  <div class="card noprint">
+    <h2>2. 場次基本資料</h2>
+    <div class="row"><label>演習代號</label><div>
+      <input type="text" id="exid" placeholder="2026b">
+      <div class="hint">小寫英數、底線、減號，開頭須為英數，最長 32 字。</div>
+    </div></div>
+    <div class="row"><label>顯示名稱</label><div>
+      <input type="text" id="name" placeholder="萬芳醫院急救站 2026 下半年">
+      <div class="hint">評核官在場次清單上看到的就是這一行。</div>
+    </div></div>
+    <div class="row"><label>開放送出起</label><input type="datetime-local" id="openFrom"></div>
+    <div class="row"><label>開放送出迄</label><div>
+      <input type="datetime-local" id="openTo">
+      <div class="hint">
+        <b>兩格都是必填。</b>留空代表「永遠開放」，同一家醫院的每一場（含去年、前年）
+        都會在評核官清單上顯示「開放中」，他可能挑錯，而且挑錯了真的送得出去。
+      </div>
+    </div></div>
+    <div class="row"><label>紀錄分頁名稱</label><div>
+      <input type="text" id="recordSheet" placeholder="自動：評核紀錄_<演習代號>">
+      <div class="hint">必須與其他場次不同，否則兩場演習會寫進同一張分頁、互相覆蓋分數。</div>
+    </div></div>
+    <div class="row"><label></label><div class="seg">
+      <label><input type="checkbox" id="isDefault"> 設為這家醫院的預設演習</label>
+    </div></div>
+  </div>
+
+  <div class="card noprint">
+    <h2>3. 設定檔（時間、地點、題目放這裡）</h2>
+    <div class="seg" style="margin-bottom:8px">
+      <label><input type="radio" name="cmode" value="copy" checked> 複製一份新的設定檔</label>
+      <label><input type="radio" name="cmode" value="reuse"> 沿用這家醫院現有的</label>
+      <label><input type="radio" name="cmode" value="manual"> 自己填 ID</label>
+    </div>
+    <div id="cCopy">
+      <div class="row"><label>演習日期</label><input type="text" id="exerciseDate" placeholder="2026/10/03"></div>
+      <div class="row"><label>地點</label><div>
+        <input type="text" id="place" placeholder="萬芳醫院一樓大廳">
+        <div class="hint">地點目前不是後端獨立欄位，會寫進「說明」。要變成獨立欄位得改兩支後端並重新部署。</div>
+      </div></div>
+      <div class="row"><label>說明</label><textarea id="desc" placeholder="選填"></textarea></div>
+      <div class="warn">
+        複製出來的設定檔裡，<b>題目要你自己進去編</b>（「項目與問題」分頁）。精靈只負責
+        建檔、填演習資訊、接好線路。<br>
+        同一份設定檔只有一組演習資訊和一份題目，所以<b>兩場內容不同的演習不能共用</b>，
+        日期與題目會互相覆蓋。
+      </div>
+    </div>
+    <div id="cManual" style="display:none">
+      <div class="row"><label>設定試算表ID</label><input type="text" id="configId"></div>
+    </div>
+    <div class="row"><label>紀錄試算表ID</label><div>
+      <input type="text" id="recordId">
+      <div class="hint">既有醫院會自動帶入。分數寫到這個檔案的上面那個分頁。</div>
+    </div></div>
+  </div>
+
+  <div class="card noprint">
+    <h2>4. 其他</h2>
+    <div class="row"><label>scenePrefix</label><input type="text" id="scenePrefix" placeholder="SCENE"></div>
+    <div class="row"><label>檔案擁有者</label><div>
+      <input type="text" id="owner" placeholder="選填，純備註">
+      <div class="hint">只是給人看的備註欄，不參與任何路由。</div>
+    </div></div>
+  </div>
+
+  <div class="noprint" style="display:flex;gap:8px;align-items:center">
+    <button id="go">建立場次</button>
+    <button class="ghost" id="check" type="button">只檢查，不建立</button>
+    <span id="busy" style="color:var(--muted);display:none">處理中…</span>
+  </div>
+</div>
+
+<div id="done" style="display:none">
+  <div class="msg ok" id="doneMsg"></div>
+  <div class="card">
+    <h2>給評核官的連結</h2>
+    <div class="qrgrid" id="qrs"></div>
+  </div>
+  <div class="card noprint">
+    <h2>網址</h2>
+    <div id="urls"></div>
+    <div class="warn">
+      分析平台那條網址<b>內含分析金鑰</b>，等同儀表板的鑰匙。只給該看報表的人，
+      不要跟評核官的 QR 碼一起發。
+    </div>
+  </div>
+  <div class="noprint" style="display:flex;gap:8px">
+    <button onclick="window.print()">列印 QR 碼</button>
+    <button class="ghost" onclick="location.reload()">再建一場</button>
+  </div>
+</div>
+
+<?!= include('QrLib'); ?>
+<script>
+let BOOT = null;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function busy(on){ $('busy').style.display=on?'':'none'; $('go').disabled=on; $('check').disabled=on; }
+
+function showErrs(list, ok){
+  $('errs').innerHTML = list.length
+    ? '<div class="msg'+(ok?' ok':'')+'">'+list.map(m=>'<div>'+esc(m)+'</div>').join('')+'</div>'
+    : '';
+  window.scrollTo(0,0);
+}
+
+// ---- 啟動：抓站台網址與既有醫院清單 ----
+google.script.run.withSuccessHandler(b=>{
+  BOOT = b;
+  const sel = $('hidSelect');
+  sel.innerHTML = b.hospitals.map(h =>
+    '<option value="'+esc(h.hid)+'">'+esc(h.label||h.hid)+'（'+esc(h.hid)+'・已有 '+h.exids.length+' 場）</option>').join('');
+  if(!b.hospitals.length){
+    document.querySelector('input[name=hmode][value=new]').checked = true;
+    toggleHmode();
+  }
+  syncHospital();
+  const problems = [];
+  if(!b.siteBase) problems.push('尚未設定 SETUP_SITE_BASE，建立後無法產生網址與 QR 碼。請先到選單的「設定說明（指令碼屬性）」。');
+  if(!b.hasTemplate) problems.push('尚未設定 SETUP_CONFIG_TEMPLATE，「複製一份新的設定檔」無法使用。');
+  b.headerProblems.forEach(p=>problems.push(p));
+  if(problems.length) showErrs(problems);
+}).withFailureHandler(e=>showErrs([String(e.message||e)])).setupBootstrap();
+
+// ---- 表單互動 ----
+function toggleHmode(){
+  const isNew = document.querySelector('input[name=hmode]:checked').value === 'new';
+  $('hExisting').style.display = isNew ? 'none' : '';
+  $('hNew').style.display = isNew ? '' : 'none';
+  // 新醫院沒有「現有的設定檔」可以沿用。
+  const reuse = document.querySelector('input[name=cmode][value=reuse]');
+  reuse.disabled = isNew;
+  if(isNew && reuse.checked){ document.querySelector('input[name=cmode][value=copy]').checked = true; toggleCmode(); }
+  syncHospital();
+}
+function toggleCmode(){
+  const m = document.querySelector('input[name=cmode]:checked').value;
+  $('cCopy').style.display   = m==='copy'   ? '' : 'none';
+  $('cManual').style.display = m==='manual' ? '' : 'none';
+}
+// 既有醫院：把它現有的紀錄檔 ID 與 scenePrefix 帶進來，少打兩格也少打錯兩格。
+function syncHospital(){
+  if(!BOOT) return;
+  const isNew = document.querySelector('input[name=hmode]:checked').value === 'new';
+  if(isNew){ return; }
+  const h = BOOT.hospitals.find(x=>x.hid===$('hidSelect').value);
+  if(!h) return;
+  if(!$('recordId').value) $('recordId').value = h.recordId || '';
+  if(!$('scenePrefix').value) $('scenePrefix').value = h.scenePrefix || 'SCENE';
+}
+document.querySelectorAll('input[name=hmode]').forEach(r=>r.onchange=toggleHmode);
+document.querySelectorAll('input[name=cmode]').forEach(r=>r.onchange=toggleCmode);
+$('hidSelect').onchange = syncHospital;
+$('exid').oninput = ()=>{
+  const v = $('exid').value.trim().toLowerCase();
+  $('recordSheet').placeholder = v ? ('自動：評核紀錄_'+v) : '自動：評核紀錄_<演習代號>';
+};
+$('genHid').onclick = ()=>{
+  busy(true);
+  google.script.run
+    .withSuccessHandler(v=>{ busy(false); $('hidNew').value = v; })
+    .withFailureHandler(e=>{ busy(false); showErrs([String(e.message||e)]); })
+    .setupSuggestHid($('instCode').value);
+};
+
+function collect(){
+  const isNew = document.querySelector('input[name=hmode]:checked').value === 'new';
+  return {
+    hid: isNew ? $('hidNew').value : $('hidSelect').value,
+    exid: $('exid').value,
+    name: $('name').value,
+    openFrom: $('openFrom').value,
+    openTo: $('openTo').value,
+    recordSheet: $('recordSheet').value,
+    recordId: $('recordId').value,
+    configId: $('configId').value,
+    configMode: document.querySelector('input[name=cmode]:checked').value,
+    exerciseDate: $('exerciseDate').value,
+    place: $('place').value,
+    desc: $('desc').value,
+    isDefault: $('isDefault').checked,
+    scenePrefix: $('scenePrefix').value,
+    owner: $('owner').value
+  };
+}
+
+// 「只檢查，不建立」直接跑註冊表的五條健全性檢查。這在建立前後都有用：建立前
+// 可以先確認現況乾淨，建立後可以確認新那一列沒有把別人撞壞。
+$('check').onclick = ()=>{
+  busy(true);
+  google.script.run
+    .withSuccessHandler(r=>{
+      busy(false);
+      showErrs(r.lines.map(l=>(l.ok?'✅ ':'⚠️ ')+l.text), r.lines.every(l=>l.ok));
+    })
+    .withFailureHandler(e=>{ busy(false); showErrs([String(e.message||e)]); })
+    .setupCheckRegistry();
+};
+
+$('go').onclick = ()=>{
+  busy(true); showErrs([]);
+  google.script.run
+    .withSuccessHandler(res=>{
+      busy(false);
+      if(!res.ok){ showErrs(res.messages); return; }
+      renderDone(res.result);
+    })
+    .withFailureHandler(e=>{ busy(false); showErrs([String(e.message||e)]); })
+    .setupCreateSession(collect());
+};
+
+// ---- 成功畫面 ----
+function qrSvg(text){
+  // ECC 'M' 是紙本掃描的常規選擇：比 L 多一點抗污損餘裕，又不像 Q/H 那樣把模組
+  // 數撐大（模組越多，同樣紙張上每格越小、越難掃）。
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  return q.createSvgTag({ scalable: true });
+}
+
+function renderDone(r){
+  $('form').style.display='none';
+  $('done').style.display='';
+  $('doneMsg').innerHTML = '<div><b>已建立：'+esc(r.name)+'</b></div>'
+    + '<div>醫院代號 '+esc(r.hid)+'　演習代號 '+esc(r.exid)+'　紀錄分頁 '+esc(r.recordSheet)+'</div>'
+    + '<div>開放送出：'+esc(r.window)+'</div>'
+    + r.notes.map(n=>'<div>・'+esc(n)+'</div>').join('');
+
+  $('qrs').innerHTML =
+    '<div class="qrcard"><div class="cap">'+esc(r.name)+'</div>'
+    + '<div class="sub">給當天要自己挑場次的評核官。掃進去會看到這家醫院的場次清單。</div>'
+    + qrSvg(r.hospitalUrl) + '</div>'
+    + '<div class="qrcard"><div class="cap">'+esc(r.name)+'（直達）</div>'
+    + '<div class="sub">給只負責這一場的評核官。掃進去直接就是這場的評核表，不用挑。</div>'
+    + qrSvg(r.sessionUrl) + '</div>';
+
+  $('urls').innerHTML = [
+    ['醫院通用（評核官自己挑場次）', r.hospitalUrl],
+    ['單場直達', r.sessionUrl],
+    ['分析平台（內含金鑰，勿外流）', r.analysisUrl]
+  ].map(([label,url])=>
+    '<div class="hint" style="margin-top:8px">'+esc(label)+'</div>'
+    + '<div class="urlbox"><input type="text" readonly value="'+esc(url)+'">'
+    + '<button class="ghost" type="button" onclick="copyUrl(this)">複製</button></div>').join('');
+}
+
+function copyUrl(btn){
+  const input = btn.previousElementSibling;
+  input.select();
+  // HtmlService 的 iframe 在部分瀏覽器不給 navigator.clipboard，execCommand 才是
+  // 這個環境裡會動的那一個。
+  try{ document.execCommand('copy'); btn.textContent='已複製'; setTimeout(()=>btn.textContent='複製',1500); }
+  catch(e){ btn.textContent='請手動複製'; }
+}
+</script>
+</body></html>
