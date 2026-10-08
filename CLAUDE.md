@@ -614,8 +614,12 @@ tenant-routing codes as not worth retrying.
 Sheet name is per-tenant (`t.recordSheet`, default `評核紀錄` /
 `DEFAULT_RECORD_SHEET_NAME`). `appendSubmission_(body, t)` appends one row per answered
 question, matching columns **by header text** via `findHeaderCol_`. Missing optional
-columns are silently skipped, which is how both the old 7-column shape and today's
-6-column shape work without code changes.
+columns are silently skipped, which is how differently-shaped record sheets work without
+code changes. **The sandbox sheet is 7 columns** — 情境階段／演練單元／評核題號／分數／
+人員代號／送出時間／觀察紀錄 — since 觀察紀錄 was added on 2026-10-08. An earlier note
+here said "today's 6-column shape"; that is stale, and on 2026-10-09 it led an audit to
+predict the wrong header for sheets `Setup.gs` creates (it copies the header from the
+first non-empty tab, so new tabs inherit all 7).
 
 | Role | Columns |
 |---|---|
@@ -887,7 +891,23 @@ is one `UrlFetchApp` GET to `action=analysis`.
 > `{{報告版次}}` on *every* report, and warnings raised during finalize could never reach
 > 附錄C because that appendix is written earlier in the chapter pass.
 >
-> Still unverified: the time-budget split across `reportContinue` calls (this run finished in
+> Re-verified 2026-10-09 after the fixes, by deliberately mistyping a template token: the
+> warning named `{{機構名稱 }}`, did **not** name `{{報告版次}}`, and appeared under 附錄C 補記
+> at the end of the document. Both fixes confirmed in the deliverable, not just the dialog.
+>
+> **Which drill a report covers is pinned by script properties, not chosen at run time.**
+> `REPORT_TENANT`/`REPORT_EXERCISE` fix the tenant; a session created by the `Setup.gs` wizard
+> therefore has **no way to produce a report** until someone edits those properties (and the
+> matching `REPORT_ANALYSIS_KEY`, since the wizard mints a fresh key per row). That is a real
+> product gap, not a bug: one container-bound script, one configured drill. Anyone testing the
+> report generator is testing the mechanism, not the session they just created.
+>
+> **ICC(2,k) on a handful of questions is not a quality signal.** A two-evaluator, four-question
+> run returned exactly `0.00` — arithmetically correct (between-question variance collapses to
+> at or below the error term, and the statistic floors at 0), and meaningless. Do not read a low
+> ICC from a smoke test as poor agreement.
+>
+> Still unverified: the time-budget split across `reportContinue` calls (both runs finished in
 > one pass), and every chart fallback path (none engaged). `docs/manual-test-checklist.md` M3
 > is the checklist.
 

@@ -641,26 +641,62 @@ function writeRunState_(st) {
   }
 }
 
-// 列出文件裡所有還沒被替換掉的 {{…}}，去重後回傳。
-// 回傳「是哪幾個」而不是「有沒有」：token 打錯字時 replaceText 完全靜默，
-// 只說「有殘留」等於要操作者自己 Ctrl+F 去翻 35 頁。
+// 列出文件裡所有還沒被替換掉的 {{…}}。回傳 [{ text, count, where }]。
+//
+// 三件事是刻意的：
+// 1. **三個容器都掃**（內文／頁首／頁尾），因為 applyCoverTokens_ 也是三個都替換。
+//    只掃內文的話，頁首裡打錯字的 token 永遠不會被抓到，而範本的機構名稱常常就
+//    放在頁首。
+// 2. **回報「是哪幾個」而不是「有沒有」**：token 打錯字時 replaceText 完全靜默，
+//    只說「有殘留」等於要操作者自己 Ctrl+F 去翻 35 頁。
+// 3. **數出現次數並標出容器**。2026-10-09 的測試裡，同一個 {{機構名稱 }} 被列了
+//    兩次而操作者在範本裡只搜到一個，當場無法判斷是掃描重複計算、還是真的有
+//    第二個藏在別處。帶上次數與容器就能自己回答這個問題。
+//
 // [^{}] 讓比對不會跨過下一個 token；guard 擋住 findText 沒有前進時的無窮迴圈。
-function leftoverTokens_(body) {
-  var out = [], seen = {}, guard = 0, r = null;
+function leftoverTokens_(doc) {
   var pattern = '\\{\\{[^{}]*\\}\\}';
-  try { r = body.findText(pattern); } catch (err) { return out; }
-  while (r && guard++ < 200) {
-    try {
-      var el = r.getElement().asText();
-      var s = r.getStartOffset(), e = r.getEndOffsetInclusive();
-      if (s >= 0 && e >= s) {
-        var txt = el.getText().substring(s, e + 1);
-        if (txt && !seen[txt]) { seen[txt] = true; out.push(txt); }
-      }
-    } catch (err2) {}
-    try { r = body.findText(pattern, r); } catch (err3) { break; }
+  var containers = [];
+  try { containers.push({ el: doc.getBody(), name: '內文' }); } catch (e1) {}
+  try { containers.push({ el: doc.getHeader(), name: '頁首' }); } catch (e2) {}
+  try { containers.push({ el: doc.getFooter(), name: '頁尾' }); } catch (e3) {}
+
+  var index = {}, order = [];
+  for (var c = 0; c < containers.length; c++) {
+    var box = containers[c];
+    if (!box.el) continue;
+    var guard = 0, r = null;
+    try { r = box.el.findText(pattern); } catch (err) { continue; }
+    while (r && guard++ < 300) {
+      try {
+        var t = r.getElement().asText();
+        var s = r.getStartOffset(), e = r.getEndOffsetInclusive();
+        if (s >= 0 && e >= s) {
+          var txt = t.getText().substring(s, e + 1);
+          if (txt) {
+            if (!index[txt]) { index[txt] = { text: txt, count: 0, where: {} }; order.push(txt); }
+            index[txt].count++;
+            index[txt].where[box.name] = true;
+          }
+        }
+      } catch (err2) {}
+      try { r = box.el.findText(pattern, r); } catch (err3) { break; }
+    }
+  }
+
+  var out = [];
+  for (var i = 0; i < order.length; i++) {
+    var rec = index[order[i]];
+    var places = [];
+    for (var w in rec.where) { if (rec.where.hasOwnProperty(w)) places.push(w); }
+    out.push({ text: rec.text, count: rec.count, where: places.join('／') });
   }
   return out;
+}
+
+// 把一筆殘留描述成人看得懂的一行：{{機構名稱 }}（內文 ×2）
+function describeLeftover_(rec) {
+  return rec.text + '（' + rec.where + (rec.count > 1 ? ' ×' + rec.count : '') + '）';
 }
 
 function addWarning_(st, text) {
@@ -2408,10 +2444,12 @@ function finalizeReport_(doc, st, ctx, aborted) {
   //    OWNER_FILLED_TOKENS_ 的註解），而且就算真的響了也不說是哪一個。
   if (body) {
     try {
-      var leftovers = leftoverTokens_(body);
+      var leftovers = leftoverTokens_(doc);
       var unexpected = [];
       for (var li = 0; li < leftovers.length; li++) {
-        if (OWNER_FILLED_TOKENS_.indexOf(leftovers[li]) === -1) unexpected.push(leftovers[li]);
+        if (OWNER_FILLED_TOKENS_.indexOf(leftovers[li].text) === -1) {
+          unexpected.push(describeLeftover_(leftovers[li]));
+        }
       }
       if (unexpected.length) {
         addWarning_(st, '文件裡有未被替換的 token：' + unexpected.join('、') +
