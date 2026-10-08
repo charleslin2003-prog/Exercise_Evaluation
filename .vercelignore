@@ -1,0 +1,22 @@
+# Vercel 把 repo 裡的每一個檔案都當成靜態檔案對外提供，不只 .html。實測正式站：
+#   GET /apps-script/ConfigWithSubmit.gs  -> 200，內含正式的 CONFIG_SPREADSHEET_ID、
+#                                            RECORD_SPREADSHEET_ID 與 ANALYSIS_KEY
+#   GET /CLAUDE.md                        -> 200，整份架構說明與已知弱點
+# 這份清單把「不是網站的一部分」的檔案排除在部署之外。
+#
+# 網站實際需要的只有這五項：Start.dc.html、Analysis.html、support.js、vendor/、assets/。
+# 新增任何後端程式、內部文件或暫存檔時，記得也要擋在這裡——這一層是公開／非公開
+# 的唯一分界，repo 本身是 public 的。
+
+# 後端原始碼：裡面有試算表 ID 與金鑰，而且它從來不是靠 Vercel 執行的
+# （Apps Script 專案是手動貼上去部署的）。
+apps-script
+
+# 內部文件：架構說明、業主操作手冊、設計決策紀錄。
+docs
+*.md
+
+# 暫存／草稿檔。
+*.tsv
+prototype-dynamic-layers.html
+.idea
