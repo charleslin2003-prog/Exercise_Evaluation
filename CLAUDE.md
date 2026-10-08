@@ -42,6 +42,46 @@ Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
 `analysisRows=16 / coverageRows=7 / learningRows=0`, 5 evaluator codes,
 `icc2k≈0.5503`, `within1=0.750` over the record sheet's 101 rows.
 
+### ⚠️ Open on `master`: Vercel serves the whole repo, backend source included
+
+Vercel publishes **every** file in the repo as a static asset, not just the two HTML
+pages. Verified against the live production site on 2026-10-08:
+
+```
+200  https://exercise-evaluation.vercel.app/apps-script/ConfigWithSubmit.gs
+200  https://exercise-evaluation.vercel.app/apps-script/Config.gs
+200  https://exercise-evaluation.vercel.app/CLAUDE.md
+```
+
+so the real `CONFIG_SPREADSHEET_ID`, `RECORD_SPREADSHEET_ID`, the full backend logic and
+this file are readable by anyone who guesses the path. `ANALYSIS_KEY` is in there too, but
+that one was already public by design — `Analysis.html` embeds it, and the dashboard's
+access control *is* "unlisted URL + that key". Spreadsheet IDs grant no access on their
+own, so this is information disclosure, not a breach; the repo is public anyway, which is
+why the owner judged it non-urgent.
+
+`dev` fixes it with a root **`.vercelignore`** (commit `c106885`) excluding `apps-script/`,
+`docs/`, `*.md`, `*.tsv` and the scratch HTML. It uses `.gitignore` semantics and is
+honoured on Git-connected deployments, so no `vercel.json` and no build step. The site
+needs only `Start.dc.html`, `Analysis.html`, `support.js`, `vendor/`, `assets/`.
+
+**The owner decided on 2026-10-08 to fix `dev` only and leave production as-is** (`master`
+is frozen; see the branch policy below). So the exposure is still live. Carry
+`.vercelignore` across in whatever release eventually touches `master` — it is additive,
+one new file, and changes no code. **Adding any new backend file, internal doc or scratch
+file means adding it to `.vercelignore` too**: that file is the entire public/non-public
+boundary.
+
+### Branch policy
+
+`master` **is** the production version and is not touched. Every change lands on `dev`;
+"更新" always means `dev`. A second Vercel project (`exercise_evaluation_test` →
+`exerciseevaluationtest.vercel.app`, same GitHub repo) has its Production Branch set to
+`dev`, so pushing `dev` deploys the test site and pushing `master` deploys the hospital's.
+That setting lives under **Settings → Environments → Production → Branch Tracking**, not
+under Settings → Git where it used to be. Neither site has an `index.html`, so the root
+path 404s — URLs must name the file (`/Start.dc.html?t=…`).
+
 ## File roles
 
 - `Start.dc.html` — the artboard (the evaluator-facing form). Contains:
