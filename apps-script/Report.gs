@@ -186,11 +186,21 @@ function dialogFailureHint_(m) {
   for (var i = 0; i < authSigns.length; i++) {
     if (m.indexOf(authSigns[i]) !== -1) {
       return '這是「授權」問題，不是檔案缺失 —— ReportDialog 檔案在不在都一樣會出現這個錯誤。\n\n'
-        + '容器綁定腳本第一次要開對話框時，必須由你本人同意 script.container.ui 這個範圍，'
-        + '而這個同意畫面只能用瀏覽器點，沒有別的方式可以代勞。\n\n'
-        + '做法：在 Apps Script 編輯器上方的函式下拉選單選「onOpen」，按「執行」，'
-        + '跳出 Google 授權視窗時按「允許」（權限清單看起來會有點多，那是正常的）。'
-        + '授權完回到試算表重新整理，再點一次這個選單項目。';
+        + '這個專案被授權時沒有拿到 script.container.ui。注意：**跑 onOpen 沒有用**'
+        + '（2026-10-09 實測過）—— 加選單在受限模式下就能做，根本不需要這個範圍，'
+        + '所以執行它不會觸發授權請求。必須執行一個真的會開對話框的函式。\n\n'
+        + '做法一：在 Apps Script 編輯器上方的函式下拉選單選「showReportCheckDialog」，'
+        + '按「執行」。這次應該會跳出 Google 授權視窗，按「允許」'
+        + '（權限清單看起來會有點多，那是正常的）。\n\n'
+        + '做法二（做法一還是沒跳授權視窗時）：專案設定 → 勾選「在編輯器中顯示 '
+        + 'appsscript.json 資訊清單檔案」，把 oauthScopes 明確寫成以下五個，存檔後'
+        + '再執行一次 showReportCheckDialog：\n'
+        + '  https://www.googleapis.com/auth/spreadsheets\n'
+        + '  https://www.googleapis.com/auth/documents\n'
+        + '  https://www.googleapis.com/auth/drive\n'
+        + '  https://www.googleapis.com/auth/script.container.ui\n'
+        + '  https://www.googleapis.com/auth/script.external_request\n'
+        + '明確宣告會強制重新授權，自動推斷則可能沿用舊的授權而永遠補不上這個範圍。';
     }
   }
   return '請確認這個 Apps Script 專案裡有一個名為「ReportDialog」的 HTML 檔案'
