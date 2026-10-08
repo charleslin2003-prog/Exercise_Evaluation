@@ -87,8 +87,25 @@ var DEFAULT_RECORD_HEADER_ = ['情境階段', '演練單元', '評核題號', '�
 // ======================================================================
 
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu(MENU_TITLE_)
+  // 這支腳本**必須**貼在租戶註冊表底下（擴充功能 → Apps Script）。貼成獨立專案
+  // 時，SpreadsheetApp.getUi() 會丟 'Cannot call SpreadsheetApp.getUi() from this
+  // context.' —— 那句話不會告訴任何人真正的原因是「專案沒有附著在試算表上」，
+  // 而 Apps Script 首頁把獨立專案和綁定專案混在一起列、名字還可能一樣，所以貼錯
+  // 地方是很容易發生的事（2026-10-09 就發生了一次）。
+  // 這裡把它翻譯成一句看得懂的話，並且不要吞掉例外 —— 選單沒長出來是硬失敗，
+  // 不是可以忽略的警告。
+  var ui;
+  try {
+    ui = SpreadsheetApp.getUi();
+  } catch (err) {
+    throw new Error('這個 Apps Script 專案沒有附著在試算表上（是「獨立專案」）。'
+      + 'Setup.gs 必須貼在「' + REGISTRY_SHEET_NAME_ + '」那份試算表底下：'
+      + '打開那份試算表 → 擴充功能 → Apps Script，貼在那裡開啟的專案中。'
+      + '不要從 Apps Script 首頁新建專案 —— 那樣建出來的是獨立專案，'
+      + '選單永遠不會出現，getActive() 也拿不到試算表。'
+      + '（原始錯誤：' + ((err && err.message) || err) + '）');
+  }
+  ui.createMenu(MENU_TITLE_)
     .addItem('新增一場演習…', 'showSetupDialog')
     .addItem('檢查註冊表', 'showRegistryCheck')
     .addSeparator()
