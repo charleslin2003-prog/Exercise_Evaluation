@@ -356,6 +356,14 @@ function setupCreateSession(payload) {
     // （例如今天才加的 觀察紀錄），照抄才不會讓新場次少一欄。
     ensureRecordSheet_(recordId, recordSheet, notes);
 
+    // 一家醫院只能有一列 預設演習=Y。這條**不在**後端那五條健全性檢查裡 ——
+    // 它不會把列標成無效，而是 resolveTenant_ 解析當下才丟 AMBIGUOUS_DEFAULT，
+    // 於是整家醫院的「?t= 不帶 ?ex=」連結（也就是精靈自己產的那張醫院通用 QR）
+    // 全部死掉。2026-10-08 第一次試跑就踩到了，所以這裡自己擋。
+    // 做法是「自動把舊的取消」而不是報錯：使用者勾「設為預設」的意思本來就是
+    // 「改成這一場」，報錯只會逼他自己去翻另一列。改了什麼一定寫進 notes。
+    if (payload.isDefault) clearOtherDefaults_(table, hid, notes);
+
     // 分析金鑰。用 Utilities.getUuid() 當亂數來源，不是 Math.random()：這是一把
     // 真的憑證，而 Apps Script 沒有 crypto.getRandomValues。
     var analysisKey = randomKey_(32);
@@ -461,6 +469,28 @@ function setupCheckRegistry() {
   }
   if (!badCount) lines.push({ ok: true, text: '五條健全性檢查全部通過，沒有任何無效列。' });
 
+  // 重複的預設演習。這條**不在**後端那五條規則裡，所以不會把列標成無效 ——
+  // 它是 resolveTenant_ 解析時才丟的 AMBIGUOUS_DEFAULT，症狀是「不帶演習代號的
+  // 連結整家醫院都打不開」，而註冊表看起來完全正常。所以一定要在這裡講出來。
+  var defaultsByHid = {};
+  for (var d = 0; d < table.rows.length; d++) {
+    var dr = table.rows[d];
+    if (!dr.hid || !dr.enabled || !dr.isDefault) continue;
+    if (!defaultsByHid[dr.hid]) defaultsByHid[dr.hid] = [];
+    defaultsByHid[dr.hid].push(dr);
+  }
+  var dupDefault = false;
+  for (var dh in defaultsByHid) {
+    if (!defaultsByHid.hasOwnProperty(dh)) continue;
+    if (defaultsByHid[dh].length > 1) {
+      dupDefault = true;
+      lines.push({ ok: false, text: '醫院「' + dh + '」有 ' + defaultsByHid[dh].length + ' 列被標為預設演習（第 '
+        + defaultsByHid[dh].map(function (x) { return x.rowNumber; }).join('、') + ' 列）。'
+        + '這會讓不帶演習代號的連結（評核官掃的那張醫院通用 QR）整個打不開，錯誤是 AMBIGUOUS_DEFAULT。請只保留一列。' });
+    }
+  }
+  if (!dupDefault) lines.push({ ok: true, text: '每家醫院的預設演習都只有一列。' });
+
   // 時間窗提醒。不是錯誤，但多場次同時進行時它幾乎一定是問題。
   var noWindow = table.rows.filter(function (r) { return r.enabled && !r.from && !r.to; });
   if (noWindow.length > 1) {
@@ -548,6 +578,22 @@ function appendRegistryRow_(table, data) {
   sh.getRange(at, 1, 1, width).setNumberFormat('@');
   sh.getRange(at, 1, 1, width).setValues([row]);
   SpreadsheetApp.flush();
+}
+
+// 把同一家醫院其他列的 預設演習 清掉。只動那一格，不碰同列其他欄位。
+// 只清 啟用=Y 的列：封存列掛著一個 預設=Y 不會造成 AMBIGUOUS_DEFAULT
+// （resolveTenant_ 的 defaults 過濾是 r.enabled && r.isDefault），而業主可能
+// 刻意留著它當「那一年的主場次」的註記。
+function clearOtherDefaults_(table, hid, notes) {
+  var at = table.cols.isDefault;
+  if (at === -1) return;
+  for (var i = 0; i < table.rows.length; i++) {
+    var r = table.rows[i];
+    if (r.hid !== hid || !r.isDefault || !r.enabled) continue;
+    table.sheet.getRange(r.rowNumber, at + 1).setValue('');
+    notes.push('原本的預設演習「' + (r.name || r.exid) + '」已取消預設（一家醫院只能有一個預設，'
+      + '否則不帶演習代號的連結會整個打不開）。');
+  }
 }
 
 // 確保紀錄分頁存在，並且有表頭。表頭優先從同一個紀錄檔裡既有的分頁抄。
