@@ -927,7 +927,18 @@ is one `UrlFetchApp` GET to `action=analysis`.
 > at or below the error term, and the statistic floors at 0), and meaningless. Do not read a low
 > ICC from a smoke test as poor agreement.
 >
-> Still unverified: the time-budget split across `reportContinue` calls (both runs finished in
+> A third run on 2026-10-09 explained the duplicate token the second one reported. It was not
+> a header, and not double-counting: **the report was warning about text it had just written
+> itself.** 附錄C prints the warning list during the chapter pass, and one of those warnings
+> was 「範本缺少封面 token：`{{機構名稱}}`」 — so a literal, well-formed token landed in the
+> body, and finalize's leftover scan then found it. The operator could only ever find one
+> occurrence in the template because the second one did not exist until the run created it.
+> **Any warning that will be printed into 附錄C must not contain a complete `{{…}}`** — pass
+> it through `plainToken_` first. Warnings added during finalize are exempt: step 4b runs
+> after the step-4 scan, and every run copies a fresh document. Reordering those two steps
+> re-opens this.
+>
+> Still unverified: the time-budget split across `reportContinue` calls (all runs finished in
 > one pass), and every chart fallback path (none engaged). `docs/manual-test-checklist.md` M3
 > is the checklist.
 

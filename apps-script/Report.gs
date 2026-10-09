@@ -695,8 +695,24 @@ function leftoverTokens_(doc) {
 }
 
 // 把一筆殘留描述成人看得懂的一行：{{機構名稱 }}（內文 ×2）
+// 這裡**刻意保留**完整的 {{…}}：殘留警告的重點就是那個打錯的字元（通常是多一個
+// 空格），去掉大括號就看不出來了。安全的理由是它只在收尾第 4b 步寫入，晚於第 4 步
+// 的掃描，而且每次產生都是全新的文件複本 —— 不會自己觸發自己。
+// 搬動這兩步的順序之前，先回頭看 plainToken_ 的註解。
 function describeLeftover_(rec) {
   return rec.text + '（' + rec.where + (rec.count > 1 ? ' ×' + rec.count : '') + '）';
+}
+
+// 把 {{機構名稱}} 變成 機構名稱。給「會被寫進附錄C 的警告」用，理由見
+// buildCover 那段的註解：警告文字裡的完整 token 會被殘留掃描誤判成範本沒替換掉。
+function plainToken_(token) {
+  return String(token == null ? '' : token).replace(/^\{\{/, '').replace(/\}\}$/, '');
+}
+
+function plainTokens_(list) {
+  var out = [];
+  for (var i = 0; i < (list || []).length; i++) out.push(plainToken_(list[i]));
+  return out;
 }
 
 function addWarning_(st, text) {
@@ -2122,11 +2138,19 @@ function reportStart(opts) {
       iccNote: ''
     };
 
+    // ⚠️ 在附錄C 會印出來的警告裡**不要寫出完整的 {{…}}**，用 plainToken_ 去掉大括號。
+    // 附錄C 是章節階段寫的，而收尾階段第 4 步會掃整份文件找殘留的 {{…}} ——
+    // 警告文字裡的 token 會被自己的掃描當成「範本沒替換掉的殘留」抓出來，
+    // 於是報告警告自己剛寫進去的東西。
+    // 2026-10-09 就是這樣：警告同時列出 {{機構名稱 }}（業主真的打錯的）和
+    // {{機構名稱}}（上一則警告自己印進去的），而業主在範本裡只找得到前者，
+    // 完全無法判斷第二個是哪來的。
+    // （收尾階段才加的警告不受影響 —— 第 4b 步在掃描之後，而且每次都是全新複本。）
     if (opts.identifiedDowngraded) {
-      addWarning_(st, '範本缺少 {{SEC_評核官差異}} 錨點，識別模式無處輸出，已自動改回匿名模式。');
+      addWarning_(st, '範本缺少 ' + plainToken_('{{SEC_評核官差異}}') + ' 錨點，識別模式無處輸出，已自動改回匿名模式。');
     }
     if (scan.coverMissing.length) {
-      addWarning_(st, '範本缺少封面 token：' + scan.coverMissing.join('、') + '（這些欄位不會被填）。');
+      addWarning_(st, '範本缺少封面 token：' + plainTokens_(scan.coverMissing).join('、') + '（這些欄位不會被填）。');
     }
     if (totalRows > 400) {
       addWarning_(st, '資料量較大（' + totalRows + ' 題），產生時間會較長，部分章節可能被時間預算跳過。');
