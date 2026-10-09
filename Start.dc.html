@@ -349,6 +349,9 @@ const NO_RETRY_ERROR_CODES = {
   AMBIGUOUS_DEFAULT: true,
   ROW_INVALID: true,
   BAD_CODE: true,
+  // 註冊表被改壞（表頭或分頁被動過）。重試沒有意義 —— 要有人去改試算表，而且
+  // 改完還有 120 秒快取。重試只會讓評核官多等三輪才看到那句中文。
+  REGISTRY_BROKEN: true,
 };
 
 // config.items 是一棵樹：分組節點是 { name, children }，葉節點（真正的評核項目）

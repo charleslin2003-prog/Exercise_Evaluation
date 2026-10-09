@@ -386,9 +386,29 @@ resolving in exactly this order:
    unconditionally, *even if `t`/`ex` were supplied*. Supplied codes are echoed back in
    the payload but have zero routing effect. Rationale: links may circulate with `?t=`
    before the registry exists, and failing them would take a live drill down.
-2. **Registry configured but unusable** (openById throws, sheet missing, zero data rows,
-   or zero rows survive `assertRegistrySane_`) → `fallbackTenant_()` with
-   `registryWarning` set. Indistinguishable from case 1 to every client.
+2. **Registry configured but unusable** → splits on `reg.readable`, because the two halves
+   have opposite consequences:
+   - **`readable === false`** (openById threw — Drive hiccup, permissions changed) →
+     `fallbackTenant_()` with `registryWarning`, same as before. Hard-failing here would
+     take a live drill down over a transient fault that usually clears itself.
+   - **`readable === true` but no usable rows** (header cell edited, tab renamed, every row
+     invalid) and the caller **supplied a `?t=`** → **hard error `REGISTRY_BROKEN`**. This is
+     a human having broken the sheet, and the caller named a specific hospital.
+   - No `?t=` → fallback either way; that is what keeps already-distributed no-param links
+     alive.
+
+   > The split exists because of a real incident on 2026-10-09. A tester pasted over the
+   > registry's `分析金鑰` header cell and then cleared it. `findHeaderCol_` stopped finding
+   > the column, `readRegistry_` returned zero rows, and **every** `?t=` request fell through
+   > to the fallback tenant — so for two minutes a `?t=clinic-9b4e1d` link served 萬芳's
+   > questions and would have written scores into 萬芳's record sheet, with nothing visibly
+   > wrong on screen. One header cell silently collapsed the whole tenancy boundary. The
+   > tester only noticed because the *analysis* endpoint returned `unauthorized`; the
+   > evaluator-facing path fails silently, which is the dangerous half. A visible outage beats
+   > writing scores into the wrong hospital.
+
+   `REGISTRY_BROKEN` is in `Start.dc.html`'s `NO_RETRY_ERROR_CODES`: retrying cannot help, a
+   human has to edit the sheet, and the registry cache is 120 s on top of that.
 3. **Registry usable but `hid === ''`** → `fallbackTenant_()`. The hardcoded constants are
    the permanent "legacy / 第一場" tenant; this is what keeps already-distributed links alive.
 4. **Registry usable and `hid !== ''`** → codes route, and **a miss is a hard error, never

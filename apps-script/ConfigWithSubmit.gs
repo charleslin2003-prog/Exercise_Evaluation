@@ -563,6 +563,27 @@ function resolveTenant_(e, body) {
   var reg = readRegistry_();
   if (!reg) return withRequested_(fallbackTenant_(), hid, exid);           // (i)
   if (!reg.rows.length) {                                                   // (ii)
+    // 情況 (ii) 分成兩種，因為後果天差地遠。2026-10-09 實測踩到了第二種：
+    // 有人不小心清掉註冊表 G1（「分析金鑰」那格表頭），findHeaderCol_ 就找不到
+    // 那一欄，readRegistry_ 判定「缺少必要欄位」、rows 回空陣列，於是**每一個**
+    // 帶 ?t= 的請求都掉進這裡、拿到寫死常數組成的 fallback 租戶。
+    // 結果是：打開 ?t=clinic-9b4e1d 的評核官看到的是萬芳的題目，送出的分數寫進
+    // 萬芳的紀錄表，而畫面上沒有任何異常。一格表頭 = 全系統靜默跨租戶混用。
+    //
+    //   readable === false（openById 丟例外：Drive 抖一下、權限被動過）
+    //     → 照舊退回 fallback。硬擋會讓進行中的演習在一次暫時故障裡整個停掉，
+    //       那個代價不能接受，而且這一類通常自己會好。
+    //   readable === true 但沒有任何可用列（表頭被改壞、分頁被改名、全部列無效）
+    //     → 這是「人把表改壞了」，而且帶 ?t= 的人**明確指定了一家醫院**。
+    //       看得見的停擺，遠比安靜地把分數寫到別家醫院好。
+    //
+    // 沒帶 ?t= 的連結照樣走 fallback：它本來就該拿到寫死那一組，這是已經發出去
+    // 的舊連結能繼續用的原因。
+    if (hid && reg.readable) {
+      throw newTenantError_('系統設定目前有問題，無法確認這個連結屬於哪一場演習，' +
+        '因此暫停服務以免把資料寫錯地方。請聯絡系統管理者（租戶註冊表的欄位或分頁可能被改動）。',
+        'REGISTRY_BROKEN');
+    }
     var warned = withRequested_(fallbackTenant_(), hid, exid);
     warned.registryWarning = reg.warning || (REGISTRY_SHEET_NAME + ' 目前沒有可用的資料列');
     return warned;
