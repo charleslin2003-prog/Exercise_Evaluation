@@ -136,11 +136,20 @@ expect_eq "回傳不含任何機密欄位" "乾淨" "$LEAK"
 expect_eq "未知醫院代號硬錯誤，不退回 fallback" "NO_TENANT" \
   "$(get "$BASE?action=sessions&t=definitely-not-a-hospital" | jget errorCode)"
 
+# 跨租戶隔離需要第二個租戶當對照組。它是測試裝置，不是系統的一部分 ——
+# 業主把它從註冊表刪掉是完全合理的操作（2026-10-11 就發生了）。
+# 那要回報成「沒驗到」，不是「驗失敗」：一個因為裝置不見而紅掉的測試，會讓人
+# 開始忽略整份輸出，而這份輸出裡有真正重要的紅線檢查。
 C=$(get "$BASE?action=sessions&t=$CLINIC")
-CROSS=$(printf '%s' "$C" | node -e '
-  let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);
-    console.log(JSON.stringify(s).includes("萬芳")?"看得到萬芳的場次":"只看得到自己的")})')
-expect_eq "跨醫院隔離" "只看得到自己的" "$CROSS"
+CLINIC_ERR=$(printf '%s' "$C" | jget errorCode)
+if [ "$CLINIC_ERR" = "NO_TENANT" ]; then
+  skip "跨醫院隔離" "對照租戶 $CLINIC 不在註冊表裡"
+else
+  CROSS=$(printf '%s' "$C" | node -e '
+    let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);
+      console.log(JSON.stringify(s).includes("萬芳")?"看得到萬芳的場次":"只看得到自己的")})')
+  expect_eq "跨醫院隔離" "只看得到自己的" "$CROSS"
+fi
 
 # --------------------------------------------------------------------------
 section "B. 設定分支（無金鑰，每支手機都會抓）"
@@ -193,15 +202,19 @@ fi
 # --------------------------------------------------------------------------
 section "D. 分析端點授權"
 
-if [ -n "$KEY_MAIN" ] && [ -n "$KEY_CLINIC" ]; then
-  expect_eq "分院金鑰讀不到萬芳" "UNAUTHORIZED" \
-    "$(get "$BASE?action=analysis&t=$HOSPITAL&key=$KEY_CLINIC" | jget errorCode)"
-  expect_eq "萬芳金鑰讀不到分院" "UNAUTHORIZED" \
-    "$(get "$BASE?action=analysis&t=$CLINIC&key=$KEY_MAIN" | jget errorCode)"
-  expect_eq "無金鑰讀分析被拒" "UNAUTHORIZED" \
-    "$(get "$BASE?action=analysis&t=$HOSPITAL" | jget errorCode)"
+if [ -n "$KEY_MAIN" ]; then
+  # 這一條不需要第二個租戶：沒帶金鑰一律擋。
+  expect_eq "無金鑰讀分析被拒" "UNAUTHORIZED"     "$(get "$BASE?action=analysis&t=$HOSPITAL" | jget errorCode)"
+  if [ -n "$KEY_CLINIC" ] && [ "$CLINIC_ERR" != "NO_TENANT" ]; then
+    expect_eq "分院金鑰讀不到萬芳" "UNAUTHORIZED"       "$(get "$BASE?action=analysis&t=$HOSPITAL&key=$KEY_CLINIC" | jget errorCode)"
+    # 要用別家的金鑰打一個**存在**的租戶，才是在驗授權。租戶不存在時回的是
+    # NO_TENANT，那只證明「查無此醫院」，跟金鑰擋不擋得住無關。
+    expect_eq "萬芳金鑰讀不到分院" "UNAUTHORIZED"       "$(get "$BASE?action=analysis&t=$CLINIC&key=$KEY_MAIN" | jget errorCode)"
+  else
+    skip "跨租戶金鑰隔離" "對照租戶 $CLINIC 不存在，或未設定 EVAL_KEY_CLINIC"
+  fi
 else
-  skip "跨租戶金鑰隔離" "未設定 EVAL_KEY_MAIN / EVAL_KEY_CLINIC"
+  skip "分析端點授權" "未設定 EVAL_KEY_MAIN"
 fi
 
 # --------------------------------------------------------------------------
