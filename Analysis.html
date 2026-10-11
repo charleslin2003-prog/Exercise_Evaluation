@@ -53,6 +53,39 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
    「產生報告」在資料讀取完成前的停用狀態看起來跟其他停用按鈕一致。 */
 .refreshBtn:disabled{opacity:.4;cursor:not-allowed}
 
+/* ===== 標頭：標題在研究室圖左側，KPI 併進綠色標頭 ===== */
+/* 標題原本獨立一列在圖的下方。移到圖左邊之後兩者同一個 flex 列，標題的
+   margin 必須歸零，否則它會把整列往下推、跟圖的視覺中線對不齊。 */
+.headBrand{display:flex;align-items:center;gap:18px;min-width:0}
+.headBrand .title{margin:0}
+.headLogo{height:96px;width:auto;display:block;flex:none}
+
+/* 四張 KPI 從 #overview 搬進標頭。沿用 .pill 的半透明白，而不是 .card 的
+   白底——白卡片壓在青綠漸層上會變成四個突兀的方塊。欄寬比例維持原本的
+   2:2:1:1：主題與說明是長文字，人數與總數是短數字。 */
+.headKpis{display:grid;grid-template-columns:2fr 2fr 1fr 1fr;gap:10px;margin-top:12px}
+.hkpi{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);border-radius:12px;padding:10px 13px;min-width:0}
+.hkpi .lbl{font-size:11px;font-weight:700;opacity:.85}
+.hkpi .val{font-size:22px;font-weight:800;margin-top:3px;line-height:1.3;overflow-wrap:anywhere}
+.hkpi .hint{font-size:11px;opacity:.75;margin-top:2px}
+@media(max-width:1050px){.headKpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.headKpis{grid-template-columns:1fr}.headBrand{gap:12px}.headLogo{height:60px}}
+
+/* ===== 場景說明浮層 ===== */
+/* 點雷達表格裡的場景編號會跳出這個。固定在畫面正中，不隨頁面捲動——表格
+   可能很長，若浮層跟著原地出現，捲到下半部時會開在視窗外。 */
+.sceneMask{position:fixed;inset:0;background:rgba(10,30,35,.28);z-index:60}
+.scenePop{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:61;
+  width:min(560px,92vw);max-height:70vh;overflow:auto;background:#fff;color:var(--ink);
+  border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 48px rgba(20,55,65,.26);padding:18px 20px}
+.scenePop .code{display:inline-flex;padding:4px 10px;border-radius:999px;background:var(--teal);color:#fff;font-size:13px;font-weight:800}
+.scenePop .body{margin-top:10px;font-size:14px;line-height:1.75}
+.scenePop .close{position:absolute;top:10px;right:12px;border:0;background:transparent;font-size:22px;line-height:1;color:var(--muted);cursor:pointer;padding:4px 8px}
+/* 表格裡的場景編號：看起來要像可以點的東西，但不能喧賓奪主。 */
+.sceneBtn{border:0;background:transparent;padding:0;font:inherit;font-weight:800;color:var(--teal);
+  text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
+.sceneBtn:hover{color:var(--teal2)}
+
 /* ===== 列印樣式 =====
    這個檔案原本「完全沒有任何 @media print」，所以每一條都在修一個現成的破
    口，不是美化：.panel{display:none} 會讓五個分頁只印出一個、.chartbox svg
@@ -78,7 +111,14 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
   .card{box-shadow:none!important;border:1px solid #c9d8dc}
   header{background:#fff!important;color:#18323a!important}
   header img{filter:none}
-  .grid.kpis{grid-template-columns:repeat(2,1fr)!important}
+  .headKpis{grid-template-columns:repeat(2,1fr)!important}
+  /* 標頭在列印時改成白底深字，半透明白的 KPI 卡會整個消失，要補回邊框與字色。 */
+  .hkpi{background:#fff!important;border:1px solid #c9d8dc!important}
+  .hkpi .lbl,.hkpi .hint{opacity:1!important;color:#67808a!important}
+  /* 浮層與它的遮罩絕不進紙本。 */
+  .sceneMask,.scenePop{display:none!important}
+  /* 場景編號在紙上點不了，拿掉會誤導人去點的虛線。 */
+  .sceneBtn{color:inherit!important;text-decoration:none!important}
   /* 三張雷達圖並排在 A4 寬度下字會小到看不清，列印一律改單欄。 */
   .cols2,.cols3{grid-template-columns:1fr!important}
   /* renderRadars() 是「三張圖接三張表」一次寫進 #radarGrid 的（charts+tables），
@@ -102,7 +142,10 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 </style></head><body>
 <header><div class="head">
   <div class="headTop">
-    <div class="eyebrow" style="opacity:1"><img src="assets/imdl-logo.png" alt="IMDL 智能機制設計研究室" style="height:96px;width:auto;display:block"></div>
+    <div class="headBrand">
+      <div class="title" id="orgTitle">讀取中…</div>
+      <img class="headLogo" src="assets/imdl-logo.png" alt="IMDL 智能機制設計研究室">
+    </div>
     <div class="headActions">
       <div class="viewTabs">
         <button class="viewTab active" id="viewCurrent" type="button">當次演習</button>
@@ -122,8 +165,8 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
       <div class="genAt" id="genAt"></div>
     </div>
   </div>
-  <div class="title" id="orgTitle">讀取中…</div>
   <div class="pills" id="infoPills"></div>
+  <div class="headKpis" id="kpis"></div>
 </div></header>
 <div class="wrap">
 <div id="stateArea"></div>
@@ -136,7 +179,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <div id="reportHint" class="card" data-reportonly="1" style="margin-top:16px"></div>
 <div id="reportSummary" class="card reportSection" data-reportonly="1" style="margin-top:16px"></div>
 <div class="reportHead reportChapter" data-reportonly="1">綜合結果</div>
-<section id="overview" class="panel active"><div class="grid kpis" id="kpis"></div><div class="card" style="margin-top:16px"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec" style="text-align:center">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec" style="text-align:center">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div></section>
+<section id="overview" class="panel active"><div class="card"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec" style="text-align:center">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec" style="text-align:center">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">4S 整備分析</div>
 <section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S整備表現直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（1–5）；橫條內依場景編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該場景占所有場景平均分的比重，段內文字為編號與該場景平均分。場景編號對照表見右方。4S 分析僅納入反應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div><div class="card"><div class="sec">場景編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">三項潛能分項分析</div>
@@ -379,6 +422,7 @@ function fmtExerciseDate(raw){
 function init(){
   // Chrome 的「另存為 PDF」檔名直接取 document.title，所以標題一定要動態設定，
   // 不能停在 HTML 裡那個暫時值，否則每一家醫院印出來的檔名都一樣。
+  buildSceneGoals();
   document.title = displayName() + '｜演習評核分析平台';
   document.getElementById('orgTitle').textContent = displayName() + '｜演習評核分析平台';
   // 沒有單獨的副標題列了：徽章優先顯示「演習類別」，沒填就退回顯示
@@ -400,7 +444,7 @@ function init(){
   evSel.innerHTML = '<option value="mean">全部平均</option>' + DATA.meta.evaluatorCodes.map(c=>`<option value="${esc(c)}">評核官 ${esc(c)}</option>`).join('');
 
   const totalEvaluated=DATA.analysisRows.length+DATA.coverageRows.length+(DATA.learningRows||[]).length;
-  document.getElementById('kpis').innerHTML=[['主題',esc(DATA.meta.exerciseTopic||'—'),'',''],['說明',esc(DATA.meta.exerciseDesc||'—'),'','font-size:14.5px'],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分',''],['評核總數',totalEvaluated,'所有已送出評分','']].map(x=>`<div class="card kpi"><div class="lbl">${x[0]}</div><div class="val" style="${x[3]}">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
+  document.getElementById('kpis').innerHTML=[['主題',esc(DATA.meta.exerciseTopic||'—'),'',''],['說明',esc(DATA.meta.exerciseDesc||'—'),'','font-size:13px'],['評核官人數',DATA.meta.evaluatorCodes.length,'已送出評分',''],['評核總數',totalEvaluated,'所有已送出評分','']].map(x=>`<div class="hkpi"><div class="lbl">${x[0]}</div><div class="val" style="${x[3]}">${x[1]}</div><div class="hint">${x[2]}</div></div>`).join('');
 
   renderIso3D();
   renderCoverageGauge();
@@ -437,7 +481,53 @@ function cleanIndicator(s){const m=String(s||'').match(/[(（]([^)）]*)[)）]/)
 function escRe(s){return String(s==null?'':s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 function scenePrefix(){return (DATA && DATA.meta && DATA.meta.scenePrefix) || 'SCENE'}
 function shortScene(name){return String(name||'').replace(new RegExp('^'+escRe(scenePrefix())+'\\s*','i'),'').trim()||name}
-function radarTable(rows){if(!rows.length) return ''; const sorted=[...rows].sort((a,b)=>a.mean-b.mean); return `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>場景編號</th><th>指標</th><th>具體評核題目</th><th>分數</th></tr></thead><tbody>${sorted.map(r=>`<tr><td>${esc(shortScene(r.itemName))}</td><td>${esc(cleanIndicator(r.indicator))}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;}
+// 場景編號 -> 完整測試場景文字。雷達表格只放得下編號，而編號本身不說明任何
+// 事情——讀者得翻到 4S 分析那一章的對照表才知道 A1 是什麼。這張對照在 init()
+// 時從全部資料列建一次，點擊時才查。
+// 這裡**只收真的 goal**，不像報告的對照表那樣在 goal 空白時退回演練單元原始
+// 名稱。差別是刻意的：對照表是一整欄並排的清單，退回原始名稱至少還是一列資
+// 訊；而浮層是「點了才出現」，若它只回出你剛剛點的那個編號，就是一個點了等
+// 於沒反應的連結 —— 那比不能點更糟。沒有 goal 的場景因此維持純文字。
+let SCENE_GOALS = {};
+function buildSceneGoals(){
+  SCENE_GOALS = {};
+  const all = [].concat(DATA.analysisRows||[], DATA.coverageRows||[], DATA.learningRows||[]);
+  for (const r of all){
+    const code = shortScene(r.itemName);
+    const goal = String(r.goal || '').trim();
+    if (!SCENE_GOALS[code] && goal) SCENE_GOALS[code] = goal;
+  }
+}
+
+// 表格裡那一格。沒有說明可看時就不要做成按鈕——一個點了沒反應的連結比純文字糟。
+function sceneCell(r){
+  const code = shortScene(r.itemName);
+  if (!SCENE_GOALS[code]) return esc(code);
+  return `<button type="button" class="sceneBtn" data-scene="${esc(code)}">${esc(code)}</button>`;
+}
+
+function openScenePop(code){
+  const text = SCENE_GOALS[code] || '';
+  if (!text) return;
+  document.getElementById('scenePopCode').textContent = code;
+  document.getElementById('scenePopText').textContent = text;
+  document.getElementById('sceneMask').style.display = '';
+  document.getElementById('scenePop').style.display = '';
+}
+function closeScenePop(){
+  document.getElementById('sceneMask').style.display = 'none';
+  document.getElementById('scenePop').style.display = 'none';
+}
+// 事件委派：雷達表格與覆蓋率表格都是 innerHTML 重畫的，綁在個別按鈕上會在
+// 每次 render 之後失效。綁在 document 上就不必管重畫時機。
+document.addEventListener('click', function(e){
+  const btn = e.target.closest ? e.target.closest('.sceneBtn') : null;
+  if (btn){ openScenePop(btn.getAttribute('data-scene')); return; }
+  if (e.target.id === 'sceneMask' || e.target.id === 'scenePopClose') closeScenePop();
+});
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeScenePop(); });
+
+function radarTable(rows){if(!rows.length) return ''; const sorted=[...rows].sort((a,b)=>a.mean-b.mean); return `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>場景編號</th><th>指標</th><th>具體評核題目</th><th>分數</th></tr></thead><tbody>${sorted.map(r=>`<tr><td>${sceneCell(r)}</td><td>${esc(cleanIndicator(r.indicator))}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;}
 function renderRadars(){let charts='',tables='';for(const p of ['反應','監測','預期']){let rows=DATA.analysisRows.filter(r=>r.potential===p);let arr=rows.map(r=>({label:r.indicator,value:r.mean}));charts+=`<div class="card chartbox"><div class="sec">${p}潛能</div>${svgRadar(arr,p)}</div>`;tables+=`<div class="card">${radarTable(rows)}</div>`}document.getElementById('radarGrid').innerHTML=charts+tables}
 function renderCoverage(){let rows=DATA.coverageRows;let arr=rows.map(r=>({label:r.indicator,value:r.mean}));document.getElementById('coverageRadar').innerHTML=svgRadar(arr,'覆蓋率');document.getElementById('coverageBars').innerHTML=rows.length?radarTable(rows):'<div class="small">尚無資料</div>'}
 function renderS4(){
@@ -794,4 +884,13 @@ function load(){
     });
 }
 load();
-</script></body></html>
+</script>
+<!-- 場景說明浮層。固定在畫面正中（見 .scenePop），所以表格捲到哪裡都看得到。
+     列印時整個隱藏。 -->
+<div id="sceneMask" class="sceneMask" style="display:none"></div>
+<div id="scenePop" class="scenePop" style="display:none" role="dialog" aria-modal="true">
+  <button type="button" class="close" id="scenePopClose" aria-label="關閉">×</button>
+  <div class="code" id="scenePopCode"></div>
+  <div class="body" id="scenePopText"></div>
+</div>
+</body></html>
