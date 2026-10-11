@@ -3016,7 +3016,6 @@ function sectionS4_(cursor, ctx) {
   // 各情境對各 4S 的平均。分群規則與 Analysis.html 的 renderS4 相同
   // （以 shortScene 為鍵、取該情境在該 4S 類別下全部評分的平均）。
   // 這裡刻意用「長格式」而不是矩陣：情境數一多，矩陣表會寬到印不下。
-  heading_(cursor, '各情境在各 4S 類別的平均', 2);
   var bucket = {};
   var scenarioText = {};
   var arows = ctx.payload.analysisRows || [];
@@ -3034,6 +3033,24 @@ function sectionS4_(cursor, ctx) {
     var sc = r.scores || [];
     for (var s2 = 0; s2 < sc.length; s2++) bucket[key].push(sc[s2].score);
   }
+  // 對照表排在「各情境在各 4S 類別的平均」**之前**：那張表整欄都是 A1、D2 這種
+  // 代號，先給對照表，讀者才有辦法從第一列開始讀懂。放在後面的話，他得先看完
+  // 一整張看不懂的表、再回頭對照一次。
+  // 它必須放在上面那個迴圈之後，因為 scenarioText 是在迴圈裡才填好的 ——
+  // 搬動順序時這是唯一的硬限制。
+  heading_(cursor, '情境編號對照表', 2);
+  var allCodes = [];
+  for (var code2 in scenarioText) {
+    if (Object.prototype.hasOwnProperty.call(scenarioText, code2)) allCodes.push(code2);
+  }
+  allCodes.sort(naturalCompare_);
+  var mapRows = [['情境編號', '測試情境與目標']];
+  for (var mc = 0; mc < allCodes.length; mc++) {
+    mapRows.push([allCodes[mc], txt_(scenarioText[allCodes[mc]])]);
+  }
+  table_(cursor, mapRows);
+
+  heading_(cursor, '各情境在各 4S 類別的平均', 2);
   var detail = [['4S 元素', '情境編號', '評分數', '平均']];
   for (var a = 0; a < keys.length; a++) {
     var codes = [];
@@ -3051,17 +3068,6 @@ function sectionS4_(cursor, ctx) {
   if (detail.length > 1) table_(cursor, detail);
   else para_(cursor, '沒有可分群的情境資料。');
 
-  heading_(cursor, '情境編號對照表', 2);
-  var allCodes = [];
-  for (var code2 in scenarioText) {
-    if (Object.prototype.hasOwnProperty.call(scenarioText, code2)) allCodes.push(code2);
-  }
-  allCodes.sort(naturalCompare_);
-  var mapRows = [['情境編號', '測試情境與目標']];
-  for (var mc = 0; mc < allCodes.length; mc++) {
-    mapRows.push([allCodes[mc], txt_(scenarioText[allCodes[mc]])]);
-  }
-  table_(cursor, mapRows);
 }
 
 // ===================================================================
