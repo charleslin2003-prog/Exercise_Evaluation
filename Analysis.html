@@ -402,6 +402,27 @@ function scoreOf(row, ev){
 
 // 報告與標題用的顯示名稱：優先用註冊表那一列的「顯示名稱」（同一家醫院的不同
 // 場次可以有不同標題），沒有就退回機構名稱，兩個都沒有才用通用字串。
+// 把後端回來的「回應」折成「反應」。
+//
+// 這支前端與 ConfigWithSubmit.gs 是**分開部署**的：前端推 git 就上線，後端要
+// 有人手動貼進 Apps Script 再發新版本。2026-10-12 改名時前端先上、後端還沒貼，
+// 結果「反應」那張雷達圖整張空白 —— 因為 renderRadars 用新名去篩一批還標著舊
+// 名的資料。畫面不會報錯，只是少一張圖，這種壞法最難發現。
+//
+// 在資料進來的那一刻折一次，整支檔案下游就只需要認得新名字，也不必再管後端
+// 是不是落後一個版本。後端自己也有 normPotential_，兩邊都做不會互相干擾。
+function normalisePotentials(d){
+  if (!d) return;
+  const fix = v => (String(v == null ? '' : v).trim() === '回應') ? '反應' : v;
+  for (const key of ['analysisRows','coverageRows','learningRows']){
+    for (const r of (d[key] || [])) r.potential = fix(r.potential);
+  }
+  const st = d.stats && d.stats.potentials;
+  if (st && st['回應'] && !st['反應']){ st['反應'] = st['回應']; delete st['回應']; }
+  const pb = d.stats && d.stats.potentialByS4;
+  if (pb && pb['回應'] && !pb['反應']){ pb['反應'] = pb['回應']; delete pb['回應']; }
+}
+
 function displayName(){return (DATA && DATA.meta && (DATA.meta.displayName || DATA.meta.orgName)) || '演習評核'}
 
 // 演習日期：設定表那一格若是真正的日期格式，後端序列化出來會是
@@ -875,6 +896,7 @@ function load(){
     .then(json=>{
       if (json.error) { document.getElementById('stateArea').innerHTML = `<div class="state err">讀取失敗：${esc(json.error)}</div>`; return; }
       DATA = json;
+      normalisePotentials(DATA);
       document.getElementById('stateArea').innerHTML='';
       document.getElementById('app').style.display='';
       init();
