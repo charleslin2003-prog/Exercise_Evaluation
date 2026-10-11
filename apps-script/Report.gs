@@ -2956,6 +2956,35 @@ function sectionOverall_(cursor, ctx) {
   }
 }
 
+// 情境編號對照表：把章節內出現過的每個情境代號對應到完整測試情境文字，附在
+// 章節最後。六、4S整備分析本來就有自己這段（建在它自己的情境×4S分群邏輯
+// 裡，動它有動搖已驗證輸出的風險，所以刻意不改用這個共用版）；這個版本給
+// 七、三項潛能分項分析與八、演習覆蓋率分析用——這兩章先前只印情境代號，
+// 讀者得翻到六或九才知道 A1、D2 是什麼，2026-10-11 業主實測就是卡在這裡。
+// 邏輯與 sectionS4_ 裡建 scenarioText 的方式相同：優先用 goal，沒有就用
+// itemName 原始值；一個情境代號以第一次出現的非空值為準；沒有任何情境代號
+// 時整段不輸出（不留一個空標題）。
+function scenarioMapTable_(cursor, rows, prefix) {
+  var scenarioText = {};
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var code = shortScene_(r.itemName, prefix);
+    if (!scenarioText[code]) scenarioText[code] = r.goal || r.itemName || '';
+  }
+  var codes = [];
+  for (var c in scenarioText) {
+    if (Object.prototype.hasOwnProperty.call(scenarioText, c)) codes.push(c);
+  }
+  if (!codes.length) return;
+  codes.sort(naturalCompare_);
+  heading_(cursor, '情境編號對照表', 2);
+  var mapRows = [['情境編號', '測試情境與目標']];
+  for (var m = 0; m < codes.length; m++) {
+    mapRows.push([codes[m], txt_(scenarioText[codes[m]])]);
+  }
+  table_(cursor, mapRows);
+}
+
 // ===================================================================
 // R6 六、4S 整備分析
 // ===================================================================
@@ -3081,6 +3110,7 @@ function sectionPotential_(cursor, ctx) {
     }
     table_(cursor, t, '表：' + p + '潛能指標明細（依平均升冪，最需改善的在最上方）');
   }
+  scenarioMapTable_(cursor, arows, ctx.prefix);
 }
 
 // ===================================================================
@@ -3115,6 +3145,7 @@ function sectionCoverage_(cursor, ctx) {
     ]);
   }
   table_(cursor, t, '表：覆蓋率指標明細（依平均升冪）');
+  scenarioMapTable_(cursor, rows, ctx.prefix);
   // 量規圖刻意不做：Charts 的 GAUGE 可用性不確定，而且它傳達的資訊就是上面
   // 那一個平均值，做一張圖沒有增加任何東西。
 }
