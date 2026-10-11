@@ -36,7 +36,7 @@ var RECORD_CODE_ALIASES_ = ['人員代號'];
 var RECORD_TIME_ALIASES_ = ['送出時間'];
 var RECORD_EXERCISE_ALIASES_ = ['演習名稱'];
 var RECORD_ITEM_ALIASES_ = ['項目名稱'];
-var RECORD_STAGE_ALIASES_ = ['情境階段'];
+var RECORD_STAGE_ALIASES_ = ['場景階段', '情境階段'];
 var RECORD_SCENE_ALIASES_ = ['演練單元'];
 var RECORD_INDICATOR_ALIASES_ = ['指標代號'];
 // 以下七欄全部是「新增的選填欄」：業主現在那張 6 欄表一欄都沒有，findHeaderCol_
@@ -50,7 +50,7 @@ var RECORD_TENANT_ALIASES_ = ['醫院代號', '機構代號'];
 // 注意：這個別名陣列跟設定表那邊的 GOAL_HEADER_ALIASES_（在 readItems_ 上方）刻意分開
 // 宣告、不共用變數——一邊是「設定表的來源欄」，一邊是「紀錄表的快照欄」，
 // 兩邊將來很可能被業主改成不同欄名。
-var RECORD_GOAL_ALIASES_ = ['測試情境與目標', '測試情境'];
+var RECORD_GOAL_ALIASES_ = ['測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
 var RECORD_POTENTIAL_ALIASES_ = ['評核潛能', '潛能'];
 var RECORD_S4_ALIASES_ = ['4S 元素', '4S元素', '單一 4S 元素'];
 // 「評核題目」跟 RECORD_ID_ALIASES_ 的「評核題號」只差一個字，但不會互相誤中：
@@ -978,7 +978,7 @@ function readIndicatorFull_(ss) {
     map[String(id)] = {
       question: String(values[i][textCol] || ''),
       indicator: String(values[i][indicatorCol] || ''),
-      potential: String(values[i][potentialCol] || ''),
+      potential: normPotential_(values[i][potentialCol]),
       s4: String(values[i][s4Col] || ''),
     };
   }
@@ -1074,7 +1074,7 @@ function buildAnalysis_(t) {
     bucket.byCode[code] = score;
     // 快照欄逐列覆寫：同一題同一人以較晚那列為準，標籤也跟著那一列走。
     if (snapGoalCol !== -1 && String(row[snapGoalCol] || '')) bucket.snap.goal = String(row[snapGoalCol]);
-    if (snapPotentialCol !== -1 && String(row[snapPotentialCol] || '')) bucket.snap.potential = String(row[snapPotentialCol]);
+    if (snapPotentialCol !== -1 && String(row[snapPotentialCol] || '')) bucket.snap.potential = normPotential_(row[snapPotentialCol]);
     if (snapS4Col !== -1 && String(row[snapS4Col] || '')) bucket.snap.s4 = String(row[snapS4Col]);
     if (snapIndicatorCol !== -1 && String(row[snapIndicatorCol] || '')) bucket.snap.indicator = String(row[snapIndicatorCol]);
     if (snapQuestionCol !== -1 && String(row[snapQuestionCol] || '')) bucket.snap.question = String(row[snapQuestionCol]);
@@ -1139,7 +1139,7 @@ function buildAnalysis_(t) {
     };
   });
 
-  var analysisRows = rows.filter(function (r) { return r.potential === '回應' || r.potential === '監測' || r.potential === '預期'; });
+  var analysisRows = rows.filter(function (r) { return r.potential === '反應' || r.potential === '監測' || r.potential === '預期'; });
   var coverageRows = rows.filter(function (r) { return r.potential.indexOf('覆蓋率') !== -1; });
   // 學習潛能的題目不納入三項潛能/4S 統計（跟業主參考 Demo 的排除規則一致），
   // 但排序視圖（Analysis.html 的「排序視圖」分頁）需要看到它，所以另外整組
@@ -1157,7 +1157,7 @@ function buildAnalysis_(t) {
     icc2k: icc2k_(consistencyRows),
     within1: within1_(consistencyRows),
   };
-  ['回應', '監測', '預期'].forEach(function (p) {
+  ['反應', '監測', '預期'].forEach(function (p) {
     stats.potentials[p] = summarize_(flattenScores_(analysisRows.filter(function (r) { return r.potential === p; })));
   });
   var s4Labels = {};
@@ -1170,7 +1170,7 @@ function buildAnalysis_(t) {
   // 過的 4S 類別）。某個組合如果完全沒有對應題目，summarize_([]) 會回傳
   // n:0/mean:null，前端看到 n===0 就跳過那一格不畫。
   stats.potentialByS4 = {};
-  ['回應', '監測', '預期'].forEach(function (p) {
+  ['反應', '監測', '預期'].forEach(function (p) {
     stats.potentialByS4[p] = {};
     Object.keys(s4Labels).forEach(function (label) {
       var pool = analysisRows.filter(function (r) { return r.potential === p && r.s4 === label; });
@@ -1973,20 +1973,36 @@ function readCriteria_(ss) {
 // 只認「層N」，沒有具名別名。問題ID/問題內容兩欄同理，也接受「評核題號」
 // 「評核題目」這種別名。
 // 有分組的節點回傳 { name, children }，最底層（葉節點）回傳 { name, questions }。
-var GROUP_HEADER_ALIASES_ = [['情境階段'], ['演練單元']];
+var GROUP_HEADER_ALIASES_ = [['場景階段', '情境階段'], ['演練單元']];
 var ID_HEADER_ALIASES_ = ['問題ID', '評核題號'];
 var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'];
 // 選填欄：每個葉節點（最底層分組，例如 SCENE）的簡要說明，取自這一欄的第一
 // 筆值，掛在葉節點的 goal 上，給 Start.dc.html 選擇畫面當作該情境的列表文字
 // 用（配合數字徽章顯示）。沒有這欄就是空字串，前端會退回原本只顯示編號。
 // 這是「真的選填」，所以刻意不用 safeHeaderCol_，-1 由 readItems_ 裡 goalCol !== -1 的判斷吸收。
-var GOAL_HEADER_ALIASES_ = ['測試情境與目標', '測試情境'];
+var GOAL_HEADER_ALIASES_ = ['測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
 // 找標頭列裡符合任一別名的欄位：先找「完全相等」，全部欄位都找過一輪都沒
 // 命中，才退而求其次找「開頭比對」。一定要先做完整的完全相等再做開頭比對
 // （不能同一欄位內兩種比對一起做），不然像「問題」這個別名會在完全相等版
 // 找到「問題」欄之前，就先用開頭比對誤中「問題ID」欄（因為「問題ID」也是
 // 「問題」開頭）。開頭比對是為了因應像「單一指標對應\n(RAG / 覆蓋率)」這種
 // 欄名後面接不固定補充文字或換行的情況。
+// 評核潛能的值正規化。業主 2026-10-12 決定把「回應」改名為「反應」。
+//
+// 為什麼在**讀取的那一刻**轉，而不是在十幾個比較點各加一個 || '回應'：
+// potential 這個值從兩個地方進來（對應指標的 評核潛能 欄、評核紀錄的快照欄），
+// 之後會變成 analysisRows 的過濾條件、stats 的鍵、Analysis.html 的顏色鍵、
+// 報告的章節順序。只要入口統一，下游就只看得到一個名字，不會有「這裡改了那裡
+// 沒改」的半套狀態。
+//
+// 舊名刻意**繼續收**：評核紀錄裡已經寫進去的快照列仍然是「回應」，而業主改
+// 對應指標那一欄是人工作業、不會跟程式同一秒發生。兩個名字都接受，改表前後
+// 的資料才會落在同一個桶子裡 —— 否則改名當下，舊資料會整批從三項潛能消失。
+function normPotential_(v) {
+  var s = String(v == null ? '' : v).trim();
+  return s === '回應' ? '反應' : s;
+}
+
 function findHeaderCol_(header, names) {
   for (var i = 0; i < header.length; i++) {
     var cell = String(header[i] || '');

@@ -61,7 +61,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 @media print{
   @page{size:A4 portrait;margin:14mm}
   html,body{background:#fff!important}
-  /* 不勾選 Chrome 的「背景圖形」時，等角立體圖的色塊與情境色譜會整片印成
+  /* 不勾選 Chrome 的「背景圖形」時，等角立體圖的色塊與場景色譜會整片印成
      白色；這兩行讓勾選後的顏色不被瀏覽器自行「省墨」淡化掉。 */
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .panel{display:block!important}
@@ -86,7 +86,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
      規則把它壓成單欄後，順序會變成三張圖連著三張表，表格跟對應的雷達圖隔了
      兩頁。這裡只在列印時用 grid 的 order 把它重排回「圖、表、圖、表、圖、表」，
      不動 renderRadars()，螢幕上的版面完全不變。子項固定是 6 個（迴圈永遠跑
-     回應／監測／預期三輪，每輪各產生一張圖與一張表）。 */
+     反應／監測／預期三輪，每輪各產生一張圖與一張表）。 */
   #radarGrid>:nth-child(1){order:1}
   #radarGrid>:nth-child(4){order:2}
   #radarGrid>:nth-child(2){order:3}
@@ -138,7 +138,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <div class="reportHead reportChapter" data-reportonly="1">綜合結果</div>
 <section id="overview" class="panel active"><div class="grid kpis" id="kpis"></div><div class="card" style="margin-top:16px"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec" style="text-align:center">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec" style="text-align:center">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">4S 整備分析</div>
-<section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S 平均分數直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（1–5）；橫條內依情境編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該情境占所有情境平均分的比重，段內文字為編號與該情境平均分。情境編號對照表見右方。4S 分析僅納入回應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div><div class="card"><div class="sec">情境編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
+<section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S整備表現直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（1–5）；橫條內依場景編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該場景占所有場景平均分的比重，段內文字為編號與該場景平均分。場景編號對照表見右方。4S 分析僅納入反應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div><div class="card"><div class="sec">場景編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">三項潛能分項分析</div>
 <section id="radars" class="panel"><div class="grid cols3" id="radarGrid"></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">演習覆蓋率分析</div>
@@ -149,7 +149,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <div id="reportComments" class="card reportSection" data-reportonly="1"></div>
 <div id="reportQuality" class="card reportSection" data-reportonly="1" style="margin-top:16px"></div>
 <div class="reportHead reportChapter" data-reportonly="1">評核方法與評分尺度</div>
-<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「回應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均。</li><li>評核官一致性使用 ICC(2,k)：雙向隨機效果、平均量測的一致性指標，僅取「所有題目都有評分的評核官」交集計算，範圍涵蓋三項潛能與覆蓋率題目（不含學習）；另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 ICC 相同。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或情境沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
+<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均。</li><li>評核官一致性使用 ICC(2,k)：雙向隨機效果、平均量測的一致性指標，僅取「所有題目都有評分的評核官」交集計算，範圍涵蓋三項潛能與覆蓋率題目（不含學習）；另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 ICC 相同。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
 <div id="reportAppendixC" class="card reportSection" data-reportonly="1"></div>
 <div class="foot">單一檔案 HTML｜資料即時讀取自後台試算表｜此連結請勿公開分享</div>
 </div>
@@ -201,20 +201,20 @@ for(let level=1;level<=5;level++){let p=pts(R*level/5).map(x=>x.join(',')).join(
 pts(R).forEach((p,i)=>s+=`<line x1="${cx}" y1="${cy}" x2="${p[0]}" y2="${p[1]}" stroke="#d8e4e7"/>`);
 let dp=items.map((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let rr=R*it.value/5;return [cx+rr*Math.cos(a),cy+rr*Math.sin(a)]});s+=`<polygon points="${dp.map(x=>x.join(',')).join(' ')}" fill="rgba(20,125,131,.20)" stroke="#147d83" stroke-width="2.4"/>`;
 dp.forEach(p=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.8" fill="#147d83"/>`);
-items.forEach((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let lr=R+31,x=cx+lr*Math.cos(a),y=cy+lr*Math.sin(a),anchor=Math.cos(a)>.25?'start':Math.cos(a)<-.25?'end':'middle';let label=it.label.replace(/^.*?\s*\(/,'('); if(it.label.length>15) label=it.label.replace(/^回應\d+\s*|^監測\d+\s*|^預期\d+\s*/,''); s+=`<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" fill="#48636c">${esc(label)}</text><text x="${x}" y="${y+13}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" font-weight="700" fill="#18323a">${it.value.toFixed(1)}</text>`});return s+'</svg>'}
+items.forEach((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let lr=R+31,x=cx+lr*Math.cos(a),y=cy+lr*Math.sin(a),anchor=Math.cos(a)>.25?'start':Math.cos(a)<-.25?'end':'middle';let label=it.label.replace(/^.*?\s*\(/,'('); if(it.label.length>15) label=it.label.replace(/^反應\d+\s*|^監測\d+\s*|^預期\d+\s*/,''); s+=`<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" fill="#48636c">${esc(label)}</text><text x="${x}" y="${y+13}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" font-weight="700" fill="#18323a">${it.value.toFixed(1)}</text>`});return s+'</svg>'}
 
 function barsSVG(items){if(!items.length) return '<div class="small">尚無資料</div>'; let W=560,H=330,padL=95,padR=35,padT=20,padB=45, cw=(W-padL-padR)/items.length,max=5,s=`<svg viewBox="0 0 ${W} ${H}">`;for(let v=1;v<=5;v++){let y=padT+(H-padT-padB)*(1-v/max);s+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e0eaec"/><text x="${padL-10}" y="${y+4}" text-anchor="end" font-size="10" fill="#67808a">${v}</text>`}items.forEach((it,i)=>{let x=padL+i*cw+cw*.19,bw=cw*.62,h=(H-padT-padB)*it.value/max,y=H-padB-h;s+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="6" fill="#147d83"/><text x="${x+bw/2}" y="${y-7}" text-anchor="middle" font-size="13" font-weight="800" fill="#18323a">${it.value.toFixed(2)}</text><text x="${x+bw/2}" y="${H-padB+18}" text-anchor="middle" font-size="11" fill="#48636c">${esc(it.label)}</text><text x="${x+bw/2}" y="${H-padB+32}" text-anchor="middle" font-size="9" fill="#7b9198">n=${it.n}</text>`});return s+'</svg>'}
 
 const S4_COLORS={'Space (空間)':'#147d83','Staff (人員)':'#b97816','Stuff (物資)':'#2f7d5b','System (系統)':'#274c67'};
 // 每根橫條是一個 4S 類別，橫條總長＝該類別的真實平均分（跟 4S 統計摘要同一
-// 個數字），所以固定落在 1–5 附近，不是分數加總。橫條內依情境編號堆疊分段
-// （segment.key 是情境編號、segment.pct 是該情境佔所有情境平均分總和的占
+// 個數字），所以固定落在 1–5 附近，不是分數加總。橫條內依場景編號堆疊分段
+// （segment.key 是場景編號、segment.pct 是該場景佔所有場景平均分總和的占
 // 比，segment.mean=pct*該橫條總長，也就是這段實際畫出來的寬度；顏色由呼叫
-// 端的 colorOf 決定，這裡不管配色邏輯）。段內文字顯示「編號＋該情境原始平均
+// 端的 colorOf 決定，這裡不管配色邏輯）。段內文字顯示「編號＋該場景原始平均
 // 分」（segment.raw），不是占比；寬度仍然是依占比分配，只有文字改回分數。
 function stackedHBarsSVG(rows,colorOf){if(!rows.length) return '<div class="small">尚無資料</div>'; let padL=90,padR=50,padT=16,padB=30,rowH=30,gap=10; let H=padT+rows.length*(rowH+gap)-gap+padB,W=640; let maxTotal=Math.max(1,...rows.map(r=>r.total)); let plotW=W-padL-padR,ticks=5,s=`<svg viewBox="0 0 ${W} ${H}">`;for(let t=0;t<=ticks;t++){let v=maxTotal*t/ticks,x=padL+plotW*t/ticks;s+=`<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${H-padB}" stroke="#e0eaec"/><text x="${x.toFixed(1)}" y="${H-padB+16}" text-anchor="middle" font-size="9" fill="#67808a">${v.toFixed(1)}</text>`}rows.forEach((r,i)=>{let y=padT+i*(rowH+gap),xCursor=padL;r.segments.forEach(seg=>{let w=plotW*seg.mean/maxTotal;s+=`<rect x="${xCursor.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${rowH}" fill="${colorOf(seg.key)}" stroke="#fff" stroke-width="1"/>`;if(w>26) s+=`<text x="${(xCursor+w/2).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fff">${esc(seg.key)} ${seg.raw.toFixed(1)}</text>`;xCursor+=w});s+=`<text x="${(padL-8).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#48636c">${esc(r.label)}</text><text x="${(xCursor+6).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="start" font-size="11" font-weight="800" fill="#18323a">${r.total.toFixed(1)}</text>`});return s+'</svg>'}
 
-const POTENTIAL_COLORS = { '回應': '#147d83', '監測': '#274c67', '預期': '#2f7d5b' };
+const POTENTIAL_COLORS = { '反應': '#147d83', '監測': '#274c67', '預期': '#2f7d5b' };
 const S4_PREFERRED_ORDER = ['Space (空間)', 'Staff (人員)', 'Stuff (物資)', 'System (系統)'];
 
 function mixHex(hex,target,t){const h=hex.replace('#',''),th=target.replace('#','');const r1=parseInt(h.substr(0,2),16),g1=parseInt(h.substr(2,2),16),b1=parseInt(h.substr(4,2),16);const r2=parseInt(th.substr(0,2),16),g2=parseInt(th.substr(2,2),16),b2=parseInt(th.substr(4,2),16);const r=Math.round(r1+(r2-r1)*t),g=Math.round(g1+(g2-g1)*t),b=Math.round(b1+(b2-b1)*t);return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('')}
@@ -234,7 +234,7 @@ function estTextW(str, size) {
 // j 變化）標 4S，兩條線在圖形最前方（螢幕最下方）的頂點交會。每個潛能
 // （每一列）裡分數最低的那一格改用較淡色調＋紅框凸顯，不用 ▼ 符號。
 function svgIso3D(byPS, s4Keys) {
-  const potentials = ['回應', '監測', '預期'];
+  const potentials = ['反應', '監測', '預期'];
   const cats = potentials.map(p => ({ label: p, color: POTENTIAL_COLORS[p] || '#147d83' }));
   const nCat = cats.length, nGroup = s4Keys.length;
   if (!nGroup) return '<div class="small">尚無資料</div>';
@@ -340,7 +340,7 @@ function renderIso3D() {
     return a.localeCompare(b);
   });
   document.getElementById('iso3dChart').innerHTML = svgIso3D(byPS, s4Keys);
-  document.getElementById('iso3dLegend').innerHTML = ['回應', '監測', '預期']
+  document.getElementById('iso3dLegend').innerHTML = ['反應', '監測', '預期']
     .map((p) => `<span class="small"><span class="dot" style="background:${POTENTIAL_COLORS[p]}"></span>${p}</span>`).join('');
 }
 
@@ -426,23 +426,23 @@ function init(){
   reportBtn.title = '';
   if (WANT_REPORT) enterReport();
 }
-// 指標欄位是「回應1 (職責與自我組織)」這種「代號 + 括號說明」格式，表格裡只
+// 指標欄位是「反應1 (職責與自我組織)」這種「代號 + 括號說明」格式，表格裡只
 // 顯示括號內的說明文字；沒有括號就整串照用。
 function cleanIndicator(s){const m=String(s||'').match(/[(（]([^)）]*)[)）]/);return m?m[1]:s;}
-// 情境編號徽章的前綴不再寫死 'SCENE'：改由後端 meta.scenePrefix 給（註冊表的
+// 場景編號徽章的前綴不再寫死 'SCENE'：改由後端 meta.scenePrefix 給（註冊表的
 // scenePrefix 欄，空白時後端回傳 'SCENE'），讓不用 SCENE 命名葉節點的醫院也能
-// 有自己的編號方案。4S 堆疊編號、情境編號對照表、radarTable 三處共用這一個
+// 有自己的編號方案。4S 堆疊編號、場景編號對照表、radarTable 三處共用這一個
 // 函式，所以只要改這裡就全部跟著改。舊部署沒有這個欄位時退回 'SCENE'，比對
 // 結果與改動前完全一致。
 function escRe(s){return String(s==null?'':s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 function scenePrefix(){return (DATA && DATA.meta && DATA.meta.scenePrefix) || 'SCENE'}
 function shortScene(name){return String(name||'').replace(new RegExp('^'+escRe(scenePrefix())+'\\s*','i'),'').trim()||name}
-function radarTable(rows){if(!rows.length) return ''; const sorted=[...rows].sort((a,b)=>a.mean-b.mean); return `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>情境編號</th><th>指標</th><th>具體評核題目</th><th>分數</th></tr></thead><tbody>${sorted.map(r=>`<tr><td>${esc(shortScene(r.itemName))}</td><td>${esc(cleanIndicator(r.indicator))}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;}
-function renderRadars(){let charts='',tables='';for(const p of ['回應','監測','預期']){let rows=DATA.analysisRows.filter(r=>r.potential===p);let arr=rows.map(r=>({label:r.indicator,value:r.mean}));charts+=`<div class="card chartbox"><div class="sec">${p}潛能</div>${svgRadar(arr,p)}</div>`;tables+=`<div class="card">${radarTable(rows)}</div>`}document.getElementById('radarGrid').innerHTML=charts+tables}
+function radarTable(rows){if(!rows.length) return ''; const sorted=[...rows].sort((a,b)=>a.mean-b.mean); return `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>場景編號</th><th>指標</th><th>具體評核題目</th><th>分數</th></tr></thead><tbody>${sorted.map(r=>`<tr><td>${esc(shortScene(r.itemName))}</td><td>${esc(cleanIndicator(r.indicator))}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;}
+function renderRadars(){let charts='',tables='';for(const p of ['反應','監測','預期']){let rows=DATA.analysisRows.filter(r=>r.potential===p);let arr=rows.map(r=>({label:r.indicator,value:r.mean}));charts+=`<div class="card chartbox"><div class="sec">${p}潛能</div>${svgRadar(arr,p)}</div>`;tables+=`<div class="card">${radarTable(rows)}</div>`}document.getElementById('radarGrid').innerHTML=charts+tables}
 function renderCoverage(){let rows=DATA.coverageRows;let arr=rows.map(r=>({label:r.indicator,value:r.mean}));document.getElementById('coverageRadar').innerHTML=svgRadar(arr,'覆蓋率');document.getElementById('coverageBars').innerHTML=rows.length?radarTable(rows):'<div class="small">尚無資料</div>'}
 function renderS4(){
   const s4Keys=Object.keys(DATA.stats.s4).sort((a,b)=>{const ia=S4_PREFERRED_ORDER.indexOf(a),ib=S4_PREFERRED_ORDER.indexOf(b);if(ia!==-1&&ib!==-1) return ia-ib;if(ia!==-1) return -1;if(ib!==-1) return 1;return a.localeCompare(b)});
-  // 情境編號 -> 完整測試情境文字（優先用 goal，沒有就用演練單元原始名稱），
+  // 場景編號 -> 完整測試場景文字（優先用 goal，沒有就用演練單元原始名稱），
   // 給下面的對照表用；編號本身依自然排序（A1 < A2 < B < ... < D1 < D2 <
   // D3 < E < F），堆疊順序、色譜順序都依這個排序走。
   const scenarioText={};
@@ -457,30 +457,30 @@ function renderS4(){
     DATA.analysisRows.filter(r=>r.s4===s4).forEach(r=>{const code=shortScene(r.itemName);(bucket[code]=bucket[code]||[]).push(...r.scores.map(s=>s.score))});
     const sceneMeans=scenarioCodes.filter(c=>bucket[c]).map(c=>{const arr=bucket[c];return{key:c,mean:arr.reduce((a,v)=>a+v,0)/arr.length}});
     // 橫條總長＝該 4S 類別的真實平均分（跟 4S 統計摘要同一個數字，
-    // DATA.stats.s4 已經用該類別所有評分算好），不是情境分數加總；橫條內
-    // 每個情境色塊的寬度則依「該情境平均分 / 所有情境平均分加總」的占比去
-    // 分這段平均分的寬度，而不是情境自己的原始分數——這樣橫條長度才有固定
-    // 的 1–5 意義，色塊寬度則呈現「這個情境佔了多少比重」。
+    // DATA.stats.s4 已經用該類別所有評分算好），不是場景分數加總；橫條內
+    // 每個場景色塊的寬度則依「該場景平均分 / 所有場景平均分加總」的占比去
+    // 分這段平均分的寬度，而不是場景自己的原始分數——這樣橫條長度才有固定
+    // 的 1–5 意義，色塊寬度則呈現「這個場景佔了多少比重」。
     const avg=(DATA.stats.s4[s4]||{}).mean||0;
     const sumMeans=sceneMeans.reduce((a,sg)=>a+sg.mean,0);
     const segments=sceneMeans.map(sg=>{const pct=sumMeans?sg.mean/sumMeans:0;return{key:sg.key,pct,raw:sg.mean,mean:pct*avg}});
     return{label:s4,segments,total:avg};
   }).sort((a,b)=>b.total-a.total);
   document.getElementById('s4BarsChart').innerHTML=stackedHBarsSVG(rows,colorOf);
-  document.getElementById('s4ScenarioTable').innerHTML=`<thead><tr><th></th><th>情境編號</th><th>測試情境</th></tr></thead><tbody>${scenarioCodes.map(c=>`<tr><td><span class="dot" style="background:${colorOf(c)}"></span></td><td>${esc(c)}</td><td>${esc(scenarioText[c])}</td></tr>`).join('')}</tbody>`;
+  document.getElementById('s4ScenarioTable').innerHTML=`<thead><tr><th></th><th>場景編號</th><th>測試場景</th></tr></thead><tbody>${scenarioCodes.map(c=>`<tr><td><span class="dot" style="background:${colorOf(c)}"></span></td><td>${esc(c)}</td><td>${esc(scenarioText[c])}</td></tr>`).join('')}</tbody>`;
 }
 function renderRanking(){
   const learning = DATA.learningRows || [];
-  const order = ['回應','監測','預期','學習'];
+  const order = ['反應','監測','預期','學習'];
   const byPotential = order.flatMap(p => {
     const pool = p === '學習' ? learning : DATA.analysisRows.filter(r => r.potential === p);
     return [...pool].sort((a,b) => a.mean - b.mean).map((r, i) => ({ r, showLabel: i === 0 ? p : '' }));
   });
-  document.getElementById('byPotentialTable').innerHTML = '<thead><tr><th>潛能</th><th>情境</th><th>項目</th><th>指標</th><th>題目</th><th>平均</th><th>SD</th></tr></thead><tbody>' +
+  document.getElementById('byPotentialTable').innerHTML = '<thead><tr><th>潛能</th><th>場景</th><th>項目</th><th>指標</th><th>題目</th><th>平均</th><th>SD</th></tr></thead><tbody>' +
     byPotential.map(({r, showLabel}) => `<tr><td>${esc(showLabel)}</td><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.indicator)}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(2)}</td><td>${r.sd.toFixed(2)}</td></tr>`).join('') + '</tbody>';
 
   const ranked = [...DATA.analysisRows, ...DATA.coverageRows, ...learning].sort((a,b) => b.mean - a.mean);
-  document.getElementById('rankTable').innerHTML = '<thead><tr><th>排序</th><th>潛能</th><th>情境</th><th>項目</th><th>題目</th><th>平均</th><th>SD</th></tr></thead><tbody>' +
+  document.getElementById('rankTable').innerHTML = '<thead><tr><th>排序</th><th>潛能</th><th>場景</th><th>項目</th><th>題目</th><th>平均</th><th>SD</th></tr></thead><tbody>' +
     ranked.map((r,i) => `<tr><td>${i+1}</td><td>${esc(r.potential)}</td><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(2)}</td><td>${r.sd.toFixed(2)}</td></tr>`).join('') + '</tbody>';
 }
 function renderDetail(){let icc=DATA.stats.icc2k;document.getElementById('iccBadge').textContent=icc==null?'ICC(2,k)：資料不足':`ICC(2,k) = ${icc.toFixed(2)}`;let scope=document.getElementById('scope').value,ev=document.getElementById('evaluator').value;let arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];document.getElementById('detailTable').innerHTML=`<thead><tr><th>階段</th><th>項目</th><th>潛能</th><th>4S</th><th>指標</th><th>${ev==='mean'?'平均分':'評分'}</th><th>各評核官分數</th><th>評核題目</th></tr></thead><tbody>${arr.map(r=>{let v=scoreOf(r,ev);return `<tr><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.potential)}</td><td>${esc(r.s4)}</td><td>${esc(r.indicator)}</td><td class="score ${cls(v)}">${v==null?'—':Number(v).toFixed(ev==='mean'?2:0)}</td><td>${r.scores.map(s=>`${esc(s.code)}:${s.score}`).join(' / ')}</td><td>${esc(r.question)}</td></tr>`}).join('')}</tbody>`}
@@ -549,7 +549,7 @@ function renderReportHint(){
   document.getElementById('reportHint').innerHTML=
     `<div class="sec">列印設定提示</div>`+
     `<ul class="hintList">`+
-      `<li>列印對話框請展開「更多設定」並勾選 <b>「背景圖形」（Background graphics）</b>；沒勾的話等角立體柱狀圖與情境色譜會整片印成白色方塊。</li>`+
+      `<li>列印對話框請展開「更多設定」並勾選 <b>「背景圖形」（Background graphics）</b>；沒勾的話等角立體柱狀圖與場景色譜會整片印成白色方塊。</li>`+
       `<li>版面請選 <b>A4、縱向、邊界「預設」、縮放 100%</b>。</li>`+
       `<li><b>頁碼的取捨：</b>Chrome 不支援 CSS 分頁邊界，本頁無法自己印出頁碼；唯一的頁碼來源是列印對話框的「頁首及頁尾」，但那個頁尾<b>同時會印出本頁網址</b>，等於把存取金鑰印在紙上。因此按下「產生報告」時已把網址列的查詢參數（含金鑰）清掉，頁尾只會印出不含金鑰的網址。<b>代價：此後用瀏覽器重新載入（F5／重新整理圖示）會失去金鑰，必須重新取得帶金鑰的連結</b>；頁面上的「重新整理」按鈕不受影響，它用的是已經讀進記憶體的金鑰。</li>`+
       `<li>本頁產出的是<b>院內檢視用列印版</b>：沒有頁碼、沒有目錄、沒有文件編號自動編排，<b>不是可歸檔的醫院品質記錄</b>。正式交付版需另走「設定試算表選單 → 範本 Google 文件 → PDF」的路線。</li>`+
@@ -583,7 +583,7 @@ function renderReportSummary(){
   const st=DATA.stats||{},pot=st.potentials||{};
   const cells=[
     ['總平均',fmt((st.overall||{}).mean)],
-    ['回應',fmt((pot['回應']||{}).mean)],
+    ['反應',fmt((pot['反應']||{}).mean)],
     ['監測',fmt((pot['監測']||{}).mean)],
     ['預期',fmt((pot['預期']||{}).mean)],
     ['演習覆蓋率',fmt((st.coverage||{}).mean)],
@@ -654,7 +654,7 @@ function renderReportQuality(){
   s+=!miss
     ? `<div class="small">目前的後端部署版本沒有回傳缺漏清單，本節無法判斷是否有題目完全沒人評分。</div>`
     : miss.length
-    ? `<div class="table-wrap"><table><thead><tr><th>問題ID</th><th>階段</th><th>項目</th><th>測試情境</th></tr></thead><tbody>${miss.map(q=>`<tr><td>${esc(q.questionId)}</td><td>${esc(q.stage)}</td><td>${esc(q.itemName)}</td><td>${esc(q.goal)}</td></tr>`).join('')}</tbody></table></div>`
+    ? `<div class="table-wrap"><table><thead><tr><th>問題ID</th><th>階段</th><th>項目</th><th>測試場景</th></tr></thead><tbody>${miss.map(q=>`<tr><td>${esc(q.questionId)}</td><td>${esc(q.stage)}</td><td>${esc(q.itemName)}</td><td>${esc(q.goal)}</td></tr>`).join('')}</tbody></table></div>`
     : `<div class="small">題庫中的每一題都至少有一位評核官評分。</div>`;
   if(byEv.length){
     s+=`<div class="sec" style="margin-top:18px">評核官寬嚴傾向</div>`;
@@ -664,11 +664,11 @@ function renderReportQuality(){
       `<div class="small" style="margin-top:6px">差值為正＝該評核官整體打得比同題其他人寬鬆；為負＝較嚴。這是一致性的輔助資訊，不是個人考核指標。</div>`;
   }
   if(un){
-    s+=`<div class="note" style="margin-top:16px">1 分的定義是「劇本未走到此條件，該關係或情境沒有被測試」，但它和 2–5 分一起平均。本次共 ${esc(String(un.n))} 個評分為 1 分（共 ${esc(String(un.total))} 個評分，占 ${esc(pctText(un.rate))}）；解讀平均分時請一併看這個比率，否則「平均 3.0」可能是表現普通，也可能是有一半評核官根本沒看到。</div>`;
+    s+=`<div class="note" style="margin-top:16px">1 分的定義是「劇本未走到此條件，該關係或場景沒有被測試」，但它和 2–5 分一起平均。本次共 ${esc(String(un.n))} 個評分為 1 分（共 ${esc(String(un.total))} 個評分，占 ${esc(pctText(un.rate))}）；解讀平均分時請一併看這個比率，否則「平均 3.0」可能是表現普通，也可能是有一半評核官根本沒看到。</div>`;
   }
   s+=`<div class="note" style="margin-top:12px">`+
     (ls
-      ? `本報告的標籤（測試情境／潛能／4S／指標／題目）來源：送出當時快照 ${esc(String(ls.snapshot||0))} 題、讀取時對照設定表 ${esc(String(ls.join||0))} 題、無來源 ${esc(String(ls.none||0))} 題。`
+      ? `本報告的標籤（測試場景／潛能／4S／指標／題目）來源：送出當時快照 ${esc(String(ls.snapshot||0))} 題、讀取時對照設定表 ${esc(String(ls.join||0))} 題、無來源 ${esc(String(ls.none||0))} 題。`
       : `本報告的標籤來源資訊由後端提供，目前的部署版本沒有回傳這項資訊。`)+
     `「讀取時對照」的題目，其標籤會隨設定試算表被編輯而改變——若日後為下一場演習修改題庫，這份已發出報告的標籤可能與當時不一致。建議從演習開始到該場報告歸檔之間不要編輯設定試算表。</div>`;
   document.getElementById('reportQuality').innerHTML=s;

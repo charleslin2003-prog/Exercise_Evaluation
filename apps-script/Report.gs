@@ -55,7 +55,7 @@ var TOTAL_BUDGET_MS_ = 1500000;
 var RUN_STALE_MS_ = 900000;
 
 // payload 跨步驟傳遞：CacheService 單值約 100KB 上限，所以切塊存。
-// ⚠️ 那個上限是**位元組**，而 payload 幾乎全是中文（題目、情境目標、指標、
+// ⚠️ 那個上限是**位元組**，而 payload 幾乎全是中文（題目、場景目標、指標、
 // 觀察紀錄），UTF-8 一個中文字 3 個位元組。用 80000 字元切塊會切出 240KB 的
 // 塊、每一塊都 put 失敗，快取路線整條變成死碼，於是每個步驟都重新 fetch 一次
 // —— 中間只要有評核官送出新分數，指紋就對不上、整輪中止。
@@ -68,7 +68,7 @@ var CACHE_TTL_ = 21600;
 // 受害者（與後端 textColIndexes 處理的是同一個危害，plan §7.2）。
 var SNAPSHOT_COLUMNS_ = [
   '報告編號', '產生時間', '報告狀態', '機構代號', '演習代號', '分組', '問題ID',
-  '階段', '項目名稱', '情境編號', '測試情境與目標', '指標', '評核潛能',
+  '階段', '項目名稱', '場景編號', '測試場景與目標', '指標', '評核潛能',
   '4S 元素', '評核題目', '評核人數', '平均', '標準差', '未觸發數', '標籤來源'
 ];
 
@@ -104,7 +104,11 @@ var SECTIONS_ = [
   { id: 'S4', token: '{{SEC_4S}}', title: '六、4S 整備分析', required: false },
   { id: 'POTENTIAL', token: '{{SEC_潛能}}', title: '七、三項潛能分項分析', required: false },
   { id: 'COVERAGE', token: '{{SEC_覆蓋率}}', title: '八、演習覆蓋率分析', required: false },
-  { id: 'SCENE', token: '{{SEC_情境}}', title: '九、情境逐項分析', required: false },
+  // ⚠️ 錨點刻意維持 {{SEC_情境}} —— 2026-10-12 把顯示用語從「情境」改成「場景」時
+  //    沒有一起改它，因為錨點要跟**業主範本文件裡實際打的字**逐字相符。改了這裡
+  //    而沒改範本，scanAnchors_ 找不到它，第九章會整章消失、只在附錄D 留一行。
+  //    真要改成 {{SEC_場景}}，必須同一天連範本一起改，兩邊不能分開。
+  { id: 'SCENE', token: '{{SEC_情境}}', title: '九、場景逐項分析', required: false },
   { id: 'LEARNING', token: '{{SEC_學習}}', title: '十、學習潛能觀察', required: false },
   { id: 'RANKING', token: '{{SEC_排序}}', title: '十一、強弱項排序', required: false },
   { id: 'COMMENTS', token: '{{SEC_觀察紀錄}}', title: '十二、觀察紀錄彙整', required: false },
@@ -135,7 +139,7 @@ var IMAGE_WIDTH_PT_ = 440;
 var TABLE_ROW_CAP_ = 300;
 
 var S4_PREFERRED_ORDER_ = ['Space (空間)', 'Staff (人員)', 'Stuff (物資)', 'System (系統)'];
-var POTENTIALS_ = ['回應', '監測', '預期'];
+var POTENTIALS_ = ['反應', '監測', '預期'];
 
 // ===================================================================
 // 選單
@@ -429,7 +433,7 @@ function escapeRegExp_(s) {
 }
 
 // 與 Analysis.html 的 shortScene() 同一條規則。兩套規則會讓同一場演習的螢幕
-// 畫面與紙本報告對不起來（「情境 D2」在兩份文件上指到不同的東西）。
+// 畫面與紙本報告對不起來（「場景 D2」在兩份文件上指到不同的東西）。
 function shortScene_(name, prefix) {
   var p = prefix || 'SCENE';
   var raw = String(name == null ? '' : name);
@@ -731,7 +735,7 @@ function addSkipped_(st, title, reason) {
 
 // 鎖只擋「同一帳號的並行執行」，擋不住「業主關掉對話框再重開」。真正的防連點
 // 是執行狀態檢查，以及「每一輪都複製出一份全新 Doc」這條不變式（見 startReport_）。
-// getDocumentLock() 在容器綁定情境下比較貼切，但 getScriptLock() 一定存在。
+// getDocumentLock() 在容器綁定場景下比較貼切，但 getScriptLock() 一定存在。
 function acquireLock_() {
   var lock = null;
   try {
@@ -782,7 +786,7 @@ function fetchAnalysis_(cfg) {
   var text = '';
   try { text = res.getContentText(); } catch (err3) { text = ''; }
   if (code !== 200) {
-    throw new Error('後端分析服務回應 HTTP ' + code + '。\n' +
+    throw new Error('後端分析服務反應 HTTP ' + code + '。\n' +
       '若是 401／403，請檢查 Web App 的「部署設定 → 誰可以存取」是否為「任何人」；' +
       '若是 404，請檢查 ' + PROP_API_URL_ + ' 是否指向仍然存在的部署。');
   }
@@ -1411,8 +1415,8 @@ function snapshotRowsFor_(payload, runId, generatedAtText) {
         '問題ID': String(r.questionId || ''),
         '階段': String(r.stage || ''),
         '項目名稱': String(r.itemName || ''),
-        '情境編號': shortScene_(r.itemName, prefix),
-        '測試情境與目標': String(r.goal || ''),
+        '場景編號': shortScene_(r.itemName, prefix),
+        '測試場景與目標': String(r.goal || ''),
         '指標': String(r.indicator || ''),
         '評核潛能': String(r.potential || ''),
         '4S 元素': String(r.s4 || ''),
@@ -2798,7 +2802,7 @@ function sectionMethod_(cursor, ctx) {
 
   heading_(cursor, '統計方法', 2);
   bullet_(cursor, '資料來源：評核官透過評核單實際送出的分數。同一題、同一位評核官若送出多次，以最後一次送出為準（重送視為更正）。');
-  bullet_(cursor, '三項潛能分析只納入「回應、監測、預期」三類題目；「學習」類題目排除在統計之外，另列於學習潛能觀察一章。');
+  bullet_(cursor, '三項潛能分析只納入「反應、監測、預期」三類題目；「學習」類題目排除在統計之外，另列於學習潛能觀察一章。');
   bullet_(cursor, '各指標分數為所有評核官對該題評分的算術平均；4S 類別平均為該類別內所有題目 × 所有評核官評分的平均。');
   bullet_(cursor, 'ICC(2,k)：Shrout–Fleiss 雙向隨機效果、平均量測的一致性指標。只取「所有題目都有評分的評核官」交集計算，交集不足 2 人或題目不足 2 題時無法計算。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。');
   bullet_(cursor, '「相差不超過 1 分」比例：逐題取該題所有已評分的評核官兩兩配對，計算分數差 ≤ 1 的配對占全部配對的比例。不要求各題的評核官一致，範圍與 ICC 相同。');
@@ -2821,7 +2825,7 @@ function sectionQuality_(cursor, ctx) {
   if (!miss.length) {
     para_(cursor, '「項目與問題」工作表裡的每一題都至少收到一位評核官的評分。');
   } else {
-    var rows = [['題號', '階段', '項目名稱', '測試情境與目標']];
+    var rows = [['題號', '階段', '項目名稱', '測試場景與目標']];
     for (var i = 0; i < miss.length; i++) {
       rows.push([txt_(miss[i].questionId), txt_(miss[i].stage), txt_(miss[i].itemName), txt_(miss[i].goal)]);
     }
@@ -2854,7 +2858,7 @@ function sectionQuality_(cursor, ctx) {
   var ls = m.labelSourceSummary || {};
   para_(cursor, '送出當時就寫死標籤（快照）' + (ls.snapshot || 0) + ' 題；讀取時對照設定表（join）' +
     (ls.join || 0) + ' 題；兩者皆無 ' + (ls.none || 0) + ' 題。' +
-    '「join」的題目，其階段／情境／指標／潛能／4S 標籤反映的是設定試算表「現在」的內容；' +
+    '「join」的題目，其階段／場景／指標／潛能／4S 標籤反映的是設定試算表「現在」的內容；' +
     '若設定表在本次演習之後被修改過，這些標籤會跟著改變。自本份報告起，' +
     '「' + SNAPSHOT_SHEET_NAME_ + '」工作表已把本次的標籤與數字凍結留存。');
 
@@ -2869,7 +2873,7 @@ function sectionQuality_(cursor, ctx) {
   }
 
   heading_(cursor, '本報告無法提供的品質資訊', 2);
-  bullet_(cursor, '應評配置表（哪一位評核官應該評哪些情境）：系統沒有這份資料，因此「每個情境是否都有足夠人數評核」無法計算，評核官人數只是「實際出現過的代號聯集」。');
+  bullet_(cursor, '應評配置表（哪一位評核官應該評哪些場景）：系統沒有這份資料，因此「每個場景是否都有足夠人數評核」無法計算，評核官人數只是「實際出現過的代號聯集」。');
   bullet_(cursor, '紀錄表有、設定表沒有的題號清單：目前沒有任何端點計算這個方向的差集，無法逐筆列出。');
   bullet_(cursor, '合格門檻／目標值：系統沒有門檻欄位，所有數值皆為描述性統計，不代表達標或未達標。');
 }
@@ -2956,13 +2960,13 @@ function sectionOverall_(cursor, ctx) {
   }
 }
 
-// 情境編號對照表：把章節內出現過的每個情境代號對應到完整測試情境文字，附在
-// 章節最後。六、4S整備分析本來就有自己這段（建在它自己的情境×4S分群邏輯
+// 場景編號對照表：把章節內出現過的每個場景代號對應到完整測試場景文字，附在
+// 章節最後。六、4S整備分析本來就有自己這段（建在它自己的場景×4S分群邏輯
 // 裡，動它有動搖已驗證輸出的風險，所以刻意不改用這個共用版）；這個版本給
-// 七、三項潛能分項分析與八、演習覆蓋率分析用——這兩章先前只印情境代號，
+// 七、三項潛能分項分析與八、演習覆蓋率分析用——這兩章先前只印場景代號，
 // 讀者得翻到六或九才知道 A1、D2 是什麼，2026-10-11 業主實測就是卡在這裡。
 // 邏輯與 sectionS4_ 裡建 scenarioText 的方式相同：優先用 goal，沒有就用
-// itemName 原始值；一個情境代號以第一次出現的非空值為準；沒有任何情境代號
+// itemName 原始值；一個場景代號以第一次出現的非空值為準；沒有任何場景代號
 // 時整段不輸出（不留一個空標題）。
 function scenarioMapTable_(cursor, rows, prefix) {
   var scenarioText = {};
@@ -2977,8 +2981,8 @@ function scenarioMapTable_(cursor, rows, prefix) {
   }
   if (!codes.length) return;
   codes.sort(naturalCompare_);
-  heading_(cursor, '情境編號對照表', 2);
-  var mapRows = [['情境編號', '測試情境與目標']];
+  heading_(cursor, '場景編號對照表', 2);
+  var mapRows = [['場景編號', '測試場景與目標']];
   for (var m = 0; m < codes.length; m++) {
     mapRows.push([codes[m], txt_(scenarioText[codes[m]])]);
   }
@@ -3013,17 +3017,17 @@ function sectionS4_(cursor, ctx) {
   }
   table_(cursor, t);
 
-  // 各情境對各 4S 的平均。分群規則與 Analysis.html 的 renderS4 相同
-  // （以 shortScene 為鍵、取該情境在該 4S 類別下全部評分的平均）。
-  // 這裡刻意用「長格式」而不是矩陣：情境數一多，矩陣表會寬到印不下。
+  // 各場景對各 4S 的平均。分群規則與 Analysis.html 的 renderS4 相同
+  // （以 shortScene 為鍵、取該場景在該 4S 類別下全部評分的平均）。
+  // 這裡刻意用「長格式」而不是矩陣：場景數一多，矩陣表會寬到印不下。
   var bucket = {};
   var scenarioText = {};
   var arows = ctx.payload.analysisRows || [];
   for (var k = 0; k < arows.length; k++) {
     var r = arows[k];
     // 對照表要建在 4S 過濾**之前**：Analysis.html 的 renderS4 就是用全部
-    // analysisRows 建它的，而一個情境的題目若 4S 元素欄留空，它仍然是一個
-    // 存在的情境。兩邊規則不一致會讓讀者在儀表板上看到一個情境、在歸檔報告的
+    // analysisRows 建它的，而一個場景的題目若 4S 元素欄留空，它仍然是一個
+    // 存在的場景。兩邊規則不一致會讓讀者在儀表板上看到一個場景、在歸檔報告的
     // 對照表裡卻找不到，無從判斷哪一份才對。
     var code = shortScene_(r.itemName, ctx.prefix);
     if (!scenarioText[code]) scenarioText[code] = r.goal || r.itemName || '';
@@ -3033,25 +3037,25 @@ function sectionS4_(cursor, ctx) {
     var sc = r.scores || [];
     for (var s2 = 0; s2 < sc.length; s2++) bucket[key].push(sc[s2].score);
   }
-  // 對照表排在「各情境在各 4S 類別的平均」**之前**：那張表整欄都是 A1、D2 這種
+  // 對照表排在「各場景在各 4S 類別的平均」**之前**：那張表整欄都是 A1、D2 這種
   // 代號，先給對照表，讀者才有辦法從第一列開始讀懂。放在後面的話，他得先看完
   // 一整張看不懂的表、再回頭對照一次。
   // 它必須放在上面那個迴圈之後，因為 scenarioText 是在迴圈裡才填好的 ——
   // 搬動順序時這是唯一的硬限制。
-  heading_(cursor, '情境編號對照表', 2);
+  heading_(cursor, '場景編號對照表', 2);
   var allCodes = [];
   for (var code2 in scenarioText) {
     if (Object.prototype.hasOwnProperty.call(scenarioText, code2)) allCodes.push(code2);
   }
   allCodes.sort(naturalCompare_);
-  var mapRows = [['情境編號', '測試情境與目標']];
+  var mapRows = [['場景編號', '測試場景與目標']];
   for (var mc = 0; mc < allCodes.length; mc++) {
     mapRows.push([allCodes[mc], txt_(scenarioText[allCodes[mc]])]);
   }
   table_(cursor, mapRows);
 
-  heading_(cursor, '各情境在各 4S 類別的平均', 2);
-  var detail = [['4S 元素', '情境編號', '評分數', '平均']];
+  heading_(cursor, '各場景在各 4S 類別的平均', 2);
+  var detail = [['4S 元素', '場景編號', '評分數', '平均']];
   for (var a = 0; a < keys.length; a++) {
     var codes = [];
     for (var bk in bucket) {
@@ -3066,7 +3070,7 @@ function sectionS4_(cursor, ctx) {
     }
   }
   if (detail.length > 1) table_(cursor, detail);
-  else para_(cursor, '沒有可分群的情境資料。');
+  else para_(cursor, '沒有可分群的場景資料。');
 
 }
 
@@ -3103,7 +3107,7 @@ function sectionPotential_(cursor, ctx) {
       type: 'RADAR', headers: ['指標', '平均分'], rows: chartRows
     });
     figureNo++;
-    var t = [['情境編號', '指標', '評核題目', '平均', '標準差']];
+    var t = [['場景編號', '指標', '評核題目', '平均', '標準差']];
     var sorted = sortByMeanAsc_(rows);
     for (var s = 0; s < sorted.length; s++) {
       t.push([
@@ -3139,7 +3143,7 @@ function sectionCoverage_(cursor, ctx) {
     chartRows.push([cleanIndicator_(rows[i].indicator) || rows[i].questionId || '（未命名）', Number(rows[i].mean || 0)]);
   }
   emitChart_(cursor, ctx, { title: '圖7　演習覆蓋率各指標平均', type: 'RADAR', headers: ['指標', '平均分'], rows: chartRows });
-  var t = [['情境編號', '指標', '評核題目', '平均', '標準差']];
+  var t = [['場景編號', '指標', '評核題目', '平均', '標準差']];
   var sorted = sortByMeanAsc_(rows);
   for (var j = 0; j < sorted.length; j++) {
     t.push([
@@ -3157,17 +3161,17 @@ function sectionCoverage_(cursor, ctx) {
 }
 
 // ===================================================================
-// R9 九、情境逐項分析
+// R9 九、場景逐項分析
 // ===================================================================
 
-// 這是資料量最大的一章，所以它自己逐群檢查時間預算：寫不完的情境群組會被
+// 這是資料量最大的一章，所以它自己逐群檢查時間預算：寫不完的場景群組會被
 // 具名列出來並記進附錄D，而不是讓整個步驟撞上六分鐘硬上限被強制終止
 // （硬上限終止時連 finally 都不保證會跑，什麼都救不回來）。
 function sectionScene_(cursor, ctx) {
   heading_(cursor, sectionById_('SCENE').title, 1);
   var rows = chartRows_(ctx.payload);
   if (!rows.length) {
-    para_(cursor, '本次沒有可分群的情境資料。');
+    para_(cursor, '本次沒有可分群的場景資料。');
     return;
   }
   var groups = {};
@@ -3197,7 +3201,7 @@ function sectionScene_(cursor, ctx) {
     var grp = groups[name2];
     heading_(cursor, shortScene_(name2, ctx.prefix) + '　' + (grp.goal ? grp.goal : name2), 2);
     if (grp.stage) para_(cursor, '所屬階段：' + grp.stage);
-    if (grp.goal && grp.goal !== name2) para_(cursor, '測試情境與目標：' + grp.goal);
+    if (grp.goal && grp.goal !== name2) para_(cursor, '測試場景與目標：' + grp.goal);
     var t = [['題號', '評核題目', '評核人數', '平均', '標準差']];
     for (var r = 0; r < grp.rows.length; r++) {
       t.push([
@@ -3212,17 +3216,17 @@ function sectionScene_(cursor, ctx) {
     var sorted = sortByMeanDesc_(grp.rows);
     if (sorted.length) {
       var hi = sorted[0], lo = sorted[sorted.length - 1];
-      para_(cursor, '本情境最高：' + txt_(hi.question) + '（' + num_(hi.mean, 2) + '）；' +
+      para_(cursor, '本場景最高：' + txt_(hi.question) + '（' + num_(hi.mean, 2) + '）；' +
         '最低：' + txt_(lo.question) + '（' + num_(lo.mean, 2) + '）。');
     }
   }
 
   if (skipped.length) {
-    para_(cursor, '⚠ 以下 ' + skipped.length + ' 個情境因本次執行的時間預算用盡而未產生：' +
-      skipped.join('、') + '。這些情境的逐題數字仍完整保存在本試算表的「' +
+    para_(cursor, '⚠ 以下 ' + skipped.length + ' 個場景因本次執行的時間預算用盡而未產生：' +
+      skipped.join('、') + '。這些場景的逐題數字仍完整保存在本試算表的「' +
       SNAPSHOT_SHEET_NAME_ + '」工作表（報告編號 ' + ctx.st.runId + '）。');
-    ctx.warn('第九章有 ' + skipped.length + ' 個情境因時間預算未產生。');
-    ctx.skip('九、情境逐項分析（部分）', '時間預算用盡，未產生的情境：' + skipped.join('、'));
+    ctx.warn('第九章有 ' + skipped.length + ' 個場景因時間預算未產生。');
+    ctx.skip('九、場景逐項分析（部分）', '時間預算用盡，未產生的場景：' + skipped.join('、'));
   }
 }
 
@@ -3241,7 +3245,7 @@ function sectionLearning_(cursor, ctx) {
   }
   para_(cursor, '「學習」潛能題目不納入三項潛能與 4S 統計，因此不會出現在前面各章的任何圖表上；' +
     '本章是這些題目在整份報告中唯一的出口。共 ' + rows.length + ' 題。');
-  var t = [['情境編號', '指標', '評核題目', '評核人數', '平均', '標準差']];
+  var t = [['場景編號', '指標', '評核題目', '評核人數', '平均', '標準差']];
   var sorted = sortByMeanAsc_(rows);
   for (var i = 0; i < sorted.length; i++) {
     t.push([
@@ -3268,7 +3272,7 @@ function sectionRanking_(cursor, ctx) {
     return;
   }
   para_(cursor, NO_THRESHOLD_NOTE_);
-  var head = ['潛能', '情境編號', '評核題目', '平均', '標準差'];
+  var head = ['潛能', '場景編號', '評核題目', '平均', '標準差'];
 
   heading_(cursor, '優勢前十', 2);
   var best = sortByMeanDesc_(rows).slice(0, 10);
@@ -3385,7 +3389,7 @@ function sectionEvaluator_(cursor, ctx) {
     para_(cursor, '沒有可比較的題目。');
     return;
   }
-  var t2 = [['情境編號', '評核題目', '評核人數', '平均', '標準差']];
+  var t2 = [['場景編號', '評核題目', '評核人數', '平均', '標準差']];
   for (var j = 0; j < rows.length; j++) {
     t2.push([
       shortScene_(rows[j].itemName, ctx.prefix),
@@ -3499,7 +3503,7 @@ function sectionAppendixB_(cursor, ctx) {
     para_(cursor, '沒有評核官資料。');
     return;
   }
-  var header = ['題號', '情境編號'];
+  var header = ['題號', '場景編號'];
   for (var c = 0; c < codes.length; c++) header.push(evaluatorLabel_(ctx, codes[c]));
   header.push('平均');
   var rows = [header];
