@@ -53,6 +53,21 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
    「產生報告」在資料讀取完成前的停用狀態看起來跟其他停用按鈕一致。 */
 .refreshBtn:disabled{opacity:.4;cursor:not-allowed}
 
+/* ===== 報告裡的圖一律固定尺寸 =====
+   業主 2026-10-12：報告中每個圖都截 10×14.5cm。這裡照字面做成寬 10、高 14.5。
+   方向若要對調（寬 14.5、高 10，那是 A4 直式比較常見的橫向圖比例），改下面
+   這兩個值就好，不必動任何一張圖的程式。
+   A4 直式扣掉 14mm 邊界的可用範圍是 18.2 × 26.9cm，兩種方向都放得下，但高
+   14.5cm 的圖一頁只擺得下一張。 */
+:root{--figW:10cm;--figH:14.5cm}
+@media print{
+  .chartbox,#iso3dChart,#s4BarsChart,#coverageRadar,#overviewS4Chart,#radarGrid .chartbox{
+    width:var(--figW)!important;height:var(--figH)!important;min-height:0!important;
+    margin-left:auto;margin-right:auto}
+  .chartbox svg,#iso3dChart svg,#s4BarsChart svg,#coverageRadar svg,#overviewS4Chart svg{
+    width:100%!important;height:100%!important;min-height:0!important;max-height:none!important}
+}
+
 /* ===== 標頭：標題在研究室圖左側，KPI 併進綠色標頭 ===== */
 /* 標題原本獨立一列在圖的下方。移到圖左邊之後兩者同一個 flex 列，標題的
    margin 必須歸零，否則它會把整列往下推、跟圖的視覺中線對不齊。 */
@@ -103,7 +118,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
   body:not(.withRanking) #rankingHead{display:none!important}
   .tabs,.viewTabs,.refreshBtn,.controls,#reportHint,.foot,[data-screenonly]{display:none!important}
   .chartbox{min-height:0!important}
-  .chartbox svg,#iso3dChart svg{width:100%!important;height:auto!important;min-height:0!important;max-height:150mm}
+  /* 圖的尺寸統一由上面的 --figW/--figH 控制，這裡不再各自設定。 */
   .table-wrap{overflow:visible!important;border:0}
   th{position:static!important}
   thead{display:table-header-group}
@@ -644,14 +659,17 @@ function renderReportCover(){
   const rows=[['機構名稱',m.orgName],['演習名稱',m.exerciseName],['演習類別',m.exerciseCategory],
     ['演習日期',fmtExerciseDate(m.exerciseDate)],['演習主題',m.exerciseTopic]];
   if(m.exercise) rows.push(['演習代號',m.exercise]);
+  // 演習地點後端沒有這個欄位，而且加一個要動兩支 Apps Script 並重新部署。
+  // 報告樣板只要它出現在封面，所以比照 報告版次 那五格做成可在畫面上打字的
+  // 欄位 —— 同樣不會被儲存，重新整理就沒了。
   rows.push(['產出時間',m.generatedAt?new Date(m.generatedAt).toLocaleString('zh-TW'):'—']);
-  const signs=['報告版次','文件編號','製表','審核','核定'];
+  const signs=['演習地點','報告版次','文件編號','製表','審核','核定'];
   document.getElementById('reportCover').innerHTML=
     `<div class="coverOrg">${esc(m.displayName||m.orgName||'演習評核')}</div>`+
     `<div class="coverTitle">演習評核分析報告</div>`+
     `<div class="coverGrid">${rows.map(r=>`<div class="k">${esc(r[0])}</div><div>${esc(r[1]||'—')}</div>`).join('')}</div>`+
     `<div class="signGrid">${signs.map((s,i)=>`<div><div class="k">${esc(s)}</div><div class="editable" contenteditable="true" spellcheck="false" id="coverEdit${i}"></div></div>`).join('')}</div>`+
-    `<div class="small" style="margin-top:14px">上列五格可直接在畫面上點進去打字；內容不會被儲存，重新整理或換台電腦就消失。</div>`;
+    `<div class="small" style="margin-top:14px">上列各格可直接在畫面上點進去打字；內容不會被儲存，重新整理或換台電腦就消失。</div>`;
 }
 
 // R1 列印設定提示卡：螢幕專用（@media print 裡明確隱藏），同時也是兩個勾選框
@@ -690,6 +708,51 @@ function onRankingChange(e){document.body.classList.toggle('withRanking',e.targe
 
 // R2 報告摘要。stats.within1 是後端從一開始就有算、但這個檔案過去完全沒有渲染
 // 的欄位（plan §4.2），這裡是它第一次被印出來。
+// 「綜合能力」＝ 潛能 × 4S 的交叉格，也就是綜合能力柱狀圖畫的那一批。
+// 報告樣板的「優勢前三項／待改善前三項」要的是**全局**的前三與後三格，
+// 不是個別題目的前三名 —— 兩者會給出不同的結論，樣板示例寫的是「反應x空間」
+// 這種組合名，所以取的一定是交叉格。
+function abilityCells(){
+  const by = (DATA.stats && DATA.stats.potentialByS4) || {};
+  const out = [];
+  for (const pot of Object.keys(by)){
+    for (const s4 of Object.keys(by[pot] || {})){
+      const c = by[pot][s4] || {};
+      // n:0 的格子代表那個組合完全沒有題目，不是「得 0 分」。放進排序會讓
+      // 待改善前三永遠是三個空格，什麼也沒說。
+      if (!c.n || c.mean == null) continue;
+      out.push({ potential: pot, s4: s4, mean: Number(c.mean), n: c.n });
+    }
+  }
+  return out;
+}
+
+// 每個 潛能×4S 組合一句固定說明，共 3×4 = 12 句。
+// ⚠️ 下面是**佔位文字**，業主 2026-10-12 說會另外給 12 句制式說法，拿到之後
+//    直接換掉這張表的值即可，其他程式都不用動。
+// 鍵用 潛能 + '×' + 4S 的原始值（4S 的值直接來自 對應指標 的「4S 元素」欄，
+// 例如 'Space (空間)'），所以業主改試算表標籤時這裡要跟著改。
+const ABILITY_NOTES = {};
+function abilityNote(pot, s4){
+  return ABILITY_NOTES[pot + '×' + s4] || '';
+}
+
+// 「反應x空間」這種顯示名。4S 欄常寫成 'Space (空間)'，報告裡只留中文比較好讀。
+function abilityLabel(pot, s4){
+  const m = String(s4 || '').match(/[（(]([^）)]+)[）)]/);
+  return pot + ' x ' + (m ? m[1] : s4);
+}
+
+function abilityTable(list, caption){
+  if (!list.length) return `<div class="sec">${esc(caption)}</div><div class="small">尚無資料</div>`;
+  const rows = list.map((c, i) =>
+    `<tr><td style="text-align:center">${i + 1}</td><td>${esc(abilityLabel(c.potential, c.s4))}</td>` +
+    `<td class="score ${cls(c.mean)}">${c.mean.toFixed(1)}</td><td>${esc(abilityNote(c.potential, c.s4))}</td></tr>`).join('');
+  return `<div class="sec">${esc(caption)}</div><div class="table-wrap"><table>` +
+    `<thead><tr><th style="width:3em"></th><th>綜合能力</th><th style="width:5em">分數</th><th>說明</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table></div>`;
+}
+
 function renderReportSummary(){
   const st=DATA.stats||{},pot=st.potentials||{};
   const cells=[
@@ -702,16 +765,13 @@ function renderReportSummary(){
     ['相差不超過 1 分比例',pctText(st.within1)],
     ['未觸發率（1 分占比）',st.untriggered?pctText(st.untriggered.rate):'—'],
   ];
-  const sorted=[...coreRows()].sort((a,b)=>b.mean-a.mean);
-  const line=r=>`<li>${esc(r.stage||'')}｜${esc(r.goal||shortScene(r.itemName))}｜${esc(r.potential||'')}${r.s4?' / '+esc(r.s4):''}　<b>${Number(r.mean).toFixed(2)}</b></li>`;
-  const top=sorted.slice(0,3),bottom=[...sorted].reverse().slice(0,3);
+  const ability=abilityCells().sort((a,b)=>b.mean-a.mean);
+  const top=ability.slice(0,3), bottom=[...ability].reverse().slice(0,3);
   document.getElementById('reportSummary').innerHTML=
     `<div class="reportHead">報告摘要</div>`+
     `<div class="sumGrid">${cells.map(c=>`<div class="sumCell"><div class="k">${esc(c[0])}</div><div class="v">${esc(c[1])}</div></div>`).join('')}</div>`+
-    `<div class="grid cols2" style="margin-top:18px">`+
-      `<div><div class="sec">優勢前三</div><ul class="hintList">${top.length?top.map(line).join(''):'<li>尚無資料</li>'}</ul></div>`+
-      `<div><div class="sec">待改善前三</div><ul class="hintList">${bottom.length?bottom.map(line).join(''):'<li>尚無資料</li>'}</ul></div>`+
-    `</div>`+
+    `<div style="margin-top:18px">${abilityTable(top,'優勢前三項')}</div>`+
+    `<div style="margin-top:16px">${abilityTable(bottom,'待改善前三項')}</div>`+
     `<div class="note" style="margin-top:16px">ICC(2,k) 只取「所有題目都有評分的評核官」交集計算，因此<b>只要有一題只被一位評核官評過，整份資料就會顯示「資料不足」</b>——那是覆蓋不均的訊號，不代表一致性差。「相差不超過 1 分比例」則逐題採該題實際評分人數配對，不需要完整矩陣。</div>`;
 }
 
