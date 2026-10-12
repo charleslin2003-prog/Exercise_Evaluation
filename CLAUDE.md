@@ -42,6 +42,96 @@ Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
 `analysisRows=16 / coverageRows=7 / learningRows=0`, 5 evaluator codes,
 `icc2k≈0.5503`, `within1=0.750` over the record sheet's 101 rows.
 
+**Those numbers have drifted — re-measured 2026-10-12:** `recordRowCount=122` (was 101),
+**6** evaluator codes (was 5), `icc2k≈0.5412` (was 0.5503); `within1=0.750` and
+`16 / 7 / 0` unchanged. Nothing is wrong — the record sheet simply got longer. Noted
+because `smoke.sh` deliberately asserts **no** statistic, so a drift like this is invisible
+to the regression suite and anyone comparing against the old baseline will think something
+broke.
+
+> ⚠️ **`ANALYSIS_KEY` is NOT in the table above, because `dev` and `master` hold the
+> *same* 32-char key — verified byte-identical on 2026-10-12.** So the sandbox and
+> production are **not** isolated at the key layer: rotating one rotates the other, and a
+> sandbox tester holds production's analysis key. The key being public is by design (see
+> the exposure section below — `Analysis.html` embeds it and the dashboard's access control
+> *is* "unlisted URL + that key"); **the two branches sharing one key is not.** This is what
+> makes plan §6.6 (key rotation) more urgent than that doc implies, and it is the one item
+> that cuts against the owner's standing instruction 「不要跟正式混用」. The fix is the one
+> already designed: one key per registry row, with the old constant demoted to the fallback
+> tenant only.
+
+### The 2026-10-12 renames (情境→場景, 回應→反應) and the two folding layers
+
+The owner renamed two pieces of vocabulary on 2026-10-12. Both were done the same way:
+**the new name is canonical, the old name stays accepted, and nothing in the spreadsheets
+had to change on the same day.** That is why the sandbox still reads correctly while its
+sheets still carry the old words — and it is also the single most confusing thing in the
+codebase right now, so read this before writing any comparison against a potential value
+or a column header.
+
+**情境 → 場景** (display wording *and* spreadsheet column names). Handled by putting the
+new name first in each alias array, keeping the old one behind it:
+
+| constant | value |
+|---|---|
+| `RECORD_STAGE_ALIASES_` | `['場景階段', '情境階段']` |
+| `RECORD_GOAL_ALIASES_` | `['測試場景與目標', '測試場景', '測試情境與目標', '測試情境']` |
+| `GROUP_HEADER_ALIASES_` | `[['場景階段','情境階段'], ['演練單元']]` |
+| `GOAL_HEADER_ALIASES_` | `['測試場景與目標', '測試場景', '測試情境與目標', '測試情境']` |
+
+**Four** arrays, not three. `RECORD_GOAL_ALIASES_` (record side) and `GOAL_HEADER_ALIASES_`
+(config side) now hold identical values but are still separate constants on purpose — this
+file says elsewhere "don't share the variable", and listing only three is exactly the drift
+that warning exists to prevent.
+
+`層2` is **not** renamed — it is still `演練單元`. Only `層1` changed. **Five** residues of
+「情境」 remain outside `Analysis.html`. The first three are deliberate and must not be
+"tidied up"; the last two are **misses, and one of them is dangerous**:
+
+- `Report.gs`'s chapter-9 anchor is still **`{{SEC_情境}}`**, because an anchor must match
+  the字 the owner literally typed in their template Doc. Changing it here without changing
+  the template on the same day makes `scanAnchors_` miss it and chapter 9 vanishes, leaving
+  one line in 附錄D. (`{{SEC_場景}}` appears in that file only inside the comment explaining
+  this.)
+- `action=selftest`'s column labels (`ConfigWithSubmit.gs:1551`/`:1554`) still print the old
+  names, because they are diagnostic labels for a sheet that still uses them.
+- The `throw` naming `層1/情境階段` — in **two** files, `ConfigWithSubmit.gs:2032` **and
+  `Config.gs:152`**, byte-identical. The two are supposed to stay in sync, so listing one is
+  itself an instance of the drift this file warns about.
+- ⚠️ **`REGISTRY_SCENEPREFIX_ALIASES_ = ['scenePrefix', '情境前綴']`**
+  (`ConfigWithSubmit.gs:124`, duplicated at `Setup.gs:73`) — **there is no `場景前綴`
+  alias.** This is a registry *column name*, so an owner who follows the new vocabulary and
+  retitles that header to 「場景前綴」 gets `findHeaderCol_` → `-1`, `scenePrefix` silently
+  falls back to `'SCENE'`, and every scene-code match for that whole hospital is wrong with
+  nothing visibly broken on screen. This is the worst kind of miss: a silent, hospital-wide
+  wrong answer triggered by doing what the rename told you to do.
+- `Setup.gs:82` `DEFAULT_RECORD_HEADER_ = ['情境階段', '演練單元', …]`, used at `:660` only
+  when a copied record file has no non-empty tab to inherit a header from. Rarely reached,
+  but it is a column-name constant the rename missed, not a comment.
+
+**回應 → 反應** (potential value only — no column name). This one is *not* an alias array,
+because the value lives in spreadsheet **cells**, not headers, and the owner's sheet was not
+going to be edited. So there are **two folding layers**, and they are both load-bearing:
+
+1. **`normPotential_(v)`** in `ConfigWithSubmit.gs` — `return s === '回應' ? '反應' : s;`,
+   applied at `readIndicatorFull_` and at `buildAnalysis_`'s snapshot read. This is why the
+   analysis payload says 反應 while the sheet says 回應.
+2. **`normalisePotentials(DATA)`** in `Analysis.html` — it does **two** things, and the
+   first is the load-bearing one: it rewrites `r.potential` on every row of
+   `analysisRows`/`coverageRows`/`learningRows`, *then* folds the `stats.potentials` and
+   `stats.potentialByS4` keys. `renderRadars()` and `renderRanking()` filter rows with
+   `r.potential === p`, not via `stats`, so folding only the stats keys would still leave
+   all three radars empty. Added because the frontend shipped before the backend was pasted
+   and the 反應 radar was blank for a while; kept deliberately, because a half-deployed
+   backend must not blank a chart.
+
+> ⚠️ **The config spreadsheet's 對應指標 sheet still literally contains `回應`** (verified
+> 2026-10-12). So the intuitive move — "the sheet says 回應, so compare against 回應" —
+> produces code where the **反應** bucket silently vanishes — not all three. `normPotential_`
+> only maps 回應→反應; 監測 and 預期 pass through untouched, and the `analysisRows` splitter
+> ORs the three conditions. So two potentials keep working and one disappears, which is
+> *harder* to notice than a total failure. Compare against **`反應`**.
+
 ### ⚠️ Open on `master`: Vercel serves the whole repo, backend source included
 
 Vercel publishes **every** file in the repo as a static asset, not just the two HTML
@@ -69,8 +159,23 @@ needs only `Start.dc.html`, `Analysis.html`, `support.js`, `vendor/`, `assets/`.
 is frozen; see the branch policy below). So the exposure is still live. Carry
 `.vercelignore` across in whatever release eventually touches `master` — it is additive,
 one new file, and changes no code. **Adding any new backend file, internal doc or scratch
-file means adding it to `.vercelignore` too**: that file is the entire public/non-public
-boundary.
+file means adding it to `.vercelignore` too.**
+
+> ⚠️ **But `.vercelignore` is NOT "the entire public/non-public boundary" — this file said
+> that, and it was wrong.** It governs only whether *the website* serves a file. The repo is
+> public, so git is a second outward-facing interface: a file excluded here is still readable
+> on GitHub. The git side is the root **`.gitignore`** (added 2026-10-12, commit `19145c9`).
+> Two layers, and they are not equally recoverable — a Vercel setting takes effect on the
+> next deploy, whereas **git history cannot be cleaned**. This nearly bit on 2026-10-12: two
+> `.tsv` spreadsheet exports were already listed under `.vercelignore`'s 「暫存／草稿檔」,
+> which looks safe but only means the site won't serve them. **Be precise about the delta,
+> because the first version of this note overstated it:** 對應指標 is absent from `doGet`'s
+> payload and only reachable via `action=analysis` — but that key is embedded verbatim in
+> the public `Analysis.html`, and `action=analysis` returns `indicator`/`potential`/`s4`/
+> `question` per row, i.e. that sheet's substantive content. So the *added* exposure is
+> close to zero. Keeping them out of git is still right — version control is not a dumping
+> ground for spreadsheet exports, and git history cannot be cleaned — but not because the
+> content is otherwise secret.
 
 ### Branch policy
 
@@ -81,6 +186,21 @@ boundary.
 That setting lives under **Settings → Environments → Production → Branch Tracking**, not
 under Settings → Git where it used to be. Neither site has an `index.html`, so the root
 path 404s — URLs must name the file (`/Start.dc.html?t=…`).
+
+## Where each fact lives (single source of truth)
+
+Five documents describe this system, and the same fact written in two of them has already
+rotted twice — the chart-fallback layer count was wrong in four files at once, and this file
+once claimed `.vercelignore` was "the entire public/non-public boundary". So: **when a fact
+below has an owner, documents other than the owner should cite it, not restate it.**
+
+| fact | owner | don't restate in |
+|---|---|---|
+| Column names, aliases, accepted potential values | the `*_ALIASES_` constants in `apps-script/ConfigWithSubmit.gs` | anywhere — quote the constant name and let the reader look. `README.md` got four alias cells wrong by copying from the `RECORD_*` arrays into an `INDICATOR_*` table |
+| Chapter count, chart-fallback layer count | `apps-script/Report.gs` (`REPORT_SECTIONS_`, `emitChart_`) | cite the line number; never repeat the number |
+| Live spreadsheet state (column counts, the literal 評核潛能 values, registry windows) | `docs/handover-筆電.md` §4 | this file and `README.md` should point at it |
+| Apps Script script properties | `apps-script/README.md` | — |
+| Per-branch constants and key state | the Branch state table in this file | — |
 
 ## File roles
 
@@ -375,9 +495,21 @@ silently breaks `RECORD_URL` until updated to match.
 ### Tenant routing (方案 A, 租戶註冊表) — the fallback rule
 
 This is the single most load-bearing piece of behaviour in the backend. `resolveTenant_(e, body)`
-returns a tenant object `{ hid, exid, displayName, configId, recordId, recordSheet,
-analysisKey, enabled, openFrom, openTo, scenePrefix, source, rowNumber, registryWarning }`,
-resolving in exactly this order:
+returns a tenant object of **20** keys — `{ hid, exid, displayName, configId, recordId,
+recordSheet, analysisKey, enabled, isDefault, openFrom, openTo, openFromText, openToText,
+scenePrefix, source, rowNumber, registryWarning, requestedHid, requestedExid, reasons }`.
+This file listed only 14 for a long time; the six that were missing are all load-bearing,
+not decoration: `isDefault` decides 預設演習 (`valid.filter(r => r.enabled && r.isDefault)`),
+`openFromText`/`openToText` are what `windowText_` prints and what `action=sessions`
+returns, `reasons` is what `action=selftest` reports per invalid row, and
+`requestedHid`/`requestedExid` are the echo-back read as `t.hid || t.requestedHid` in the
+config branch's **success** payload and in `action=selftest` — **not** in any error message.
+Error messages use `resolveTenant_`'s local `hid`/`exid`, and when nothing resolves it
+*throws*, so no tenant object exists for `errorOut_` to read. Their real job is fallback
+mode: `hid`/`exid` are `''` there, and the payload still has to hand the caller's own
+`?t=`/`?ex=` back to the client unchanged.
+
+Resolution happens in exactly this order:
 
 0. `hid` = `normSlug_(body.tenant)` || `normSlug_(e.parameter.t)` || `''`; `exid` likewise
    from `body.exercise` / `e.parameter.ex` (**POST body wins over query**). A code that is
@@ -486,8 +618,9 @@ tenant. The specific reason strings are returned **only** by `action=selftest`.
 > non-blank and don't match the resolved tenant. That is defence in depth behind rule 2,
 > not the primary guard. **Both `&&` conditions are load-bearing**: a blank value means
 > "written before those columns existed" and must be kept, and a blank `t.hid`/`t.exid`
-> means fallback mode, where there is no exercise identity to filter on. On today's
-> 6-column sheet both columns resolve to `-1`, so this changes no current number.
+> means fallback mode, where there is no exercise identity to filter on. On the sandbox's
+> **7-column** sheet (verified 2026-10-12: `A1:G123`) neither column exists, so both resolve
+> to `-1` and this changes no current number.
 
 ### Which deployment serves the config branch
 
@@ -578,8 +711,21 @@ Boundaries that do hold, and must keep holding:
 | `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `機構名稱`/`演習名稱`/`演習主題`(or `主題`)/`演習類別`/`演習日期`/`說明`, plus the two **new** optional labels `啟用觀察紀錄` and `低分需說明門檻`, reading column B of each | `orgName`, `exerciseName`, `exerciseTopic`, `exerciseCategory`, `exerciseDate`, `exerciseDesc: string` (all optional, `''` when absent), `commentEnabled: boolean` (default `true`; only a literal `N`/`n`/`否`/`關閉`/`false` turns it off), `commentRequiredBelow: number` (default `0` = never required). `exerciseTopic` and `exerciseCategory` are **separate fields**, not aliases — the sheet has both a `主題` row (long descriptive title) and a `演習類別` row (short category) at the same time; conflating them silently drops whichever comes later. `Analysis.html`'s header pill uses `exerciseCategory`, its 主題 KPI card uses `exerciseTopic`, its 說明 card uses `exerciseDesc` |
 | `人員代號` | `代號` | `codes: { value, label }[]` (dropdown options, `value === label`) |
 | `評分標準` | `分數`, `標籤`, `說明` | `criteria: { score, label, desc }[]`, one row per score (1–5) |
-| `項目與問題` | `層1`, `層2`, … (any number, in order; `層1`/`層2` also accept `情境階段`/`演練單元`) **or** `項目名稱` as a fallback single grouping column; plus `問題ID` (or `評核題號`), `問題內容` (or `評核題目`/`具體評核題目`), and an optional `測試情境與目標`/`測試情境` column | `items`: a tree whose depth = however many `層N` columns exist. Each leaf also carries `goal` (first non-blank 測試情境 under that leaf) |
-| `對應指標` (`INDICATOR_SHEET_NAME`) | `問題ID`, `問題`, `問題所屬指標`, `評核潛能`, `4S 元素` | Read-only lookup, **not** part of `doGet`'s payload — read by `readIndicatorMap_` (write path, first three columns) / `readIndicatorFull_` (analysis path, all five). Lives in the config spreadsheet because it is config, not a record of a submission |
+| `項目與問題` | `層1`, `層2`, … (any number, in order; `層1` also accepts `場景階段` or the older `情境階段`, `層2` accepts `演練單元`) **or** `項目名稱` as a fallback single grouping column; plus `問題ID` (or `評核題號`), `問題內容` (or `評核題目`/`具體評核題目`), and an optional `測試場景與目標` column (older `測試場景`/`測試情境與目標`/`測試情境` still accepted — see `GOAL_HEADER_ALIASES_`) | `items`: a tree whose depth = however many `層N` columns exist. Each leaf also carries `goal` (first non-blank 測試場景與目標 under that leaf) |
+| `對應指標` (`INDICATOR_SHEET_NAME`) | Matched by **alias**, never by literal name — see the warning below | Read-only lookup, **not** part of `doGet`'s payload — read by `readIndicatorMap_` (write path, first three columns) / `readIndicatorFull_` (analysis path, all five). Lives in the config spreadsheet because it is config, not a record of a submission |
+
+> ⚠️ **This row used to list `問題ID`, `問題`, `問題所屬指標`, `評核潛能`, `4S 元素` as if
+> those were the headers. Four of the five do not exist on the live sheet.** They are the
+> *first* entry of each `INDICATOR_*_ALIASES_` array, and the sheet mostly uses the *second*
+> — but not uniformly, so don't lean on that rule either: `INDICATOR_POTENTIAL_ALIASES_` has
+> exactly **one** element (`['評核潛能']`), and the indicator header is the literal string
+> `單一指標對應` + **a newline** + `(RAG / 覆蓋率)`, which resolves only through
+> `findHeaderCol_`'s prefix pass, not an exact match. Verified 2026-10-12, the actual header
+> row is: `情境階段`／`演練單元`／`評核題號`／`評核潛能`／`單一 4S 元素`／
+> `單一指標對應⏎(RAG / 覆蓋率)`／`具體評核題目`. Only `評核潛能` matches what was written
+> here. This is the same failure mode as the 6-column→7-column note above: an auditor who
+> predicts the header from this file gets it wrong. **Read `INDICATOR_*_ALIASES_` in
+> `ConfigWithSubmit.gs`, not this table, when you need to know what resolves.**
 
 `readItems_` scans the header row for `層1`, `層2`, … in order; if no `層N` column exists
 it falls back to grouping by `項目名稱` alone. A node with rows appended under it comes
@@ -645,7 +791,7 @@ first non-empty tab, so new tabs inherit all 7).
 |---|---|
 | Required | `問題ID` (or `評核題號`), `分數`, `人員代號`, `送出時間` |
 | Optional (pre-existing) | `演習名稱`, `項目名稱`, `情境階段`, `演練單元`, `指標代號` |
-| Optional (**new**) | `觀察紀錄`, `醫院代號`, `演習代號`, `測試情境`, `評核潛能`, `4S 元素`, `評核題目` |
+| Optional (**new**) | `觀察紀錄`, `醫院代號`, `演習代號`, `測試場景與目標` (older `測試情境` still accepted), `評核潛能`, `4S 元素`, `評核題目` |
 
 Alias arrays: `RECORD_COMMENT_ALIASES_`, `RECORD_TENANT_ALIASES_`,
 `RECORD_EXERCISEID_ALIASES_`, `RECORD_GOAL_ALIASES_`, `RECORD_POTENTIAL_ALIASES_`,
@@ -691,8 +837,9 @@ The key is compared against the **resolved row's** `分析金鑰` (in fallback m
 `buildAnalysis_(t)` reads every row in the tenant's record sheet, keeping the **last** row
 per dedup key, and joins each `問題ID` against `對應指標` and `項目與問題`. Dedup key is
 `(醫院代號, 演習代號, 問題ID)` — the first two components come from the record row's own
-columns when those columns exist, and are empty strings otherwise, so for today's 6-column
-sheet it degenerates to exactly the previous `(問題ID)`-with-last-write-wins behaviour.
+columns when those columns exist, and are empty strings otherwise, so on the sandbox's
+**7-column** sheet (which has neither 醫院代號 nor 演習代號) it degenerates to exactly the
+previous `(問題ID)`-with-last-write-wins behaviour.
 Per-tenant record files are what make a full-table read correct rather than merely
 tolerable.
 
@@ -710,7 +857,8 @@ scores:[{code,score}], mean, sd }` plus the new `exerciseId`,
 `comments:[{code,comment}]` (non-empty only, sorted by code), `labelSource`, and
 `untriggered` (count of scores equal to 1 on that row).
 
-Rows split into `analysisRows` (potential `回應`/`監測`/`預期`), `coverageRows` (potential
+Rows split into `analysisRows` (potential `反應`/`監測`/`預期` — **see the rename note
+below; the spreadsheet still literally says `回應`**), `coverageRows` (potential
 containing `覆蓋率`) and `learningRows` (`學習`). `learningRows` are excluded from `stats`
 but still returned; the on-screen 排序視圖 panel and the report's opt-in R7 section are the
 only places they surface.
@@ -766,11 +914,13 @@ places share.
 
 ### Tabs (five buttons)
 
-- **綜合評比 (`#overview`)** — `kpis` grid: 主題/說明 (from `meta.exerciseTopic`/
+- **綜合評比 (`#overview`)** — **the four KPI cards are no longer in this panel.** They
+  moved into `<header>` on 2026-10-12 (`.headKpis`, still `id="kpis"`, rendered as `.hkpi`
+  translucent pills instead of `.card.kpi`): 主題/說明 (from `meta.exerciseTopic`/
   `exerciseDesc`, falling back to `—`; the header pill above the tabs uses the separate
   `exerciseCategory`), 評核官人數, 評核總數 (`analysisRows + coverageRows + learningRows`).
-  Below that, one card holds three aligned sections in a `1fr 140px 1fr` title row +
-  content row: 綜合能力柱狀圖 (isometric 3D potential × 4S bars, `svgIso3D`/`renderIso3D`),
+  `#overview` now holds only one card with three aligned sections in a `1fr 140px 1fr` title
+  row + content row: 綜合能力柱狀圖 (isometric 3D potential × 4S bars, `svgIso3D`/`renderIso3D`),
   演習覆蓋率 (gauge, `svgCoverageGauge`), and 4S整備表現直方圖 (`barsSVG` — the simple
   non-stacked 4S average, *not* the 4S 分析 tab's stacked chart).
 - **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category, stacked by
@@ -779,12 +929,12 @@ places share.
   adjacent hues. Bar **length** is the real 4S average (`stats.s4[s4].mean`, ~1–5), not a
   sum; each segment's **width** is that scenario's share of the sum of per-scenario means,
   while its label (`D2 3.7`) shows the scenario's actual average. Bars sorted by total,
-  descending. The sibling card is `情境編號對照表` (`#s4ScenarioTable`), mapping each short
+  descending. The sibling card is `場景編號對照表` (`#s4ScenarioTable`), mapping each short
   code to its full `goal` text (or raw `itemName`), with a matching color swatch per row.
-- **三項潛能雷達圖 (`#radars`)** — one `svgRadar` per potential (回應/監測/預期), axes sorted
+- **三項潛能雷達圖 (`#radars`)** — one `svgRadar` per potential (反應/監測/預期), axes sorted
   clockwise lowest→highest (sorting happens inside `svgRadar()`, so every caller gets it).
   Each radar card is followed by a **separate** card (not nested, so chart height stays
-  fixed regardless of table length) holding a `radarTable()` — 情境編號 / 指標 /
+  fixed regardless of table length) holding a `radarTable()` — 場景編號 / 指標 /
   具體評核題目 / 分數, ascending by score.
 - **演習覆蓋率 (`#coverage`)** — coverage radar plus a `radarTable()` in the 覆蓋率指標摘要 card.
 - **統計方法 (`#method`)** — static prose, not data-driven; update by hand if the stats
@@ -819,12 +969,63 @@ Sections: R0 封面 `#reportCover` (with five `contenteditable` fields — 報�
 製表/審核/核定 — persisted **nowhere**), R1 列印設定提示卡 `#reportHint` (screen-only;
 holds the two checkboxes), R2 報告摘要 `#reportSummary` (new code: 總平均, three potentials,
 覆蓋率, ICC(2,k), **within1 — rendered here for the first time anywhere**, 未觸發率,
-優勢前三/待改善前三), R3–R6 reuse `#overview`/`#s4`/`#radars`/`#coverage` as-is, R7 reuses
+優勢前三/待改善前三 — see the ability-table note below), R3–R6 reuse `#overview`/`#s4`/`#radars`/`#coverage` as-is, R7 reuses
 `#ranking` **only when `#includeRanking` is checked (default off)**, R8 觀察紀錄彙整
 `#reportComments`, R9 資料品質 `#reportQuality` (missingQuestions, untriggered,
 recordRowCount vs deduped count, and a one-line `labelSourceSummary` disclosure), R10
 reuses `#method`, R11 附錄C `#reportAppendixC` (file names, sheet name, row count, tenant,
 exercise, tenantSource, generatedAt — **no key, no spreadsheet ID, no URL**).
+
+#### 優勢前三項／待改善前三項 — the ability tables (2026-10-12)
+
+`abilityCells()` reads **`DATA.stats.potentialByS4`** — the same cross-tab the iso-3D chart
+draws, deliberately, so the table and the chart can never disagree. Cells with `n === 0`
+are dropped. `abilityLabel(pot, s4)` names a cell — it regex-extracts the Chinese inside the parens and
+joins with a space-x-space, so `('反應','Space (空間)')` returns **`反應 x 空間`**, not
+`反應×Space (空間)`. The `×` belongs to `ABILITY_NOTES`' *key* format (`pot + '×' + s4`,
+which keeps the raw 4S string) — two different strings, easy to conflate.
+
+- **`rankedTop(cells, n, asc)` is competition ranking and includes every tie.** Rank comes
+  from the *score*, not the row index, so 1,1,1 / 1,2,2 / 1,2,3,3,3 all print in full —
+  three is a cap on the *rank*, not on the number of rows. The owner asked for this
+  explicitly: the naive "take the first three after sorting" silently truncated a
+  fourth cell with an identical score, so the report would claim one ability was "top
+  three" while another with the exact same number was absent, with no way for the reader to
+  tell why. Verified over these 8 cases: three-way tie for first, 1-2-2, 1-2-3-3-3, no ties,
+  all tied, fewer than three rows, empty list, and the ascending 待改善 direction. (Commit
+  `88f5f88` says "9 種情況" and then lists 8 — the count is off by one in the commit
+  message; there is no test file, so the ninth cannot be recovered.)
+- **`ABILITY_NOTES` is an empty object `{}`** keyed `潛能×4S`. The owner is supplying twelve
+  fixed sentences; until then the 說明 column of both tables prints blank. Filling that one
+  object is the only edit needed.
+- The iso-3D chart's pale outline marks the **three globally lowest** cells (`weakSet`,
+  `ee41ce0`), not the lowest of each row as it did before — and it includes ties the same
+  way, by taking the third-lowest value as a cut and collecting everything `<= cut`.
+
+#### Figure sizing for print (`--figW` / `--figH`)
+
+`:root{--figW:10cm;--figH:14.5cm}` and one `@media print` rule pin every figure to the same
+box, replacing the old per-chart `max-height:150mm`. **The orientation is literal and
+unconfirmed**: 10 wide × 14.5 tall is what the owner wrote, and nobody has checked it
+against a real print yet — swap those two values if it is wrong.
+
+> ⚠️ **`#coverageGauge` is not covered by either selector.** The 演習覆蓋率 gauge in
+> `#overview` sits in a plain `div` with no `.chartbox` class and is not named in the print
+> rule, so it still prints at its native size. "Every figure is 10×14.5" is therefore not
+> yet true.
+
+`演習地點` was added to the cover's `contenteditable` fields (now six: 演習地點, 報告版次,
+文件編號, 製表, 審核, 核定). Like the others it is **persisted nowhere** — the backend has no
+such field and the cover says so.
+
+#### 場景說明浮層 (`SCENE_GOALS`)
+
+`buildSceneGoals()` indexes each scene short code to its `goal` text; `sceneCell()` renders
+the code as a `.sceneBtn` **only when a real `goal` exists**, and `openScenePop()` opens a
+window-centred `position:fixed` panel (closed by click-outside or Escape, both delegated to
+`document`). The "only when a goal exists" condition matters: an earlier version fell back
+to `itemName`, so clicking `D2` popped up a panel whose entire content was the text
+「SCENE D2」 — a popover that tells you what you just clicked.
 
 - **匿名模式 `#anonMode` is checked by default.** `anonCode()` maps each evaluator code to
   `評核官 N` by its index in the sorted `meta.evaluatorCodes`. Unchecking it requires a
@@ -847,9 +1048,34 @@ exercise, tenantSource, generatedAt — **no key, no spreadsheet ID, no URL**).
 
 ### 場次下拉 (`#exPicker`)
 
-Replaced the old 過去演習 button + `#pastPanel` link list, both of which are **gone** —
-`#viewPast`, `#pastPanel` and the `#pastList` CSS no longer exist anywhere in the file.
-Stale notes may still describe them.
+This one `<select>` has now replaced **two** things, in two separate rounds:
+
+- the old 過去演習 button + `#pastPanel` link list (**gone** — `#viewPast`, `#pastPanel`
+  and the `#pastList` CSS no longer exist anywhere in the file; stale notes may still
+  describe them), and
+- the **`當次演習` button** (`#viewCurrent`, removed 2026-10-12 in `6d79e7a`). Its
+  `onclick` was literally `load` — the same function as the neighbouring 重新整理 — and the
+  thing it was trying to express ("which session am I looking at") is a *state*, which a
+  stateless button can never say. The dropdown is that answer. **Do not add it back.**
+
+Two consequences worth knowing before you conclude something is broken:
+
+- **產生報告 follows the dropdown with no extra plumbing.** `enterReport()` reads the
+  in-memory `DATA`, and `DATA` is whatever `currentExid` fetched — so the report
+  *structurally cannot* name a different session than the screen. No session parameter is
+  passed to the report path, by design.
+- **In fallback mode (no `?t=`) that row now has only three buttons**, because the picker
+  is hidden and `當次演習` is gone. That is correct — a one-option dropdown is noise, not
+  information — but it means a local `python3 -m http.server` test **must** use
+  `?t=wanfang-7f3a2c` or it looks like the feature never shipped.
+
+`load()` disables the picker while a fetch is in flight and re-enables it in `.finally`.
+That closes a real pre-existing hole: switching twice quickly fired two `action=analysis`
+requests, and the earlier one could easily arrive last, leaving the screen on a session
+that is *not* the one shown in the dropdown — with nothing visibly wrong. The lock is
+guarded by `exListLoaded` so it cannot fight `loadExercises()`'s own lock on first load,
+and the re-enable sits in `.finally` because the most likely next action after a failed
+read is "try another session".
 
 `loadExercises()` is called automatically from `init()` the first time `meta.tenant` is
 non-empty (guarded by `exListLoaded`, so refreshing the analysis doesn't re-fetch the
@@ -972,9 +1198,19 @@ is one `UrlFetchApp` GET to `action=analysis`.
 - **Charts degrade, never fail.** `chartCapability_()` probes once per run on a hidden
   `_報告暫存` sheet: `Charts.ChartType['RADAR']` is bracket-accessed (passing `undefined` to
   `setChartType` throws unreadably), the generated PNG must exceed 1000 bytes (the known
-  failure is a blank image, not an exception). Fallback chain per figure: native embedded
-  chart → COLUMN/BAR redraw of the same numbers → a native Docs table of the same numbers →
-  a paragraph naming the failure. Every degradation lands in `warnings[]`, the dialog, and
+  failure is a blank image, not an exception). The chain is: native attempt → ① **COLUMN**
+  redraw of the same numbers → ② **`legacyChartBlob_`, the older Charts service**
+  (`:1611`/`:1680`) → ③ a native Docs table of the same numbers (`:1686`) → ④ a paragraph
+  naming the failure (`:1701`). Layer ② is the one this file used to omit — and the code's
+  own comment at `:1643` omits it too, while counting the native attempt as a layer, so
+  "four" means two different things in the two places. Two precision notes: layer ① only
+  exists for `RADAR` and `BAR` figures — `emitChart_` builds `order` at `:1654-1661`, and a
+  figure whose own type is already `COLUMN` gets no redraw step; and the redraw target is
+  always `COLUMN`, never `BAR` (`BAR` is only ever a figure's native type).
+  **No run is known to have reached any of the four**, but that is weaker than it sounds:
+  `chartCapability_` being green only rules out ①, whereas ②–④ fire per-figure when
+  `tryChartBlob_` returns no blob (including the ≤1000-byte blank-PNG case) or the insert
+  fails. What would actually prove it is an empty `warnings[]`/附錄C on those runs. Every degradation lands in `warnings[]`, the dialog, and
   附錄C. The iso-3D chart is deliberately not reproduced; it is `stats.potentialByS4`, and a
   grouped column chart carries the identical numbers.
 - **Stepped execution.** Apps Script's 6-minute cap is handled by splitting across
