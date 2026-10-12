@@ -1,0 +1,284 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway, do not fold this file into the real app as-is.
+  Question this answers: can ONE navigation component drive both a 1-layer
+  dataset (today's SCENE case: item -> questions) and a 3-layer dataset
+  (階段 -> 情境 -> 問題) while obeying two hard rules for the 選階段/選情境
+  screens — "夠大" (buttons must be large) and "不滑動" (no scrolling,
+  regardless of how many items are in a level: 5, 8, or 11) — without the
+  code changing shape.
+  State model: `stack` is an array of child-indices from the root down.
+  Walking `stack` against the active dataset always finds "where am I".
+  Layout model: `layoutGrid(container, n)` measures the container's real
+  box and picks the (cols, rows) split that maximizes the smaller cell
+  dimension, so every level fits with zero scroll and cells stay as big
+  as the available space allows.
+  Run: python -m http.server, then open /prototype-dynamic-layers.html
+-->
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE — 動態層數導覽（夠大 / 不滑動）</title>
+<style>
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;background:#3a382f;color:#161512;display:flex;justify-content:center;padding:24px 0 120px;}
+  button{font-family:inherit;cursor:pointer}
+  #phone{width:390px;height:844px;box-sizing:border-box;background:#f7f5ee;display:flex;flex-direction:column;overflow:hidden;position:relative;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.4)}
+  #topControls{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#161512;color:#fff;font-size:12px;flex-shrink:0}
+  #topControls button{background:#3a382f;color:#fff;border:1px solid #565248;border-radius:8px;padding:4px 10px;font-size:12px}
+  #screen{flex-grow:1;min-height:0;display:flex;flex-direction:column;padding:14px;box-sizing:border-box;overflow:hidden}
+  #debug{flex-shrink:0;background:#161512;color:#9fd8b0;font-size:11px;line-height:1.5;padding:8px 12px;white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace}
+  .breadcrumb{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;flex-shrink:0}
+  .crumb{font-size:12px;font-weight:700;padding:5px 10px;border-radius:12px;background:#efe7d3;color:#7a4e0f;border:0;cursor:pointer}
+  .crumb.current{background:#161512;color:#fff}
+  .leafScreen h2{font-size:17px;margin:0 0 12px}
+  .qcard{background:#fff;border:2px solid #d8d2bf;border-radius:14px;padding:12px;margin-bottom:10px}
+  .qcard .qtext{font-size:14px;font-weight:700;margin-bottom:8px}
+  .scoreRow{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .scoreRow button{height:38px;border-radius:10px;border:2px solid #d8d2bf;background:#fff;font-weight:900}
+  .backBtn{border:0;background:transparent;font-size:14px;font-weight:700;color:#7a4e0f;padding:8px 0;margin-bottom:8px;flex-shrink:0}
+
+  /* 共用：自適應網格（依項目數反推欄列數，撐滿剩餘空間，永不滾動） */
+  .adaGrid{flex-grow:1;min-height:0;display:grid;gap:10px}
+  .adaBtn{border:2px solid #d8d2bf;border-radius:16px;background:#fff;color:#161512;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;padding:6px;line-height:1.25;overflow:hidden}
+  .adaBtn.leaf{background:#f0e2be;border-color:#e3cf9b;color:#7a4e0f}
+
+  /* Variant A — 麵包屑 + 自適應網格鑽層 */
+  #screenA{flex-grow:1;min-height:0;display:flex;flex-direction:column}
+
+  /* Variant B — 手風琴單開（同層永遠只展開一個，其餘收成細條） */
+  #screenB{flex-grow:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+  .accHead{flex-shrink:0;text-align:left;display:flex;justify-content:space-between;align-items:center;background:#fff;border:2px solid #d8d2bf;border-radius:12px;padding:10px 14px;font-size:14px;font-weight:800}
+  .accHead.open{background:#161512;color:#fff}
+  .accBody{flex-grow:1;min-height:0;display:flex;flex-direction:column}
+
+  /* Variant C — 並列分割：左側階段軌 + 右側自適應網格 */
+  #screenC{flex-grow:1;min-height:0;display:flex;gap:10px}
+  .rail{flex-shrink:0;width:96px;display:flex;flex-direction:column;gap:8px}
+  .railBtn{flex:1;border:2px solid #d8d2bf;border-radius:14px;background:#fff;font-size:13px;font-weight:800;padding:4px;text-align:center;display:flex;align-items:center;justify-content:center;line-height:1.2}
+  .railBtn.active{background:#161512;color:#fff;border-color:#161512}
+  .railPane{flex-grow:1;min-height:0;display:flex;flex-direction:column}
+
+  #switcher{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#161512;color:#fff;border-radius:24px;display:flex;align-items:center;gap:14px;padding:10px 18px;box-shadow:0 4px 20px rgba(0,0,0,.4);font-size:13px;z-index:100}
+  #switcher button{background:transparent;border:0;color:#fff;font-size:16px;padding:4px 8px}
+  #switcher .label{font-weight:700;min-width:210px;text-align:center}
+</style>
+</head>
+<body>
+<div id="phone">
+  <div id="topControls">
+    <span>資料層數（獨立於畫面版本，可任意搭配）</span>
+    <button id="depthToggle">切換 1層/3層</button>
+  </div>
+  <div id="screen"></div>
+  <div id="debug"></div>
+</div>
+
+<div id="switcher">
+  <button id="prevBtn">◀</button>
+  <span class="label" id="variantLabel"></span>
+  <button id="nextBtn">▶</button>
+</div>
+
+<script>
+// ---------- 假資料：模擬「層數由資料決定」----------
+const FAKE_Q = ['反應速度評分', '溝通協調評分', '資源調度評分', '民眾溝通評分'];
+function leaf(name) { return { name, questions: FAKE_Q }; }
+const DATA_3 = {
+  name: '國防部案例', children: [
+    { name: '階段0', children: ['國防部應變中心開設','雙和醫院缺水危機','新北市府網站遭駭','雙和醫院資安攻擊','中油斷氣影響雙和'].map(leaf) },
+    { name: '階段1', children: ['中共沿海封控威脅','敵對勢力認知作戰','權貴撤離謠言恐慌','資金凍結謠言擠兌','金融擠兌波及雙和','長照機構斷水斷電','偽造警報訊息干擾','發布緊急動員命令'].map(leaf) },
+    { name: '階段2', children: ['台61線交通管制','實施民生配給配售','台64線交管引民怨','台61交管引發謠言','雙和降載引發民怨','雙和急診現爆裂物','中共無人機偵察','雙和啟動防空避難','無人機攻擊通訊站','防空警報引發推擠','雙和慢性照護中斷'].map(leaf) },
+  ]
+};
+// 1 層：模擬現有 SCENE 案例（項目 -> 問題，沒有中間分組）
+const DATA_1 = {
+  name: 'SCENE案例', children: ['SCENE 資安通報','SCENE 現場管制','SCENE 傷患救護'].map(leaf)
+};
+
+// ---------- 狀態：一個 index 堆疊，走到哪一層都靠它算 ----------
+const qs = new URLSearchParams(location.search);
+let variant = qs.get('variant') || 'A';
+let depth = qs.get('depth') || '3';
+let stack = [];        // 選 A/C 版時：目前鑽到哪一層
+let openIdx = null;    // 手風琴版（B）：目前展開的 index（null=都收合）
+
+function dataset() { return depth === '3' ? DATA_3 : DATA_1; }
+function pathNodes() {
+  let node = dataset();
+  const path = [node];
+  for (const idx of stack) { node = node.children[idx]; path.push(node); }
+  return path;
+}
+function currentNode() { const p = pathNodes(); return p[p.length - 1]; }
+function isLeaf(node) { return !!node.questions; }
+
+function pushChild(idx) { stack.push(idx); render(); }
+function popTo(d) { stack = stack.slice(0, d); render(); }
+function syncUrl() {
+  const u = new URL(location.href);
+  u.searchParams.set('variant', variant);
+  u.searchParams.set('depth', depth);
+  history.replaceState(null, '', u);
+}
+
+// ---------- 核心：自適應網格 ----------
+// 量測容器實際可用空間，反推「哪種欄x列排列可以讓最小邊最大」，
+// 保證 n 個項目一定塞得下（不滑動），同時盡量放大（夠大）。
+function layoutGrid(container, n) {
+  const w = container.clientWidth, h = container.clientHeight;
+  if (!w || !h || n <= 0) return;
+  let best = { cols: n, rows: 1, size: 0 };
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const size = Math.min(w / cols, h / rows);
+    if (size > best.size) best = { cols, rows, size };
+  }
+  container.style.gridTemplateColumns = 'repeat(' + best.cols + ', 1fr)';
+  container.style.gridTemplateRows = 'repeat(' + best.rows + ', 1fr)';
+}
+
+function nodeBtnHtml(c, i, onClick) {
+  const cls = isLeaf(c) ? ' leaf' : '';
+  return '<button class="adaBtn' + cls + '" onclick="' + onClick + '(' + i + ')">' + c.name + '</button>';
+}
+
+// ---------- 葉節點（問卷）畫面 ----------
+function leafScreenHtml(node, backTo) {
+  return '<button class="backBtn" onclick="' + backTo + '">← 返回</button>' +
+    '<div class="leafScreen" style="overflow:auto"><h2>' + node.name + '</h2>' +
+    node.questions.map((q) => '<div class="qcard"><div class="qtext">' + q + '</div><div class="scoreRow">' +
+      [1,2,3,4,5].map((n) => '<button>' + n + '</button>').join('') + '</div></div>').join('') +
+    '</div>';
+}
+
+// ---------- Variant A — 麵包屑 + 自適應網格鑽層 ----------
+function renderVariantA() {
+  const screen = document.getElementById('screen');
+  const node = currentNode();
+  if (isLeaf(node)) {
+    screen.innerHTML = leafScreenHtml(node, 'popTo(' + (stack.length - 1) + ')');
+    return;
+  }
+  const path = pathNodes();
+  const crumbs = '<div class="breadcrumb">' + path.map((n, i) =>
+    '<button class="crumb' + (i === path.length - 1 ? ' current' : '') + '" onclick="popTo(' + i + ')">' + n.name + '</button>').join('') + '</div>';
+  screen.innerHTML = '<div id="screenA">' + crumbs + '<div class="adaGrid" id="gridA"></div></div>';
+  const grid = document.getElementById('gridA');
+  grid.innerHTML = node.children.map((c, i) => nodeBtnHtml(c, i, 'pushChild')).join('');
+  requestAnimationFrame(() => layoutGrid(grid, node.children.length));
+}
+
+// ---------- Variant B — 手風琴單開，其餘收成細條 ----------
+function renderVariantB() {
+  const screen = document.getElementById('screen');
+  const root = dataset();
+  // 深度=1 時，root.children 本身就是葉節點：手風琴沒有「展開」的意義，直接進問卷。
+  if (stack.length === 1) {
+    const node = currentNode();
+    screen.innerHTML = leafScreenHtml(node, 'accBack()');
+    return;
+  }
+  screen.innerHTML = '<div id="screenB"></div>';
+  const box = document.getElementById('screenB');
+  root.children.forEach((c, i) => {
+    const isOpen = openIdx === i;
+    const head = document.createElement('button');
+    head.className = 'accHead' + (isOpen ? ' open' : '');
+    head.textContent = c.name + (isLeaf(c) ? '' : (isOpen ? '  （收合 ▲）' : '  （展開 ▼）'));
+    head.onclick = () => {
+      if (isLeaf(c)) { stack = [i]; render(); return; }
+      openIdx = isOpen ? null : i;
+      render();
+    };
+    box.appendChild(head);
+    if (isOpen && !isLeaf(c)) {
+      const body = document.createElement('div');
+      body.className = 'accBody';
+      body.innerHTML = '<div class="adaGrid" id="gridB"></div>';
+      box.appendChild(body);
+    }
+  });
+  const gridB = document.getElementById('gridB');
+  if (gridB) {
+    const openNode = root.children[openIdx];
+    gridB.innerHTML = openNode.children.map((c, i) => nodeBtnHtml(c, i, 'pickB')).join('');
+    requestAnimationFrame(() => layoutGrid(gridB, openNode.children.length));
+  }
+}
+function pickB(i) { stack = [openIdx, i]; render(); }
+function accBack() { stack = []; render(); }
+
+// ---------- Variant C — 並列分割：左側階段軌 + 右側自適應網格 ----------
+function renderVariantC() {
+  const screen = document.getElementById('screen');
+  const root = dataset();
+  // 深度=1 時沒有「軌」的意義（只有一層），直接整版顯示這一層的自適應網格。
+  if (root.children.every(isLeaf)) {
+    if (stack.length === 1) {
+      screen.innerHTML = leafScreenHtml(currentNode(), 'popTo(0)');
+      return;
+    }
+    screen.innerHTML = '<div class="adaGrid" id="gridC" style="flex-grow:1"></div>';
+    const grid = document.getElementById('gridC');
+    grid.innerHTML = root.children.map((c, i) => nodeBtnHtml(c, i, 'pushChild')).join('');
+    requestAnimationFrame(() => layoutGrid(grid, root.children.length));
+    return;
+  }
+  if (stack.length === 2) {
+    screen.innerHTML = leafScreenHtml(currentNode(), 'popTo(1)');
+    return;
+  }
+  const railIdx = stack.length >= 1 ? stack[0] : 0;
+  screen.innerHTML = '<div id="screenC"><div class="rail" id="railC"></div><div class="railPane"><div class="adaGrid" id="gridC"></div></div></div>';
+  const rail = document.getElementById('railC');
+  rail.innerHTML = root.children.map((c, i) =>
+    '<button class="railBtn' + (i === railIdx ? ' active' : '') + '" onclick="selectRail(' + i + ')">' + c.name + '</button>').join('');
+  const activeNode = root.children[railIdx];
+  const grid = document.getElementById('gridC');
+  grid.innerHTML = activeNode.children.map((c, i) => nodeBtnHtml(c, i, 'pickC')).join('');
+  requestAnimationFrame(() => layoutGrid(grid, activeNode.children.length));
+}
+function selectRail(i) { stack = [i]; render(); }
+function pickC(i) { stack = [stack[0] ?? 0, i]; render(); }
+
+// ---------- 切換與除錯面板 ----------
+function render() {
+  if (variant === 'A') renderVariantA();
+  else if (variant === 'B') renderVariantB();
+  else renderVariantC();
+
+  const labels = { A: 'A — 麵包屑 + 自適應網格', B: 'B — 手風琴單開 + 網格', C: 'C — 階段軌 + 自適應網格' };
+  document.getElementById('variantLabel').textContent = labels[variant];
+  document.getElementById('debug').textContent =
+    'variant=' + variant + '  depth=' + depth + '層\n' +
+    'stack=' + JSON.stringify(stack) + (variant === 'B' ? '  openIdx=' + openIdx : '') + '\n' +
+    'path=' + pathNodes().map((n) => n.name).join(' > ');
+  syncUrl();
+}
+
+const ORDER = ['A', 'B', 'C'];
+function cycle(dir) {
+  const i = ORDER.indexOf(variant);
+  variant = ORDER[(i + dir + ORDER.length) % ORDER.length];
+  stack = []; openIdx = null;
+  render();
+}
+document.getElementById('prevBtn').onclick = () => cycle(-1);
+document.getElementById('nextBtn').onclick = () => cycle(1);
+document.addEventListener('keydown', (e) => {
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+  if (e.key === 'ArrowLeft') cycle(-1);
+  if (e.key === 'ArrowRight') cycle(1);
+});
+document.getElementById('depthToggle').onclick = () => {
+  depth = depth === '3' ? '1' : '3';
+  stack = []; openIdx = null;
+  render();
+};
+window.addEventListener('resize', render);
+
+render();
+</script>
+</body>
+</html>

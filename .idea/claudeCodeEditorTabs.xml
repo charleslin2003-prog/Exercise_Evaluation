@@ -1,20 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeEditorTabs">
-    <option name="activeSessionId" value="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" />
+    <option name="activeSessionId" value="c150ce63-21cc-405f-8a79-057ff6ed8f43" />
     <option name="openSessionIds">
       <list>
-        <option value="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" />
+        <option value="0806a52e-8d63-4e79-abab-83c4922d65c9" />
+        <option value="6e0c38fb-83bf-42cd-93df-01a925bd886d" />
+        <option value="dd32eb76-370e-4760-8301-f5eafd706c36" />
+        <option value="6566ae44-bd1b-460c-9348-51a3df0b7e45" />
+        <option value="c150ce63-21cc-405f-8a79-057ff6ed8f43" />
       </list>
     </option>
     <option name="sessionPaths">
       <map>
-        <entry key="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" value="/sessions/234924fa-7491-42cb-b47d-b7220bf9ea0b" />
+        <entry key="0806a52e-8d63-4e79-abab-83c4922d65c9" value="/sessions/234924fa-7491-42cb-b47d-b7220bf9ea0b" />
+        <entry key="6566ae44-bd1b-460c-9348-51a3df0b7e45" value="/sessions/234924fa-7491-42cb-b47d-b7220bf9ea0b" />
+        <entry key="6e0c38fb-83bf-42cd-93df-01a925bd886d" value="/sessions/2ac53631-2a17-438a-815c-c9dc7ba5c21d" />
+        <entry key="c150ce63-21cc-405f-8a79-057ff6ed8f43" value="/sessions/new" />
+        <entry key="dd32eb76-370e-4760-8301-f5eafd706c36" value="/sessions/1309240d-41b9-4111-80af-0b9e11be15af" />
       </map>
     </option>
     <option name="sessionTitles">
       <map>
-        <entry key="5bd1afbf-f592-450b-a8a1-cb15b03c64d8" value="$USER_HOME$/charles_OneDrive/OneDrive/文件/萬芳醫院急救站" />
+        <entry key="0806a52e-8d63-4e79-abab-83c4922d65c9" value="$USER_HOME$/charles_OneDrive/OneDrive/文件/萬芳醫院急救站" />
+        <entry key="6566ae44-bd1b-460c-9348-51a3df0b7e45" value="$USER_HOME$/charles_OneDrive/OneDrive/文件/萬芳醫院急救站" />
+        <entry key="6e0c38fb-83bf-42cd-93df-01a925bd886d" value="我現在選場次的功能做了嗎? 跟 協調" />
+        <entry key="c150ce63-21cc-405f-8a79-057ff6ed8f43" value="Claude Code" />
+        <entry key="dd32eb76-370e-4760-8301-f5eafd706c36" value="這裡專門桌機(這台)與筆電交接 已 commit 並 push。 - `37a641d` **Let" />
       </map>
     </option>
   </component>
