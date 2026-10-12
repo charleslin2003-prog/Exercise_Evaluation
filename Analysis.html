@@ -163,12 +163,18 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
     </div>
     <div class="headActions">
       <div class="viewTabs">
-        <button class="viewTab active" id="viewCurrent" type="button">當次演習</button>
-        <!-- 場次下拉：取代了原本的「過去演習」按鈕＋連結清單。切換場次不再是
-             換一條帶金鑰的網址（那會把 ?key= 留在網址列與瀏覽紀錄裡），而是
-             就地改 currentExid 再重抓一次 analysis。只有後端真的從註冊表解析
-             到機構代號時才會出現，回退模式下只有一場，沒有東西可選。 -->
-        <select class="exPicker" id="exPicker" style="display:none" title="切換要檢視的演習場次"></select>
+        <!-- 場次下拉。它先後取代了兩個東西：原本的「過去演習」按鈕＋連結清單，
+             以及原本擺在這個位置的「當次演習」按鈕。後者該退場的理由有兩個：
+             它的行為跟隔壁的「重新整理」完全相同（都是重抓目前這一場），而
+             「現在在看哪一場」做成一顆沒有狀態的按鈕，本來就講不出任何資訊；
+             下拉自己就是答案。
+             切換場次不換網址（那會把 ?key= 留在網址列與瀏覽紀錄裡），而是就地
+             改 currentExid 再重抓一次 analysis。「產生報告」讀的是同一份 DATA，
+             所以報告必然就是下拉上選的那一場，不需要再傳一次場次參數——這是
+             設計，不是巧合：報告與畫面不可能指向不同場次。
+             只有後端真的從註冊表解析到機構代號時才會出現；回退模式下只有一場，
+             一個只有一個選項的下拉是雜訊，不是資訊。 -->
+        <select class="exPicker" id="exPicker" style="display:none" title="選擇要檢視與產生報告的演習場次"></select>
         <button class="viewTab" type="button" disabled title="之後開放">演習回饋管理</button>
         <button class="refreshBtn" id="refreshBtn">重新整理</button>
         <!-- 預設 disabled：按下「產生報告」會把網址列的 ?key= 清掉（見
@@ -969,10 +975,7 @@ document.getElementById('exPicker').onchange=function(){
   load();
 };
 
-// 「當次演習」與「重新整理」是同一件事（都重抓目前這一場）；場次切換走上面
-// 那個下拉，「演習回饋管理」按鈕仍停用。
-// 點「當次演習」就是重新整理目前資料，行為上等同 refreshBtn。
-document.getElementById('viewCurrent').onclick=load;
+// 場次切換走上面那個下拉，「演習回饋管理」按鈕仍停用。
 document.getElementById('refreshBtn').onclick=load;
 document.getElementById('reportBtn').onclick=enterReport;
 document.getElementById('backBtn').onclick=exitReport;
@@ -983,6 +986,13 @@ function load(){
   // 這時候產生報告只會印出與畫面不一致的內容。init() 成功後會再解鎖。
   document.getElementById('reportBtn').disabled=true;
   document.getElementById('reportBtn').title='資料讀取完成後才能產生報告';
+  // 讀取期間鎖住場次下拉。快速連切兩場會送出兩個請求，而先送的那個完全可能
+  // 後到，畫面就會停在「不是下拉上顯示的那一場」——而且看不出來。鎖住比事後
+  // 比對請求序號便宜，也比較誠實：使用者看得到自己在等什麼。
+  // 只在清單真的填好之後才鎖，否則第一次載入時會把還沒有選項的空下拉鎖起來，
+  // 而緊接著的 loadExercises() 有它自己的鎖／解鎖。
+  const picker=document.getElementById('exPicker');
+  if(exListLoaded) picker.disabled=true;
   document.getElementById('stateArea').innerHTML='<div class="state">資料讀取中…</div>';
   fetch(RECORD_URL + '?action=analysis&key=' + encodeURIComponent(KEY)
         + (T_PARAM ? '&t=' + encodeURIComponent(T_PARAM) : '')
@@ -998,7 +1008,11 @@ function load(){
     })
     .catch(err=>{
       document.getElementById('stateArea').innerHTML = `<div class="state err">讀取失敗，請確認網路連線或稍後重試。<br>${esc(String(err))}</div>`;
-    });
+    })
+    // 失敗時也一定要解鎖：讀取失敗最常見的下一個動作就是「換一場看看」。
+    // 第一次載入時 exListLoaded 還是 false（它要等 loadExercises() 的回應才會
+    // 變 true），所以這裡不會搶走 loadExercises() 自己的鎖。
+    .finally(()=>{ if(exListLoaded) picker.disabled=false; });
 }
 load();
 </script>
