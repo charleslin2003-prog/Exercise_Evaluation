@@ -338,13 +338,29 @@ function svgIso3D(byPS, s4Keys) {
   const minX=Math.min(...xs)-pad,maxX=Math.max(...xs)+pad,minY=Math.min(...ys)-pad-16,maxY=Math.max(...ys)+pad;
   const W=maxX-minX,H=maxY-minY;
   boxes.sort((a,b)=>a.depth-b.depth);
-  // 每個潛能（每一列）裡分數最低的那格改用較淡色調，跟同一列其他較飽和的
-  // 柱子拉出對比，一眼就能挑出這個潛能裡最弱的 S 要素。
-  const minJByCat=cats.map((c,i)=>{
-    let minJ=-1,minV=Infinity;
-    for(let j=0;j<nGroup;j++){const v=matrix[i][j];if(v!=null&&v<minV){minV=v;minJ=j;}}
-    return minJ;
-  });
+  // 標出**全局最低的三格**（2026-10-12 業主指定）。
+  //
+  // 原本標的是「每一列各自最低的那一格」，也就是每個潛能挑一個最弱的 S。那個
+  // 畫法會標出 3～4 格，而且是**相對**的：某個潛能整列都很高時，它那格仍會被
+  // 標成紅的，看起來像個問題，其實不是。報告的「待改善前三項」取的是全局前三，
+  // 兩邊若用不同定義，同一份報告裡的圖和表會互相矛盾。
+  //
+  // 平手一併標：第三低和第四低同分時標出四格，比硬切成三格誠實。
+  const weakSet=(function(){
+    const flat=[];
+    for(let i=0;i<cats.length;i++){
+      for(let j=0;j<nGroup;j++){
+        const v=matrix[i][j];
+        if(v!=null) flat.push({i:i,j:j,v:v});
+      }
+    }
+    flat.sort((a,b)=>a.v-b.v);
+    if(!flat.length) return {};
+    const cut=flat[Math.min(2,flat.length-1)].v;
+    const set={};
+    flat.forEach(c=>{ if(c.v<=cut) set[c.i+','+c.j]=true; });
+    return set;
+  })();
   let s=`<svg class="iso3dSvg" viewBox="${minX} ${minY} ${W} ${H}" role="img" aria-label="三項潛能 4S 立體圖" style="width:100%;height:auto;min-height:300px">`;
   boxes.forEach(b=>{
     const c=cats[b.i];
@@ -352,7 +368,7 @@ function svgIso3D(byPS, s4Keys) {
       s+=`<polygon points="${[b.A,b.B,b.C,b.D].map(p=>p.join(',')).join(' ')}" fill="#eef3f4" stroke="#d8e4e7"/>`;
       return;
     }
-    const isWeak=b.j===minJByCat[b.i];
+    const isWeak=!!weakSet[b.i+','+b.j];
     const top=isWeak?mixHex(c.color,'#ffffff',.85):mixHex(c.color,'#ffffff',.45);
     const left=isWeak?mixHex(c.color,'#ffffff',.62):mixHex(c.color,'#000000',.12);
     const right=isWeak?mixHex(c.color,'#ffffff',.42):mixHex(c.color,'#000000',.34);
