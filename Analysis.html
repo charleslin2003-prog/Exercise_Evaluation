@@ -759,10 +759,29 @@ function abilityLabel(pot, s4){
   return pot + ' x ' + (m ? m[1] : s4);
 }
 
+// 取到第 n 名為止，**同分同名次而且全部列入**（2026-10-12 業主指定）。
+// 用的是競賽排名：分數相同給同一個名次，下一個名次跳過被佔用的位次。
+// 所以回傳的筆數不一定是 n —— 1,1,1 會是三筆、1,2,2 三筆、1,2,3,3,3 五筆。
+// 直接 slice(0,3) 會在同分處硬切，等於從兩個一模一樣的組合裡任選一個放進
+// 報告、另一個丟掉，而報告上看不出曾經發生過這件事。
+function rankedTop(cells, n, asc){
+  const sorted = [...cells].sort((a,b)=> asc ? a.mean-b.mean : b.mean-a.mean);
+  const out = [];
+  let rank = 0, prev = null;
+  for (let i=0;i<sorted.length;i++){
+    const c = sorted[i];
+    if (prev === null || c.mean !== prev) rank = i + 1;   // 同分沿用上一個名次
+    if (rank > n) break;
+    out.push(Object.assign({ rank: rank }, c));
+    prev = c.mean;
+  }
+  return out;
+}
+
 function abilityTable(list, caption){
   if (!list.length) return `<div class="sec">${esc(caption)}</div><div class="small">尚無資料</div>`;
-  const rows = list.map((c, i) =>
-    `<tr><td style="text-align:center">${i + 1}</td><td>${esc(abilityLabel(c.potential, c.s4))}</td>` +
+  const rows = list.map(c =>
+    `<tr><td style="text-align:center">${c.rank}</td><td>${esc(abilityLabel(c.potential, c.s4))}</td>` +
     `<td class="score ${cls(c.mean)}">${c.mean.toFixed(1)}</td><td>${esc(abilityNote(c.potential, c.s4))}</td></tr>`).join('');
   return `<div class="sec">${esc(caption)}</div><div class="table-wrap"><table>` +
     `<thead><tr><th style="width:3em"></th><th>綜合能力</th><th style="width:5em">分數</th><th>說明</th></tr></thead>` +
@@ -781,8 +800,8 @@ function renderReportSummary(){
     ['相差不超過 1 分比例',pctText(st.within1)],
     ['未觸發率（1 分占比）',st.untriggered?pctText(st.untriggered.rate):'—'],
   ];
-  const ability=abilityCells().sort((a,b)=>b.mean-a.mean);
-  const top=ability.slice(0,3), bottom=[...ability].reverse().slice(0,3);
+  const ability=abilityCells();
+  const top=rankedTop(ability,3,false), bottom=rankedTop(ability,3,true);
   document.getElementById('reportSummary').innerHTML=
     `<div class="reportHead">報告摘要</div>`+
     `<div class="sumGrid">${cells.map(c=>`<div class="sumCell"><div class="k">${esc(c[0])}</div><div class="v">${esc(c[1])}</div></div>`).join('')}</div>`+
