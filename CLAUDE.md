@@ -919,10 +919,15 @@ places share.
   translucent pills instead of `.card.kpi`): 主題/說明 (from `meta.exerciseTopic`/
   `exerciseDesc`, falling back to `—`; the header pill above the tabs uses the separate
   `exerciseCategory`), 評核官人數, 評核總數 (`analysisRows + coverageRows + learningRows`).
-  `#overview` now holds only one card with three aligned sections in a `1fr 140px 1fr` title
+  `#overview` holds two cards. The first has three aligned sections in a `1fr 140px 1fr` title
   row + content row: 綜合能力柱狀圖 (isometric 3D potential × 4S bars, `svgIso3D`/`renderIso3D`),
   演習覆蓋率 (gauge, `svgCoverageGauge`), and 4S整備表現直方圖 (`barsSVG` — the simple
-  non-stacked 4S average, *not* the 4S 分析 tab's stacked chart).
+  non-stacked 4S average, *not* the 4S 分析 tab's stacked chart). The second
+  (`#abilityRankCard`, `renderAbilityRank()`, added 2026-10-13) is the full version of the
+  report's 優勢前三項／待改善前三項: every 潛能×4S cell ranked high→low with the same
+  `abilityCells()` + `rankedTop()` (ties share a rank), then the `n:0` cells — combinations
+  with no questions in this drill — listed last with no rank and `—`, because "no questions"
+  must not read as "lowest score". `#overview` is reused as report section R3, so it prints.
 - **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category, stacked by
   演練單元/SCENE short code, segments in natural code order (`A1 < A2 < B < … < F`), colors
   from an HSL spectrum (hue 0–300° across the sorted list) so adjacent codes read as
