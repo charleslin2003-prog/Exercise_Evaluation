@@ -996,9 +996,19 @@ function fetchAnalysis_(cfg) {
   }
   if (data.error) {
     if (String(data.errorCode || '') === 'UNAUTHORIZED') {
-      throw new Error('分析金鑰不正確（後端回「unauthorized」）。\n' +
-        '請確認指令碼屬性 ' + PROP_ANALYSIS_KEY_ + ' 的值，與分析儀表板網址上 ?key= 後面那一串完全相同；' +
-        '若已啟用租戶註冊表，要用該場演習那一列的「分析金鑰」。');
+      // 提示要指對地方：網頁模式下 REPORT_ANALYSIS_KEY 連讀都沒讀（憑證是網址上
+      // 帶來、而且已經對過本部署註冊表那一列的那一把），叫人去改它等於把人送去
+      // 檢查唯一不相干的東西。這條在網頁模式下真正的成因只有一個：這支報告部署的
+      // 註冊表，與後端 ConfigWithSubmit.gs 的註冊表，對同一場的「分析金鑰」不一致。
+      throw new Error(cfg.webMode
+        ? '後端不接受這把分析金鑰（回「unauthorized」）。\n' +
+          '這把金鑰是從分析平台的網址帶過來、並且已經與本報告部署的租戶註冊表那一列比對通過的，' +
+          '所以問題出在兩邊的註冊表對同一場演習記的「分析金鑰」不同。\n' +
+          '請確認本部署的指令碼屬性 ' + PROP_REGISTRY_ID_ + ' 與後端 ConfigWithSubmit.gs 的 ' +
+          'REGISTRY_SPREADSHEET_ID 指向同一份註冊表（改完後兩邊各有 120 秒快取）。'
+        : '分析金鑰不正確（後端回「unauthorized」）。\n' +
+          '請確認指令碼屬性 ' + PROP_ANALYSIS_KEY_ + ' 的值，與分析儀表板網址上 ?key= 後面那一串完全相同；' +
+          '若已啟用租戶註冊表，要用該場演習那一列的「分析金鑰」。');
     }
     throw new Error('後端回報錯誤：' + String(data.error) +
       (data.errorCode ? '（代碼 ' + data.errorCode + '）' : ''));
@@ -2317,9 +2327,15 @@ function reportStart(opts) {
       var live = readActiveRunFor_(target);
       if (live && live.status === 'running' &&
           (Date.now() - Number(live.startedAt || 0)) < RUN_STALE_MS_) {
-        throw reportError_('這場演習已經有一份報告正在產生中（編號 ' + live.runId + '）。\n' +
+        var busy = reportError_('這場演習已經有一份報告正在產生中（編號 ' + live.runId + '）。\n' +
           (live.docUrl ? '文件連結：' + live.docUrl + '\n' : '') +
           '請等它完成，或在產生面板按「捨棄這一輪」之後再試一次。', 'REPORT_BUSY');
+        // 把「是哪一輪」帶在錯誤物件上，failure_ 會把它放進回應的 runId。
+        // 不這樣做的話回應的 runId 是空的（st 此時還不存在），分析平台就給不出
+        // 「查看那一輪的狀態」那顆按鈕 —— 而那正是這個分支唯一能提供的動作。
+        busy.liveRunId = live.runId || '';
+        busy.liveDocUrl = live.docUrl || '';
+        throw busy;
       }
       // 在這裡就先占位：報告編號要等驗證做完才有意義，但「這場次有人在跑」
       // 必須在任何驗證之前就成立，否則連點兩下會有兩輪同時通過檢查。
@@ -2895,7 +2911,9 @@ function progress_(st, label, done) {
 function failure_(err, st) {
   return {
     ok: false,
-    runId: st ? st.runId : '',
+    // st 為 null 時仍可能知道「是哪一輪擋住的」（REPORT_BUSY 會把它掛在錯誤物件
+    // 上）。選單模式永遠不會設 liveRunId，所以這一項對那條路是死碼。
+    runId: st ? st.runId : ((err && err.liveRunId) || ''),
     step: st ? (st.doneCount || 0) : 0,
     totalSteps: st ? (st.totalCount || 0) : 0,
     label: '已中止',
@@ -2907,7 +2925,7 @@ function failure_(err, st) {
     // ReportDialog.html 只讀 ok／error，多一個鍵對它完全沒有影響。
     errorCode: (err && err.reportCode) || 'REPORT_FAILED',
     warnings: st ? (st.warnings || []).slice() : [],
-    docUrl: st ? (st.docUrl || '') : '',
+    docUrl: st ? (st.docUrl || '') : ((err && err.liveDocUrl) || ''),
     pdfUrl: ''
   };
 }
@@ -4047,17 +4065,24 @@ var PREFLIGHT_CODES_ = ['RUN_NOT_FOUND', 'RUN_TOKEN_MISMATCH', 'REPORT_BUSY'];
 // 畫的是同一條線）。
 // 想多回一個欄位就得改這裡，這也正是這條線查得動的原因
 // （對照 ConfigWithSubmit.gs 的 sessionSortable_）。
+// ⚠️ 三個自由文字欄位（label／warnings／error）一律再過一次 scrub_。
+// 理由不是「現在有洩漏」—— 今天每一個警告的產生點都走過 msg_()。理由是這條
+// 紅線的可查性：上面那段註解宣稱「只有這兩個函式組裝回應物件」，但那只有在
+// 遮蔽也發生在**這裡**時才是一句真話。警告是先存進指令碼屬性、之後才由
+// reportStatus 原樣回放的，遮蔽若只發生在產生點，正確性就取決於「當時
+// SECRET_IDS_ 已經註冊完了沒有」—— 一個新增的警告（或一個新的呼叫順序）就能
+// 無聲地打破它，而且不會有任何地方報錯。在收口處再擦一次，成本是幾次字串比對。
 function webProgressOut_(res, st) {
   var out = {
     ok: res.ok !== false,
     runId: String(res.runId || ''),
     step: Number(res.step || 0),
     totalSteps: Number(res.totalSteps || 0),
-    label: String(res.label || ''),
+    label: scrub_(String(res.label || '')),
     done: !!res.done,
     status: String(res.status || ''),
     identified: !!(st ? st.identified : res.identified),
-    warnings: (res.warnings || []).slice(),
+    warnings: scrubList_(res.warnings),
     docUrl: String(res.docUrl || ''),
     pdfUrl: String(res.pdfUrl || ''),
     folderName: String((st && st.folderName) || ''),
@@ -4066,15 +4091,23 @@ function webProgressOut_(res, st) {
       (Date.now() - Number(st.startedAt || 0)) > RUN_STALE_MS_)
   };
   if (res.ok === false) {
-    out.error = String(res.error || '');
+    out.error = scrub_(String(res.error || ''));
     out.errorCode = String(res.errorCode || 'REPORT_FAILED');
   }
   return out;
 }
 
+function scrubList_(list) {
+  var out = [];
+  for (var i = 0; i < (list || []).length; i++) out.push(scrub_(String(list[i] == null ? '' : list[i])));
+  return out;
+}
+
 function webErrorShape_(message, code) {
+  // ⚠️ 'unauthorized' 必須逐字，不經 scrub_（它本來就不含任何秘密，而
+  // Analysis.html 會把這個字串原樣比對）。
   if (code === 'UNAUTHORIZED') return { error: 'unauthorized', errorCode: 'UNAUTHORIZED' };
-  return { error: String(message == null ? '' : message), errorCode: String(code || 'REPORT_FAILED') };
+  return { error: scrub_(String(message == null ? '' : message)), errorCode: String(code || 'REPORT_FAILED') };
 }
 
 function webErrorOut_(err) {
@@ -4291,7 +4324,16 @@ function resolveWebTarget_(params) {
   // （硬擋會讓演習當天全場評核官無法評分），但拒絕產生一份報告不會讓任何事
   // 停擺，而「安靜地報了另一家醫院」會產出一份封面寫錯的、已簽核的 PDF。
   if (!reg.readable || !reg.sheetFound || !reg.rowCount) {
-    throw reportError_('目前無法取得演習註冊資料，請稍後再試或聯絡系統管理者。', 'REGISTRY_OFF');
+    // ⚠️ 這一句是在金鑰比對**之前**丟的（金鑰就住在註冊表裡，讀不到表就比不了），
+    // 所以收件人可能是完全沒有憑證的人 —— 不能說「是哪一關壞了」。
+    // 但完全不給線索會變成第二個「報告快照 J1/K1」式的陷阱：只在執行時爆、
+    // 指著一份試算表、而且沒有任何東西指出要去看哪裡。折衷是只講**指令碼屬性的
+    // 鍵名與分頁名稱**（兩者都寫在公開的 repo 裡，不是憑證），不講 ID、不講原因。
+    throw reportError_('目前無法取得演習註冊資料，請稍後再試或聯絡系統管理者。\n' +
+      '（系統管理者：請檢查報告部署的指令碼屬性 ' + PROP_REGISTRY_ID_ + ' 指到的檔案是否存在、' +
+      '執行帳號有無權限、裡面有沒有「' + REG_SHEET_NAME_ + '」分頁，以及該分頁的表頭是否仍有 ' +
+      REG_HID_ALIASES_[0] + '／' + REG_EXID_ALIASES_[0] + '／' + REG_CONFIGID_ALIASES_[0] + '／' +
+      REG_RECORDID_ALIASES_[0] + '／' + REG_KEY_ALIASES_[0] + ' 這五欄。）', 'REGISTRY_OFF');
   }
 
   var hit = null;
@@ -4661,12 +4703,22 @@ function beginWebStep_(runId, target) {
 // 終局狀態壓成墓碑：reportStatus 還答得出問題，但不再占著 8KB。
 // 快照座標與 ssId 刻意保留 —— snapPending 還沒清掉時，下一次同場次的
 // reportStart 要靠它們把停在「產生中」的那幾列補標成「中斷」。
+//
+// ⚠️ runToken 也必須保留，而且理由不是「順便」：分析平台對 reportContinue 的
+// 網路錯誤會用同一組 runId+runToken 自動重試一次（那是設計的一部分，靠
+// openCursor_ 的 BEGIN 標記不變式才安全）。最值得重試的一次，正好是「最後一章
+// 寫完、PDF 也出了，回應卻掉在路上」那一次 —— 此時這一輪已經被 closeWebRun_
+// 壓成墓碑。墓碑若不帶 runToken，beginWebStep_ 的第一個條件就不成立，重試會收到
+// RUN_TOKEN_MISMATCH，而不是「這一輪已經結束（完成）」+ 文件／PDF 連結：
+// 報告明明好好地躺在雲端硬碟裡，畫面卻說「已中止」，而且連「捨棄這一輪」也會
+// 用同一個代碼失敗（webAbandon_ 比的是同一個欄位）。
 function tombstoneOf_(st) {
   return {
     tombstone: true,
     propKey: st.propKey || '',
     webMode: st.webMode === true,
     runId: st.runId || '',
+    runToken: st.runToken || '',
     hid: st.hid || '',
     exid: st.exid || '',
     ssId: st.ssId || '',
@@ -4710,6 +4762,12 @@ function sweepStaleRuns_(target) {
   for (var i = 0; i < keys.length; i++) {
     var k = keys[i];
     if (k.indexOf(PROP_RUN_PREFIX_) !== 0) continue;
+    // ⚠️ 'REPORT_RUN_STATE'.indexOf('REPORT_RUN_') === 0 —— 選單模式那一格的鍵名
+    // 正好通過上面的前綴比對。少了這一行，只要有人把同一份原始碼貼成「既是容器
+    // 綁定、又有部署」的單一專案，一次網頁端的 reportStart 就會把選單那一輪的
+    // 執行狀態壓成墓碑（queue／docId 一起沒了，接不下去也重設不回來），或在它
+    // 超過 7 天後直接刪掉。網頁模式永遠不該碰選單模式的那一格。
+    if (k === PROP_RUN_STATE_) continue;
     var st = readRunStateAt_(k);
     if (!st || !st.runId) { try { p.deleteProperty(k); } catch (errDel) {} continue; }
 
