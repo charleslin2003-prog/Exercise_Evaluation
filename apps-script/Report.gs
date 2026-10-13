@@ -47,7 +47,7 @@ var MENU_TITLE_ = '演習評核報告';
 
 // 兩份手貼副本的指紋。**改這個檔案就要改這一行**，否則它會從「可查核的版本號」
 // 退化成「兩邊都印同一個字串的裝飾」。reportCheck 與附錄C 都會印它。
-var REPORT_BUILD_ = '2026-10-13 fill-mode';
+var REPORT_BUILD_ = '2026-10-13 fill-mode b';
 
 // ===== 指令碼屬性鍵 =====
 var PROP_ANALYSIS_KEY_ = 'REPORT_ANALYSIS_KEY';
@@ -974,6 +974,18 @@ function plainTokens_(list) {
   var out = [];
   for (var i = 0; i < (list || []).length; i++) out.push(plainToken_(list[i]));
   return out;
+}
+
+// plainToken_ 的「整段字串」版：把一句話裡**任何**完整的 {{…}} 拆掉大括號。
+// 為什麼需要它而不是只在每個寫死的字串上呼叫 plainToken_：會被寫進文件的字串
+// 不只有我們自己組的那幾句，還有 msg_(err) —— 例外訊息裡原樣帶著一個 token 的
+// 情形真的會發生（填入式的欄數不足就是這樣丟的）。那句話一旦落進儲存格或
+// 「報告產生紀錄」，收尾第 4 步的殘留掃描就會把它當成「範本沒替換掉的 token」
+// 報出來，於是報告警告自己剛剛寫下去的字 —— 2026-10-09 已經踩過一次，
+// 見 plainToken_ 上方與 OWNER_FILLED_TOKENS_ 的註解。
+// 只拆大括號、不動裡面的字，讀者仍然看得出是哪一個標記。
+function plainifyTokens_(s) {
+  return String(s == null ? '' : s).replace(/\{\{([^{}]*)\}\}/g, '$1');
 }
 
 function addWarning_(st, text) {
@@ -3191,8 +3203,9 @@ function reportContinue(runId, target) {
           for (var di = 0; di < drop.length; di++) {
             addSkipped_(st, titleOf_(drop[di]), '時間預算用盡，未產生');
           }
-          addWarning_(st, '已超過跨步驟總時間預算，' + drop.length + ' 章未產生；' +
-            '仍會補上附錄C／附錄D 以記錄這件事。');
+          addWarning_(st, '已超過跨步驟總時間預算，' + drop.length +
+            (st.mode === 'fill' ? ' 個區塊未產生；仍會補上文件最後的「' + FILL_RECORD_TITLE_ + '」以記錄這件事。'
+              : ' 章未產生；仍會補上附錄C／附錄D 以記錄這件事。'));
           st.queue = keep;
           if (!keep.length) { aborted = true; break; }
           continue; // 以保留的附錄章節重跑迴圈（下面的逐步預算會讓它結束這次呼叫）。
@@ -3358,8 +3371,12 @@ function finalizeReport_(doc, st, ctx, aborted) {
     try { removeParagraphByText_(body, DRAFT_BANNER_); } catch (err4) {}
   } else if (body && partial) {
     try {
+      // 指路要指到這個模式真的有的那一節：填入式沒有附錄D，它的對應物是文件
+      // 最後自動附加的「報告產生紀錄」。叫讀者去翻一個不存在的附錄，就是這個
+      // 檔案一再付代價的那種「錯誤提示比沒有提示更糟」。
       body.replaceText(tokenPattern_(DRAFT_BANNER_),
-        '草稿 — 產生未完成（本報告有 ' + all.length + ' 節未產生，詳見附錄D，請勿分發）');
+        '草稿 — 產生未完成（本報告有 ' + all.length + ' 節未產生，詳見' +
+        (fillMode ? '文件最後的「' + FILL_RECORD_TITLE_ + '」' : '附錄D') + '，請勿分發）');
     } catch (err5) {}
   }
 
@@ -3394,8 +3411,10 @@ function finalizeReport_(doc, st, ctx, aborted) {
       var late = (st.warnings || []).slice(printed);
       if (late.length) {
         var tail = { body: body, index: body.getNumChildren() };
-        heading_(tail, '附錄C 補記：產生收尾階段的警告', 2);
-        para_(tail, '以下警告在附錄C 產生之後才發生，因此沒有列在上面那一節裡。');
+        // 兩種模式的「前一節叫什麼」不同：錨點式是附錄C，填入式是產生紀錄。
+        var printedIn = fillMode ? FILL_RECORD_TITLE_ : '附錄C';
+        heading_(tail, printedIn + ' 補記：產生收尾階段的警告', 2);
+        para_(tail, '以下警告在' + printedIn + ' 產生之後才發生，因此沒有列在上面那一節裡。');
         for (var lw = 0; lw < late.length; lw++) bullet_(tail, late[lw]);
         st.warningsPrintedCount = st.warnings.length;
       }
@@ -4962,7 +4981,9 @@ function emitChartIntoCell_(loc, ctx, spec) {
       }
       lastError = '圖片插入儲存格失敗';
     } else {
-      lastError = res.error;
+      // plainifyTokens_：lastError 會被寫進儲存格與「報告產生紀錄」，而底層
+      // 例外訊息帶著完整 {{…}} 的情形是會發生的（見 plainifyTokens_ 上方）。
+      lastError = plainifyTokens_(res.error);
     }
   }
   var legacy = legacyChartBlob_(spec);
@@ -4990,7 +5011,7 @@ function emitChartIntoCell_(loc, ctx, spec) {
     }
     return;
   } catch (errText) {
-    lastError = lastError + '；數值也寫不進儲存格（' + msg_(errText) + '）';
+    lastError = lastError + '；數值也寫不進儲存格（' + plainifyTokens_(msg_(errText)) + '）';
   }
   // 第 ⑤ 段。
   try {
@@ -5066,11 +5087,23 @@ function fillRowSlot_(loc, ctx, def) {
   var ti = loc.rowIndex;
   var st = ctx.st;
 
-  // 檢查過了還是再量一次：範本有可能在「檢查設定」與「產生」之間被改過。
+  // 檢查過了還是再量一次：範本有可能在「檢查設定」與「產生」之間被改過
+  // （掃描的是範本本身，複本是掃描之後才建立的）。
+  // ⚠️ 訊息裡用 plainToken_ 去掉大括號：這一句會被 writeFillSlot_ 的 catch
+  // 寫進儲存格、也會進 warnings[] 與「報告產生紀錄」，帶著完整的 {{…}} 就會
+  // 被收尾第 4 步的殘留掃描當成範本打錯字抓出來。
   var cells = table.getRow(ti).getNumCells();
   if (cells < def.columns.length) {
-    throw new Error(def.token + ' 所在的表格只有 ' + cells + ' 欄，這個標記需要 ' +
+    throw new Error(plainToken_(def.token) + ' 所在的表格只有 ' + cells + ' 欄，這個標記需要 ' +
       def.columns.length + ' 欄（欄位順序由左至右：' + columnContractText_(def) + '）。');
+  }
+  // 同理再量一次「標記在不在這一列的第一格」。欄位對應是從該列第一欄開始算的，
+  // 標記若被挪到第三欄，底下照樣從第 0 格開始寫，於是那個標記原封不動留在
+  // PDF 上 —— 一個不會報錯、只會印出來的失敗。掃描關卡已經擋過這件事，這裡
+  // 是同一條規則的第二道，理由與上面的欄數複查相同。
+  if (loc.cellIndex !== 0) {
+    throw new Error(plainToken_(def.token) + ' 不在樣板列的第一格（目前在第 ' + (loc.cellIndex + 1) +
+      ' 欄），無法對應欄位順序（由左至右：' + columnContractText_(def) + '）。');
   }
 
   var data = fillRowData_(def, ctx);
@@ -5156,8 +5189,8 @@ function writeFillSlot_(doc, slotId, ctx) {
     try {
       writeFillRecord_(doc, ctx);
     } catch (errRec) {
-      ctx.warn(FILL_RECORD_TITLE_ + '：寫入失敗（' + msg_(errRec) + '）。');
-      ctx.skip(FILL_RECORD_TITLE_, msg_(errRec));
+      ctx.warn(FILL_RECORD_TITLE_ + '：寫入失敗（' + plainifyTokens_(msg_(errRec)) + '）。');
+      ctx.skip(FILL_RECORD_TITLE_, plainifyTokens_(msg_(errRec)));
     }
     return;
   }
@@ -5170,7 +5203,8 @@ function writeFillSlot_(doc, slotId, ctx) {
     // 唯一的例外是上一次正好死在這個 slot 的寫入途中 —— 那種情況下資料列可能
     // 只寫了一半，必須具名說出來，不能無聲放過。
     if (ctx.st.fillInflight === slotId) {
-      ctx.warn(def.token + ' 的資料列可能未完整寫入（上一次呼叫在寫入途中中斷）。');
+      // plainToken_：這一則會被印進「報告產生紀錄」，不可以含完整的 {{…}}。
+      ctx.warn(plainToken_(def.token) + ' 的資料列可能未完整寫入（上一次呼叫在寫入途中中斷）。');
       ctx.skip(def.title, '上一次呼叫在寫入途中中斷，資料列可能不完整');
       ctx.st.fillInflight = '';
     }
@@ -5181,13 +5215,17 @@ function writeFillSlot_(doc, slotId, ctx) {
     else fillRowSlot_(loc, ctx, def);
   } catch (err) {
     ctx.st.fillInflight = '';
+    // ⚠️ 例外訊息會原樣落進儲存格與「報告產生紀錄」，所以一律先過
+    // plainifyTokens_ —— 它裡面可能帶著一個完整的 {{…}}（欄數／位置複查就是
+    // 這樣丟的），而那會讓收尾的殘留掃描報告它自己剛寫下去的字。
+    var reason = plainifyTokens_(msg_(err));
     try {
       setParaText_(clearCellToSingleParagraph_(loc.cell),
-        '⚠ 本處在產生時發生錯誤：' + msg_(err) + '　同一批數字已經寫進設定試算表的「' +
+        '⚠ 本處在產生時發生錯誤：' + reason + '　同一批數字已經寫進設定試算表的「' +
         SNAPSHOT_SHEET_NAME_ + '」工作表（報告編號 ' + ctx.st.runId + '），請由該處查閱。');
     } catch (err2) {}
-    ctx.warn(def.title + '：產生失敗（' + msg_(err) + '）。');
-    ctx.skip(def.title, msg_(err));
+    ctx.warn(def.title + '：產生失敗（' + reason + '）。');
+    ctx.skip(def.title, reason);
   }
 }
 
