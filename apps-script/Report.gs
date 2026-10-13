@@ -47,7 +47,7 @@ var MENU_TITLE_ = '演習評核報告';
 
 // 兩份手貼副本的指紋。**改這個檔案就要改這一行**，否則它會從「可查核的版本號」
 // 退化成「兩邊都印同一個字串的裝飾」。reportCheck 與附錄C 都會印它。
-var REPORT_BUILD_ = '2026-10-13 web-entry';
+var REPORT_BUILD_ = '2026-10-13 fill-mode';
 
 // ===== 指令碼屬性鍵 =====
 var PROP_ANALYSIS_KEY_ = 'REPORT_ANALYSIS_KEY';
@@ -117,8 +117,19 @@ var SNAPSHOT_COLUMNS_ = [
 var COVER_TOKENS_ = [
   '{{機構名稱}}', '{{演習名稱}}', '{{演習主題}}', '{{演習類別}}', '{{演習日期}}',
   '{{機構代號}}', '{{演習代號}}', '{{評核官人數}}', '{{資料列數}}',
-  '{{報告產生時間}}', '{{報告編號}}', '{{匿名模式}}'
+  '{{報告產生時間}}', '{{報告編號}}', '{{匿名模式}}',
+  // 2026-10-13 新增，給業主自己的報告手稿用（儀表板上那張「說明」KPI 卡的同一個值）。
+  // 它走的是既有的 applyCoverTokens_ 三容器 replaceText，所以**打在表格儲存格裡
+  // 也會被替換** —— replaceText 會走訪表格，這正是填入式範本不需要為它寫新程式的原因。
+  '{{演習說明}}'
 ];
+
+// 缺席時**不計入** scan.coverMissing 的封面 token。
+// 為什麼要有這張表：{{演習說明}} 是後加的，而舊的 21 章骨架範本裡沒有它。
+// 若讓它進 coverMissing，每一份用舊範本產出的報告都會在附錄C 多一則
+// 「範本缺少封面 token：演習說明」—— 一則對那份範本而言完全正確、卻每次都響的
+// 警告。這個檔案已經為同一個病付過一次代價（見 OWNER_FILLED_TOKENS_）。
+var COVER_TOKENS_SILENT_ = ['{{演習說明}}'];
 
 // **刻意不填**的 token：報告版次／文件編號／製表／審核／核定 是留給業主在產生出來
 // 的文件裡自己簽的（附錄C 最後一段就是這樣寫的）。
@@ -166,7 +177,62 @@ var SECTIONS_ = [
 // 插入位置仍然是各自的錨點，所以文件上的章節順序完全由範本決定。
 var LAST_WRITTEN_SECTIONS_ = ['APPC', 'APPD'];
 
-var DRAFT_BANNER_ = '草稿 — 產生未完成（本份報告尚未完成，請勿分發）';
+// ===================================================================
+// 填入式範本（第二種模式，2026-10-13）
+// ===================================================================
+//
+// 為什麼需要第二種模式：{{SEC_*}} 錨點式假設「範本是一具骨架，程式把一整章
+// 內容插進去」。業主交來的是一份**已經寫好、已經畫好 12 張表格**的報告手稿：
+// 圖要放進 1×1 表格的儲存格裡、資料要一列一列長在他排好的表格中（框線已經
+// 設成隱藏）。錨點式在這裡**物理上做不到** —— 錨點必須是本文最上層段落
+// （見 topLevelParagraphOf_ 的註解）；放進儲存格時 body.getChildIndex 會算出
+// 錯誤索引、把一整章插到不相干的位置，所以 scanAnchors_ 從第一天就直接拒絕它。
+//
+// 填入式不是「放寬那條規則」，而是換一種寫法 —— 兩種 token 都不走 body 插入：
+//   • {{圖_*}}：清空標記所在的那一格，把圖**放進那一格**，寬度依該欄欄寬縮放。
+//   • {{列_*}}：把標記所在的那一列當樣板**複製**，一筆資料一列，格式自動繼承。
+// 兩者都只動儲存格，不需要 body 的索引，所以在表格裡完全成立。
+//
+// ⚠️ 兩種模式互斥，由 scanTemplate_ 一次判定並寫進執行狀態（st.mode）。
+// 混用會產出半成品，所以是硬拒絕、不是「盡力而為」—— 理由與
+// assertRequiredAnchors_ 完全相同：一份缺了東西的 PDF 看起來跟完整的一模一樣。
+
+// 填入式的「最後才寫」清單，與 LAST_WRITTEN_SECTIONS_ 同一個理由：
+// 產生紀錄必須在所有可能降級的東西都寫完之後才寫，否則它記不到自己後面發生的事。
+var FILL_TAIL_IDS_ = ['FILLREC'];
+var FILL_RECORD_ID_ = 'FILLREC';
+var FILL_RECORD_TITLE_ = '附錄　報告產生紀錄（系統自動附加）';
+
+// 七個圖片標記。title 同時是降級訊息與進度標籤用的名稱。
+// 新增一個就是在這張表加一列，再到 fillImageSpec_ 加一個 case —— 沒有第三個地方。
+var FILL_IMAGE_TOKENS_ = [
+  { id: 'IMG_ABILITY',  token: '{{圖_綜合能力}}',  kind: 'image', title: '綜合能力（潛能 × 4S 交叉平均）' },
+  { id: 'IMG_S4',       token: '{{圖_4S整備}}',    kind: 'image', title: '4S 整備平均' },
+  { id: 'IMG_COVERAGE', token: '{{圖_覆蓋率}}',    kind: 'image', title: '演習覆蓋率各指標平均' },
+  { id: 'IMG_RADAR_1',  token: '{{圖_雷達_反應}}', kind: 'image', title: '反應潛能各指標平均', potential: '反應' },
+  { id: 'IMG_RADAR_2',  token: '{{圖_雷達_監測}}', kind: 'image', title: '監測潛能各指標平均', potential: '監測' },
+  { id: 'IMG_RADAR_3',  token: '{{圖_雷達_預期}}', kind: 'image', title: '預期潛能各指標平均', potential: '預期' },
+  { id: 'IMG_SCENE_S4', token: '{{圖_場景4S}}',    kind: 'image', title: '各場景在各 4S 類別的平均' }
+];
+
+// 七種資料列標記。
+// ⚠️ columns 不是註解，是**契約本身**：它同時是欄數檢查、拒絕訊息的文字來源、
+// 以及由左至右的寫入順序。想多填一欄就只改這一張表 —— 一個地方可讀、一個地方
+// 可改，這也正是「欄位順序」這條約定查得動的原因
+// （對照 ConfigWithSubmit.gs 的 sessionSortable_ 是唯一組裝回應物件的地方）。
+// 範本的欄數可以**多**於 columns.length，多出來的欄系統一個字都不碰（留給業主
+// 自己填備註）；**少**就是硬拒絕，絕不「有幾欄填幾欄」。
+var FILL_ROW_TOKENS_ = [
+  { id: 'ROW_TOP3',  token: '{{列_優勢前三}}',   kind: 'row', title: '優勢前三（綜合能力）',   columns: ['序號', '綜合能力', '分數', '說明'] },
+  { id: 'ROW_BOT3',  token: '{{列_待改善前三}}', kind: 'row', title: '待改善前三（綜合能力）', columns: ['序號', '綜合能力', '分數', '說明'] },
+  { id: 'ROW_COV',   token: '{{列_覆蓋率指標}}', kind: 'row', title: '覆蓋率指標明細',         columns: ['指標', '具體評核題目', '分數'] },
+  { id: 'ROW_P1',    token: '{{列_反應指標}}',   kind: 'row', title: '反應潛能指標明細',       columns: ['場景編號', '指標', '具體評核題目', '分數'], potential: '反應' },
+  { id: 'ROW_P2',    token: '{{列_監測指標}}',   kind: 'row', title: '監測潛能指標明細',       columns: ['場景編號', '指標', '具體評核題目', '分數'], potential: '監測' },
+  { id: 'ROW_P3',    token: '{{列_預期指標}}',   kind: 'row', title: '預期潛能指標明細',       columns: ['場景編號', '指標', '具體評核題目', '分數'], potential: '預期' },
+  { id: 'ROW_SCENE', token: '{{列_場景對照}}',   kind: 'row', title: '場景編號對照表',         columns: ['色塊', '場景編號', '測試場景'] }
+];
+
+var DRAFT_BANNER_ ='草稿 — 產生未完成（本份報告尚未完成，請勿分發）';
 var WIP_SUFFIX_ = '（產生中）';
 var PARTIAL_SUFFIX_ = '（部分完成）';
 
@@ -794,6 +860,11 @@ function writeRunState_(st) {
         // 少了 runToken 原本那個分頁也續不下去。
         propKey: st.propKey || '',
         runToken: st.runToken || '',
+        // ⚠️ mode 缺一不可：少了它，續跑時 st.mode 會是 undefined → 判成
+        // 錨點式，於是程式開始往業主的手稿裡插 21 章內容。它只有幾個位元組，
+        // 永遠不值得為了省空間而丟掉。
+        mode: st.mode || 'anchor',
+        fillInflight: st.fillInflight || '',
         webMode: st.webMode === true,
         hid: st.hid || '',
         exid: st.exid || '',
@@ -1403,6 +1474,323 @@ function planFromScan_(scan, opts) {
   // 附錄C 一定要在附錄D 之前寫（附錄D 要引用附錄C 已經記下的降級結果）。
   tail.sort(function (a, b) { return LAST_WRITTEN_SECTIONS_.indexOf(a) - LAST_WRITTEN_SECTIONS_.indexOf(b); });
   return head.concat(tail);
+}
+
+// ===================================================================
+// 範本模式判定（錨點式／填入式）
+// ===================================================================
+
+function fillDefById_(id) {
+  var i;
+  for (i = 0; i < FILL_IMAGE_TOKENS_.length; i++) {
+    if (FILL_IMAGE_TOKENS_[i].id === id) return FILL_IMAGE_TOKENS_[i];
+  }
+  for (i = 0; i < FILL_ROW_TOKENS_.length; i++) {
+    if (FILL_ROW_TOKENS_[i].id === id) return FILL_ROW_TOKENS_[i];
+  }
+  if (id === FILL_RECORD_ID_) {
+    // token 為空字串是刻意的：產生紀錄不是範本裡的標記，它是文件最後自動附加的
+    // 一段。finalizeReport_ 第 1 步會檢查 token 是否為空，空的就只記進附錄、
+    // 不去 replaceText（replaceText('') 會把整份文件掃爛）。
+    return { id: FILL_RECORD_ID_, token: '', kind: 'record', title: FILL_RECORD_TITLE_ };
+  }
+  return null;
+}
+
+function fillDefByToken_(token) {
+  var i;
+  for (i = 0; i < FILL_IMAGE_TOKENS_.length; i++) {
+    if (FILL_IMAGE_TOKENS_[i].token === token) return FILL_IMAGE_TOKENS_[i];
+  }
+  for (i = 0; i < FILL_ROW_TOKENS_.length; i++) {
+    if (FILL_ROW_TOKENS_[i].token === token) return FILL_ROW_TOKENS_[i];
+  }
+  return null;
+}
+
+// 這個字串在三個地方出現（拒絕訊息、檢查設定、產生紀錄），所以只寫一次。
+function columnContractText_(def) {
+  return def.columns.join('｜');
+}
+
+// 走訪本文所有表格，定位每一個填入式標記。
+// ⚠️ **絕不**從 findText 的結果往上爬父層找位置。那個爬法（topLevelParagraphOf_）
+// 存在的目的正好相反 —— 它是用來「拒絕儲存格」的；拿來定位填入式標記會把每一個
+// 都退掉。儲存格定位取代了本文插入，這就是這一族 token 在 {{SEC_*}} 做不到的
+// 地方做得到的全部原因。
+//
+// findText 另外跑一次，當成「這個字串到底存不存在」的權威。兩邊不一致
+// （findText 找得到、走訪定位不到）就是一條具名的拒絕理由（巢狀表格／清單項目／
+// 頁首頁尾），不是猜測，也不會被無聲忽略。這是 scanAnchors_ 搭配
+// tokenInHeaderOrFooter_ 的同一套兩路比對。
+function scanFillTokens_(doc) {
+  var out = {
+    images: [], rows: [], problems: [], unknown: [], duplicates: [],
+    nearMiss: [], anyFillLike: false, found: {}
+  };
+  var body = null;
+  try { body = doc.getBody(); } catch (errB) { body = null; }
+
+  // 1) 先用既有的殘留掃描一次拿到「文件裡所有長得像 token 的字串 + 出現次數 +
+  //    在哪個容器」。重用它而不是另寫一套，是因為那一套已經處理過無窮迴圈防護
+  //    與三容器的問題，而且兩邊對「什麼算一個 token」的定義必須一致。
+  var all = [];
+  try { all = leftoverTokens_(doc); } catch (errL) { all = []; }
+  var known = {};
+  var i, j;
+  for (i = 0; i < SECTIONS_.length; i++) known[SECTIONS_[i].token] = true;
+  for (i = 0; i < COVER_TOKENS_.length; i++) known[COVER_TOKENS_[i]] = true;
+  for (i = 0; i < OWNER_FILLED_TOKENS_.length; i++) known[OWNER_FILLED_TOKENS_[i]] = true;
+  for (i = 0; i < FILL_IMAGE_TOKENS_.length; i++) known[FILL_IMAGE_TOKENS_[i].token] = true;
+  for (i = 0; i < FILL_ROW_TOKENS_.length; i++) known[FILL_ROW_TOKENS_[i].token] = true;
+
+  for (i = 0; i < all.length; i++) {
+    var rec = all[i];
+    var isFillLike = /^\{\{[圖列]_/.test(rec.text);
+    if (isFillLike) out.anyFillLike = true;
+    var def = fillDefByToken_(rec.text);
+    if (def) {
+      out.found[def.id] = { count: rec.count, where: rec.where };
+      if (rec.count > 1) {
+        out.duplicates.push(rec.text + ' 在範本裡出現了 ' + rec.count + ' 次（' + rec.where +
+          '），系統無法判斷要放哪一個，請只保留一個。');
+      }
+      continue;
+    }
+    if (isFillLike) { out.unknown.push(rec.text); continue; }
+    if (!known[rec.text] && rec.text.indexOf('{{#BEGIN_') !== 0) out.nearMiss.push(describeLeftover_(rec));
+  }
+
+  // 2) 走訪本文的表格，把每一個認得的標記定位到 (表格, 列, 欄)。
+  var located = {};
+  if (body) {
+    var tables = [];
+    try { tables = body.getTables() || []; } catch (errT) { tables = []; }
+    for (var ti = 0; ti < tables.length; ti++) {
+      var table = tables[ti];
+      var nr = 0;
+      try { nr = table.getNumRows(); } catch (errR) { nr = 0; }
+      for (var r = 0; r < nr; r++) {
+        var row = null;
+        try { row = table.getRow(r); } catch (errRow) { row = null; }
+        if (!row) continue;
+        var nc = 0;
+        try { nc = row.getNumCells(); } catch (errC) { nc = 0; }
+        for (var c = 0; c < nc; c++) {
+          var cell = null;
+          try { cell = row.getCell(c); } catch (errCell) { cell = null; }
+          if (!cell) continue;
+          var text = '';
+          try { text = String(cell.getText() || '').replace(/^\s+|\s+$/g, ''); } catch (errTx) { text = ''; }
+          if (text.indexOf('{{') === -1) continue;
+          for (j = 0; j < FILL_IMAGE_TOKENS_.length + FILL_ROW_TOKENS_.length; j++) {
+            var d = (j < FILL_IMAGE_TOKENS_.length)
+              ? FILL_IMAGE_TOKENS_[j]
+              : FILL_ROW_TOKENS_[j - FILL_IMAGE_TOKENS_.length];
+            if (located[d.id]) continue;
+            if (text.indexOf(d.token) === -1) continue;
+            var tableIndex = -1;
+            try { tableIndex = body.getChildIndex(table); } catch (errIdx) { tableIndex = -1; }
+            located[d.id] = {
+              def: d, tableIndex: tableIndex, rowIndex: r, cellIndex: c,
+              numCells: nc, cellText: text, alone: (text === d.token)
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // 2b) 走訪定位到、但第 1 步沒看到的，一律補進 found。
+  //     leftoverTokens_ 每個容器有 300 次的迴圈防護上限，撞到上限時會漏掉後面的
+  //     token —— 那種情況下「定位得到卻不寫」會是一次無聲的遺漏，而無聲遺漏正是
+  //     這整套檢查要消滅的東西。兩邊取聯集，寧可多報一條位置問題。
+  for (j = 0; j < FILL_IMAGE_TOKENS_.length + FILL_ROW_TOKENS_.length; j++) {
+    var dd = (j < FILL_IMAGE_TOKENS_.length)
+      ? FILL_IMAGE_TOKENS_[j]
+      : FILL_ROW_TOKENS_[j - FILL_IMAGE_TOKENS_.length];
+    if (!out.found[dd.id] && located[dd.id]) {
+      out.found[dd.id] = { count: 1, where: '內文' };
+      out.anyFillLike = true;
+    }
+  }
+
+  // 3) 逐一驗位置。沒定位到但 findText 找得到＝放錯容器，要具名說出來。
+  for (j = 0; j < FILL_IMAGE_TOKENS_.length + FILL_ROW_TOKENS_.length; j++) {
+    var def2 = (j < FILL_IMAGE_TOKENS_.length)
+      ? FILL_IMAGE_TOKENS_[j]
+      : FILL_ROW_TOKENS_[j - FILL_IMAGE_TOKENS_.length];
+    var hit = out.found[def2.id];
+    if (!hit) continue;                       // 範本沒放這個標記 —— 不是錯誤，見下方註解。
+    var loc = located[def2.id];
+    if (!loc) {
+      if (String(hit.where || '').indexOf('頁首') !== -1 || String(hit.where || '').indexOf('頁尾') !== -1) {
+        out.problems.push(def2.token + ' 被放在頁首或頁尾裡。填入式標記必須放在本文的表格儲存格，' +
+          '頁首／頁尾只能放版面元素（院徽、頁碼）。');
+      } else {
+        out.problems.push(def2.token + '：文件裡找得到這串字，但它不在本文的表格儲存格裡' +
+          '（可能在巢狀表格、清單項目或純段落裡）。' +
+          (def2.kind === 'image'
+            ? '圖片標記必須單獨放進一個 1×1 表格的儲存格。'
+            : '資料列標記必須打在樣板列最左邊那一格。'));
+      }
+      continue;
+    }
+    if (def2.kind === 'image') {
+      if (!loc.alone) {
+        out.problems.push(def2.token + ' 所在的儲存格裡還有別的文字（目前內容：「' +
+          (loc.cellText.length > 40 ? loc.cellText.substring(0, 40) + '…' : loc.cellText) +
+          '」）。圖片標記必須單獨占一個儲存格 —— 系統會先清空該格再放圖，格子裡的圖說文字會一起被清掉。' +
+          '請把圖說移到表格外面或下一列。');
+        continue;
+      }
+      out.images.push(loc);
+    } else {
+      if (loc.cellIndex !== 0) {
+        out.problems.push(def2.token + ' 必須打在樣板列最左邊那一格，目前在第 ' + (loc.cellIndex + 1) +
+          ' 欄。系統是以「標記所在的那一列」當樣板複製的，欄位對應從該列第一欄開始算。');
+        continue;
+      }
+      if (loc.numCells < def2.columns.length) {
+        out.problems.push(def2.token + ' 所在的表格只有 ' + loc.numCells + ' 欄，這個標記需要 ' +
+          def2.columns.length + ' 欄。\n　　這張表的欄位順序必須是（由左至右）：' + columnContractText_(def2) +
+          '。\n　　請把該表格補到 ' + def2.columns.length + ' 欄，或把這個標記刪掉。' +
+          '（多出來的欄位系統不會動，可以留給您自己填寫。）');
+        continue;
+      }
+      out.rows.push(loc);
+    }
+  }
+  return out;
+}
+
+// 唯一的模式判定點。
+// 回 { mode, anchors, fill, coverMissing }。
+//
+// secPresent 刻意用「這個字串在文件裡存不存在」而不是「它是不是一個合格的錨點」：
+// 一個不小心掉進表格儲存格的 {{SEC_摘要}} 必須繼續是**錨點式的位置錯誤**
+// （scanAnchors_ 本來就會具名指出它），而不是無聲地把整份文件翻成填入式。
+function scanTemplate_(doc) {
+  var anchors = scanAnchors_(doc);
+  var fill = scanFillTokens_(doc);
+
+  var secPresent = false;
+  var secFound = [];
+  for (var i = 0; i < SECTIONS_.length; i++) {
+    if (tokenExistsAnywhere_(doc, SECTIONS_[i].token)) {
+      secPresent = true;
+      secFound.push(SECTIONS_[i].token);
+    }
+  }
+  var fillPresent = fill.anyFillLike;
+  var fillFound = [];
+  for (var k = 0; k < FILL_IMAGE_TOKENS_.length + FILL_ROW_TOKENS_.length; k++) {
+    var d = (k < FILL_IMAGE_TOKENS_.length)
+      ? FILL_IMAGE_TOKENS_[k]
+      : FILL_ROW_TOKENS_[k - FILL_IMAGE_TOKENS_.length];
+    if (fill.found[d.id]) fillFound.push(d.token);
+  }
+
+  var mode = 'none';
+  if (secPresent && fillPresent) mode = 'both';
+  else if (secPresent) mode = 'anchor';
+  else if (fillPresent) mode = 'fill';
+
+  // COVER_TOKENS_SILENT_ 裡的 token 缺席不算缺 —— 舊的 21 章骨架範本因此在
+  // 附錄C 的警告清單上一個字都不會變。
+  var coverMissing = [];
+  for (var c = 0; c < anchors.coverMissing.length; c++) {
+    if (COVER_TOKENS_SILENT_.indexOf(anchors.coverMissing[c]) === -1) coverMissing.push(anchors.coverMissing[c]);
+  }
+
+  return {
+    mode: mode, anchors: anchors, fill: fill, coverMissing: coverMissing,
+    secFound: secFound, fillFound: fillFound,
+    coverSilentMissing: (anchors.coverMissing.length !== coverMissing.length)
+  };
+}
+
+// 回傳拒絕訊息；可以用就回空字串。
+// **檢查設定與產生流程共用這一個函式**，所以「檢查說沒問題、產生卻失敗」不可能
+// 發生 —— 這是 scanAnchors_ 上方那條規則的延伸，不是新規則。
+function templateRefusalMessage_(scan) {
+  if (scan.mode === 'none') {
+    var m = '這份報告範本裡找不到任何可用的標記，無法判斷要怎麼產生報告。\n' +
+      '　• 章節錨點式：範本要有 ' + plainToken_('{{SEC_摘要}}') + ' 這類錨點（原字要含兩層大括號），' +
+      '每一個單獨占一個本文段落，系統會把一整章內容插在那裡。\n' +
+      '　• 填入式：範本要有 圖_… （打在 1×1 表格的儲存格裡）或 列_… （打在樣板列最左邊那一格），同樣含兩層大括號。\n' +
+      '　目前可用的填入式標記共 ' + (FILL_IMAGE_TOKENS_.length + FILL_ROW_TOKENS_.length) + ' 個：' +
+      plainTokens_(tokensOfDefs_(FILL_IMAGE_TOKENS_)).join('、') + '、' +
+      plainTokens_(tokensOfDefs_(FILL_ROW_TOKENS_)).join('、') + '。';
+    if (scan.fill.nearMiss.length) {
+      m += '\n範本裡找到這些看起來像標記、但系統不認得的字串：' + scan.fill.nearMiss.join('、') +
+        '。標記必須逐字相符，多一個空白也會對不上。';
+    }
+    return m;
+  }
+  if (scan.mode === 'both') {
+    return '這份報告範本同時含有章節錨點與填入式標記，系統無法判斷要用哪一種方式產生，已中止。\n' +
+      '　• 找到的章節錨點：' + plainTokens_(scan.secFound).join('、') + '\n' +
+      '　• 找到的填入式標記：' + plainTokens_(scan.fillFound).join('、') + '\n' +
+      '兩者的運作方式完全不同：錨點會被一整章內容「取代」，填入式只把圖與資料列「填進」您已經畫好的表格。' +
+      '混用會產出一份半成品。\n' +
+      '請擇一：把填入式標記全部刪掉（沿用原本 21 章的範本），或把 SEC_… 錨點全部刪掉（使用您自己的報告版型）。';
+  }
+  if (scan.mode !== 'fill') return '';
+
+  var parts = [];
+  if (scan.fill.unknown.length) {
+    parts.push('範本裡有系統不認得的填入式標記：' + scan.fill.unknown.join('、') + '。\n' +
+      '可用的圖片標記：' + plainTokens_(tokensOfDefs_(FILL_IMAGE_TOKENS_)).join('、') + '\n' +
+      '可用的資料列標記：' + plainTokens_(tokensOfDefs_(FILL_ROW_TOKENS_)).join('、') + '\n' +
+      '標記必須逐字相符（含底線與中文字），多一個空白也會對不上。');
+  }
+  if (scan.fill.duplicates.length) parts.push('　• ' + scan.fill.duplicates.join('\n　• '));
+  if (scan.fill.problems.length) parts.push('填入式標記的位置有問題：\n　• ' + scan.fill.problems.join('\n　• '));
+  return parts.length ? parts.join('\n\n') : '';
+}
+
+function tokensOfDefs_(defs) {
+  var out = [];
+  for (var i = 0; i < defs.length; i++) out.push(defs[i].token);
+  return out;
+}
+
+// 取代兩個呼叫點的 assertRequiredAnchors_(scan)。錨點式直接轉呼叫既有函式，
+// 訊息逐字相同 —— 既有那條已經產出過真實報告的路一個位元都沒變。
+function assertTemplateUsable_(scan) {
+  if (scan.mode === 'anchor') {
+    assertRequiredAnchors_(scan.anchors);
+    return;
+  }
+  var m = templateRefusalMessage_(scan);
+  if (m) throw new Error(m);
+}
+
+// ⚠️ 刻意**不拒絕**「預期的 {{圖_*}}／{{列_*}} 少了幾個」。
+// 這份手稿是業主自己的：他沒有畫框的那張圖，就是他不要的那張圖。檢查設定會把
+// 每一個缺席的標記列成 ⚠ 提醒（那是它的工作），但缺圖不該擋住產生。
+// 身分類的封面 token 同理只警告不擋 —— 文件最後自動附加的「報告產生紀錄」
+// 一定會印出報告編號、產生時間、機構代號與演習代號，所以填入式的 PDF 不可能
+// 匿名到看不出是哪一輪產生的，即使業主在手稿裡用手打了院名。
+function planFillSlots_(fill) {
+  var list = [];
+  var i;
+  for (i = 0; i < fill.images.length; i++) {
+    list.push({ id: fill.images[i].def.id, t: fill.images[i].tableIndex, r: fill.images[i].rowIndex });
+  }
+  for (i = 0; i < fill.rows.length; i++) {
+    list.push({ id: fill.rows[i].def.id, t: fill.rows[i].tableIndex, r: fill.rows[i].rowIndex });
+  }
+  // 依文件順序排，對話框的進度才會由上而下讀過整份手稿。
+  list.sort(function (a, b) {
+    if (a.t !== b.t) return a.t - b.t;
+    return a.r - b.r;
+  });
+  var out = [];
+  for (i = 0; i < list.length; i++) out.push(list[i].id);
+  out.push(FILL_RECORD_ID_);
+  return out;
 }
 
 // ===================================================================
@@ -2047,6 +2435,8 @@ function coverTokenMap_(payload, st) {
     '{{演習主題}}': txt_(m.exerciseTopic),
     '{{演習類別}}': txt_(m.exerciseCategory),
     '{{演習日期}}': txt_(formatExerciseDate_(m.exerciseDate)),
+    // 儀表板「說明」KPI 卡的同一個值（演習資訊 工作表的「說明」列）。
+    '{{演習說明}}': txt_(m.exerciseDesc),
     // fallback 模式下 meta.tenant/exercise 是空字串，絕不填使用者帶進來的
     // 假代號 —— 在紙本報告上印一個其實沒有路由效果的機構代號會誤導判讀。
     '{{機構代號}}': m.tenant ? String(m.tenant) : '—（單一演習模式）',
@@ -2134,33 +2524,52 @@ function reportValidateOnly(target) {
   var scan = null;
   if (tpl) {
     try {
-      scan = scanAnchors_(tpl.doc);
-      var foundIds = [];
-      var missingOptional = [];
-      var missingRequired = [];
-      for (var i = 0; i < SECTIONS_.length; i++) {
-        var sec = SECTIONS_[i];
-        if (scan.found[sec.id]) foundIds.push(sec.title);
-        else if (sec.required) missingRequired.push(sec.token + '（' + sec.title + '）');
-        else missingOptional.push(sec.token + '（' + sec.title + '）');
+      // 與產生流程**同一支** scanTemplate_／同一段拒絕訊息，所以
+      // 「檢查說沒問題、產生卻失敗」不可能發生（scanAnchors_ 上方那條規則的延伸）。
+      scan = scanTemplate_(tpl.doc);
+      var refusal = templateRefusalMessage_(scan);
+      add('範本模式',
+        (scan.mode === 'anchor' || scan.mode === 'fill'),
+        scan.mode === 'anchor' ? '章節錨點式（{{SEC_*}}）—— 系統把一整章內容插在每個錨點的位置。'
+          : (scan.mode === 'fill' ? '填入式（{{圖_*}}／{{列_*}}）—— 系統只把圖與資料列填進您已經畫好的表格。'
+            : refusal));
+
+      if (scan.mode === 'anchor') {
+        var foundIds = [];
+        var missingOptional = [];
+        var missingRequired = [];
+        for (var i = 0; i < SECTIONS_.length; i++) {
+          var sec = SECTIONS_[i];
+          if (scan.anchors.found[sec.id]) foundIds.push(sec.title);
+          else if (sec.required) missingRequired.push(sec.token + '（' + sec.title + '）');
+          else missingOptional.push(sec.token + '（' + sec.title + '）');
+        }
+        add('必要章節錨點', missingRequired.length === 0,
+          missingRequired.length ? '缺少：' + missingRequired.join('、') : '六個必要錨點齊備。');
+        add('錨點位置', scan.anchors.problems.length === 0,
+          scan.anchors.problems.length ? scan.anchors.problems.join('　／　') : '所有錨點都單獨占一個本文最上層段落。');
+        checks.push({
+          label: '將產生的章節', ok: true,
+          detail: '共 ' + foundIds.length + ' 章：' + foundIds.join('、') +
+            (missingOptional.length ? '　｜　範本未放錨點、因此不產生：' + missingOptional.join('、') : '')
+        });
+      } else if (scan.mode === 'fill') {
+        pushFillChecks_(checks, add, scan);
       }
-      add('必要章節錨點', missingRequired.length === 0,
-        missingRequired.length ? '缺少：' + missingRequired.join('、') : '六個必要錨點齊備。');
-      add('錨點位置', scan.problems.length === 0,
-        scan.problems.length ? scan.problems.join('　／　') : '所有錨點都單獨占一個本文最上層段落。');
-      checks.push({
-        label: '將產生的章節', ok: true,
-        detail: '共 ' + foundIds.length + ' 章：' + foundIds.join('、') +
-          (missingOptional.length ? '　｜　範本未放錨點、因此不產生：' + missingOptional.join('、') : '')
-      });
+
+      // 封面 token（兩種模式都印）。原本這一行寫死「全部 12 個」，加了
+      // {{演習說明}} 之後那個數字就會是錯的，所以改成動態計數。
+      var coverRequired = COVER_TOKENS_.length - COVER_TOKENS_SILENT_.length;
+      var descPresent = !scan.coverSilentMissing;
       checks.push({
         label: '封面 token', ok: true,
-        detail: scan.coverMissing.length
+        detail: (scan.coverMissing.length
           ? '⚠ 範本裡找不到這些 token（不影響產生，只是這些欄位不會被填）：' + scan.coverMissing.join('、')
-          : '全部 12 個封面 token 都在範本裡。'
+          : '全部 ' + coverRequired + ' 個封面 token 都在範本裡。') +
+          '　｜　選填：{{演習說明}}' + (descPresent ? '（已放置，會填入 演習資訊 的「說明」）' : '（未放置，略過）')
       });
     } catch (err3) {
-      add('章節錨點', false, '掃描範本時發生錯誤：' + msg_(err3));
+      add('範本標記掃描', false, '掃描範本時發生錯誤：' + msg_(err3));
     }
   }
 
@@ -2242,6 +2651,10 @@ function reportValidateOnly(target) {
       detail: icc.note + (icc.reasons.length ? '　造成交集縮小的題目：' + icc.reasons.slice(0, 8).join('；') +
         (icc.reasons.length > 8 ? ' …等 ' + icc.reasons.length + ' 題' : '') : '')
     });
+
+    // 填入式才印：業主正在手工擺標記，先知道哪一張表會長成幾列，比產生完再
+    // 回頭看便宜得多。
+    if (scan && scan.mode === 'fill') pushFillPreviewChecks_(checks, scan, payload);
   }
 
   if (ss) {
@@ -2284,6 +2697,98 @@ function reportValidateOnly(target) {
   }
 
   return { ok: ok, checks: checks };
+}
+
+// -------------------------------------------------------------------
+// 檢查設定：填入式專屬的幾列
+// -------------------------------------------------------------------
+//
+// 為什麼這幾列值得存在：業主**正在手工把這些標記打進他的手稿裡**，而他一定會
+// 打錯其中一個。標記打錯字時什麼都不會發生 —— 那張圖就是沒出現，而他要翻完
+// 整份 PDF 才會發現。這幾列就是在產生之前把它說出來。
+// 這裡讀的是 scanTemplate_ 的同一份結果，所以與拒絕條件不可能不一致。
+function pushFillChecks_(checks, add, scan) {
+  var i, lines;
+
+  // 圖片標記
+  var imgFound = [], imgMissing = [];
+  for (i = 0; i < FILL_IMAGE_TOKENS_.length; i++) {
+    var d = FILL_IMAGE_TOKENS_[i];
+    if (scan.fill.found[d.id]) imgFound.push(d.token + '（' + d.title + '）');
+    else imgMissing.push(d.token + '（' + d.title + '）');
+  }
+  checks.push({
+    label: '圖片標記（{{圖_*}}）', ok: true,
+    detail: '找到 ' + imgFound.length + ' / ' + FILL_IMAGE_TOKENS_.length + ' 個：' +
+      (imgFound.length ? imgFound.join('、') : '（一個都沒有）') +
+      (imgMissing.length ? '　｜　⚠ 範本未放、因此不產生：' + imgMissing.join('、') +
+        '（缺圖不是錯誤 —— 您沒有畫框的位置就是您不要的圖）' : '')
+  });
+
+  // 資料列標記：每一個都印「目前 N 欄／需要 M 欄」與契約的欄位順序。
+  var rowFound = [], rowMissing = [];
+  for (i = 0; i < FILL_ROW_TOKENS_.length; i++) {
+    var rd = FILL_ROW_TOKENS_[i];
+    if (!scan.fill.found[rd.id]) { rowMissing.push(rd.token + '（' + rd.title + '）'); continue; }
+    var loc = null;
+    for (var k = 0; k < scan.fill.rows.length; k++) {
+      if (scan.fill.rows[k].def.id === rd.id) { loc = scan.fill.rows[k]; break; }
+    }
+    rowFound.push(rd.token + '：所在表格目前 ' + (loc ? loc.numCells : '？') + ' 欄／需要 ' +
+      rd.columns.length + ' 欄　欄位順序：' + columnContractText_(rd));
+  }
+  checks.push({
+    label: '資料列標記（{{列_*}}）', ok: true,
+    detail: (rowFound.length ? rowFound.join('　／　') : '（一個都沒有）') +
+      (rowMissing.length ? '　｜　⚠ 範本未放、因此不產生：' + rowMissing.join('、') : '')
+  });
+
+  // 位置／重複／不認得 —— 這三類是真的會擋住產生的。
+  lines = [];
+  if (scan.fill.unknown.length) lines.push('不認得的標記：' + scan.fill.unknown.join('、'));
+  if (scan.fill.duplicates.length) lines.push(scan.fill.duplicates.join('　／　'));
+  if (scan.fill.problems.length) lines.push(scan.fill.problems.join('　／　'));
+  add('填入式標記的位置與拼字', lines.length === 0,
+    lines.length ? lines.join('　／　') : '所有標記都拼寫正確、各出現一次，而且位置合格。');
+
+  // 匿名：識別模式的三道門有一道在這個模式下永遠不成立，報告必須自己說出來，
+  // 不能讓操作者以為勾了就有。
+  checks.push({
+    label: '匿名模式（填入式）', ok: true,
+    detail: '填入式範本沒有評核官差異的輸出位置，本次一律匿名；' +
+      '勾選「附上可識別的評核官代號」與「附上附錄B」都不會生效。'
+  });
+}
+
+// 本次各標記預計填入的筆數。0 筆也要印 —— 那一格會變成「（本次沒有可列出的
+// 資料）」，業主最好在產生之前就知道。
+function pushFillPreviewChecks_(checks, scan, payload) {
+  // 這幾支列資料建構器是純函式，只讀 payload／stats／meta／prefix，
+  // 不碰文件也不碰試算表，所以在檢查流程裡呼叫是安全的。
+  var meta = payload.meta || {};
+  var lite = {
+    payload: payload, stats: payload.stats || {}, meta: meta,
+    prefix: meta.scenePrefix || 'SCENE'
+  };
+  var parts = [];
+  for (var i = 0; i < FILL_ROW_TOKENS_.length; i++) {
+    var d = FILL_ROW_TOKENS_[i];
+    if (!scan.fill.found[d.id]) continue;
+    var n = fillRowData_(d, lite).values.length;
+    parts.push(plainToken_(d.token) + '：' + n + ' 列' + (n === 0 ? '（會印「本次沒有可列出的資料」）' : ''));
+  }
+  var cells = abilityCells_(lite);
+  checks.push({
+    label: '本次預計填入的列數', ok: true,
+    detail: (parts.length ? parts.join('；') : '範本沒有放任何資料列標記。') +
+      '　｜　目前 12 個 潛能×4S 交叉格中有 ' + cells.length + ' 格有資料（優勢／待改善前三都從這幾格取，同分同名次全部列入）。'
+  });
+
+  // 這個版型裝不下的東西，附上本次的實際筆數。
+  checks.push({
+    label: '本模式不會產生的內容', ok: true,
+    detail: fillModeCoverage_({ payload: payload, stats: payload.stats || {}, meta: meta, st: { runId: '（本次尚未產生）' } }).join('　／　')
+  });
 }
 
 // ===================================================================
@@ -2365,12 +2870,22 @@ function reportStart(opts) {
     }
 
     var tpl = openTemplateDoc_(cfg.templateId);
-    var scan = scanAnchors_(tpl.doc);
-    assertRequiredAnchors_(scan);
+    // 範本模式在這裡判定一次，之後整輪都讀 st.mode，不再重判。
+    // 位置與 assertRequiredAnchors_ 原本那一行完全相同：仍然在 targetSpreadsheet_、
+    // resolveOutputFolder_、fetchAnalysis_、ensureSnapshotSheet_、makeCopy 之前，
+    // 所以任何拒絕都發生在 Drive 上出現第一個檔案、試算表上出現第一列之前。
+    var scan = scanTemplate_(tpl.doc);
+    assertTemplateUsable_(scan);
+    var fillMode = (scan.mode === 'fill');
 
-    if (identified && !scan.found.EVALUATOR) {
+    // 識別模式的第三道門在填入式裡**永遠不成立**：那種範本沒有
+    // {{SEC_評核官差異}}，也沒有任何逐評核官資料的輸出位置。所以一律降級為匿名，
+    // 而且降級訊息要講填入式的話 —— 叫業主去找一個在這種範本裡不可能存在的錨點，
+    // 正是「給錯提示比不給提示更糟」那條教訓。
+    if (identified && !(scan.mode === 'anchor' && scan.anchors.found.EVALUATOR)) {
       identified = false;
       opts.identifiedDowngraded = true;
+      opts.identifiedDowngradedFill = fillMode;
     }
 
     // 這一輪要寫 報告快照／_報告暫存 的那份試算表。網頁模式下它是註冊表那一列
@@ -2415,6 +2930,11 @@ function reportStart(opts) {
     var startedAt = Date.now();
     st = {
       runId: runId,
+      // 範本模式。⚠️ 它也必須出現在 writeRunState_ 的最小退路 JSON 裡 ——
+      // 少了它，一輪在屬性寫入失敗之後續跑時會退回 anchor，開始往業主的手稿裡
+      // 插 21 章。
+      mode: scan.mode,
+      fillInflight: '',
       // 網頁模式一輪一格屬性；選單模式 propKey 為空 → 仍是單一 REPORT_RUN_STATE。
       propKey: target ? (PROP_RUN_PREFIX_ + runId) : '',
       webMode: !!target,
@@ -2466,7 +2986,9 @@ function reportStart(opts) {
     // 完全無法判斷第二個是哪來的。
     // （收尾階段才加的警告不受影響 —— 第 4b 步在掃描之後，而且每次都是全新複本。）
     if (opts.identifiedDowngraded) {
-      addWarning_(st, '範本缺少 ' + plainToken_('{{SEC_評核官差異}}') + ' 錨點，識別模式無處輸出，已自動改回匿名模式。');
+      addWarning_(st, opts.identifiedDowngradedFill
+        ? '這份範本是填入式（您自己的報告版型），沒有評核官差異的輸出位置，識別模式無處可放，已自動改回匿名模式。'
+        : '範本缺少 ' + plainToken_('{{SEC_評核官差異}}') + ' 錨點，識別模式無處輸出，已自動改回匿名模式。');
     }
     if (scan.coverMissing.length) {
       addWarning_(st, '範本缺少封面 token：' + plainTokens_(scan.coverMissing).join('、') + '（這些欄位不會被填）。');
@@ -2524,7 +3046,7 @@ function reportStart(opts) {
     }
     applyCoverTokens_(doc, coverTokenMap_(payload, st));
 
-    var plan = planFromScan_(scan, opts);
+    var plan = fillMode ? planFillSlots_(scan.fill) : planFromScan_(scan.anchors, opts);
     st.queue = plan;
     // 附錄D 要能說出「範本沒放錨點、所以沒產生」是哪幾章，而 queue 會被逐章
     // shift 掉，所以另外留一份完整的章節清單。
@@ -2578,9 +3100,19 @@ function sectionById_(id) {
   return null;
 }
 
+// 進度標籤、附錄D 的標題、以及收尾第 1 步的「未產生」標示都走這裡，
+// 所以它必須同時認得錨點式的章節 id 與填入式的 slot id。
 function titleOf_(id) {
   var s = sectionById_(id);
-  return s ? s.title : id;
+  if (s) return s.title;
+  var f = fillDefById_(id);
+  if (f) return f.title;
+  return id;
+}
+
+// 這一輪「最後才寫」的清單。填入式沒有附錄C／附錄D，它的對應物是產生紀錄。
+function tailIdsFor_(st) {
+  return (st && st.mode === 'fill') ? FILL_TAIL_IDS_ : LAST_WRITTEN_SECTIONS_;
 }
 
 // 每一次 google.script.run 都是一次獨立執行，各有自己的六分鐘額度。
@@ -2646,8 +3178,9 @@ function reportContinue(runId, target) {
       // 額度，兩章附錄用不到幾秒，不必在已經逼近上限的這一次裡硬擠。
       if (!st.aborting && (Date.now() - Number(st.startedAt || 0)) > TOTAL_BUDGET_MS_) {
         var keep = [], drop = [];
+        var tailIds = tailIdsFor_(st);
         for (var qi = 0; qi < st.queue.length; qi++) {
-          if (LAST_WRITTEN_SECTIONS_.indexOf(st.queue[qi]) === -1) drop.push(st.queue[qi]);
+          if (tailIds.indexOf(st.queue[qi]) === -1) drop.push(st.queue[qi]);
           else keep.push(st.queue[qi]);
         }
         if (drop.length) {
@@ -2671,7 +3204,10 @@ function reportContinue(runId, target) {
       var id = st.queue[0];
       // 單一章節自己的截止時間（第九章會逐群檢查它）。
       ctx.deadline = stepStart + cfg.budgetMs;
-      writeSection_(doc, id, ctx);
+      // 填入式走平行的寫入器，不是在 writeSection_ 裡加 if —— 錨點式那條路
+      // （已經產出過真實報告的那一條）因此一個位元都沒變。
+      if (st.mode === 'fill') writeFillSlot_(doc, id, ctx);
+      else writeSection_(doc, id, ctx);
       st.queue.shift();
       st.doneCount++;
       wrote.push(titleOf_(id));
@@ -2791,18 +3327,27 @@ function finalizeReport_(doc, st, ctx, aborted) {
   var deferred = (st.unwritten || []).slice();
   var remaining = (st.queue || []).slice();
   var all = remaining.concat(deferred);
+  var fillMode = (st.mode === 'fill');
   if (body) {
     for (var i = 0; i < all.length; i++) {
-      var sec = sectionById_(all[i]);
-      if (!sec) continue;
-      try {
-        body.replaceText(tokenPattern_(sec.token), '（本節未產生：產生程序依時間預算中止）');
-      } catch (err2) {}
-      if (i < remaining.length) ctx.skip(sec.title, '時間預算用盡，未產生');
+      // ⚠️ body.replaceText **會走訪表格**，所以一個沒輪到的 {{圖_*}}／{{列_*}}
+      // 不論躲在哪一格都會被就地換掉。這也正是 applyCoverTokens_ 不必為了
+      // {{演習說明}} 落在手稿的儲存格裡而加任何一行程式的原因。
+      var def = fillMode ? fillDefById_(all[i]) : sectionById_(all[i]);
+      if (!def) continue;
+      if (def.token) {
+        try {
+          body.replaceText(tokenPattern_(def.token), '（本節未產生：產生程序依時間預算中止）');
+        } catch (err2) {}
+      }
+      if (i < remaining.length) ctx.skip(def.title, '時間預算用盡，未產生');
     }
     // 2) 殘留的 BEGIN 標記（上一次寫到一半留下的）。
-    for (var j = 0; j < SECTIONS_.length; j++) {
-      try { removeParagraphByText_(body, beginMarker_(SECTIONS_[j].id)); } catch (err3) {}
+    //    填入式從不建立 BEGIN 標記（它不用 openCursor_），所以整段跳過。
+    if (!fillMode) {
+      for (var j = 0; j < SECTIONS_.length; j++) {
+        try { removeParagraphByText_(body, beginMarker_(SECTIONS_[j].id)); } catch (err3) {}
+      }
     }
   }
 
@@ -3266,38 +3811,15 @@ function sectionOverall_(cursor, ctx) {
 
   // 圖2：潛能 × 4S 交叉。等角立體圖刻意不重現 —— 它是呈現手法，資料就是
   // stats.potentialByS4，群組直條傳達完全相同的數字。
-  var keys = s4Keys_(st);
+  // ⚠️ 資料的組法（含「沒有題目的格子一律留空白、絕不填 0」那條規則）抽到
+  // specAbilityCross_，與填入式的 {{圖_綜合能力}} 共用同一份 —— 兩套規則會讓
+  // 同一場演習在骨架報告與手稿報告上長出不同的柱子。
+  var spec2 = specAbilityCross_(ctx);
+  var keys = spec2.allKeys;
   var pbs = st.potentialByS4 || {};
   if (keys.length) {
-    // ⚠️ 沒有題目的格子一律留空白，**絕不填 0**。
-    // 這張圖的值域是 1–5 分，一根高度 0 的柱子在圖上讀起來是「這個面向得 0 分」
-    // ——「監測潛能在人員面向得 0 分」會被當成頭號發現提報，而真相是那個組合
-    // 根本沒有題目。Sheets 的圖表把空白格當成缺口（不畫），正是要的行為；
-    // 而數值表那條降級路線收到 '' 時，num_ 也會印成「—」，兩條路一致。
-    // 同理，整欄都沒有資料的 4S 類別直接不進圖，不留一根空軸。
-    var liveKeys = [];
-    for (var kk = 0; kk < keys.length; kk++) {
-      var hasAny = false;
-      for (var pp = 0; pp < POTENTIALS_.length; pp++) {
-        var probe = (pbs[POTENTIALS_[pp]] || {})[keys[kk]] || {};
-        if (probe.n) { hasAny = true; break; }
-      }
-      if (hasAny) liveKeys.push(keys[kk]);
-    }
-    var headers2 = ['潛能'].concat(liveKeys);
-    var rows2 = [];
-    for (var a = 0; a < POTENTIALS_.length; a++) {
-      var line = [POTENTIALS_[a]];
-      var any = false;
-      for (var b = 0; b < liveKeys.length; b++) {
-        var cell = (pbs[POTENTIALS_[a]] || {})[liveKeys[b]] || {};
-        if (cell.n) any = true;
-        line.push(cell.n ? Number(cell.mean) : '');
-      }
-      if (any) rows2.push(line);
-    }
-    if (liveKeys.length && rows2.length) {
-      emitChart_(cursor, ctx, { title: '圖2　潛能 × 4S 交叉平均', type: 'COLUMN', headers: headers2, rows: rows2 });
+    if (spec2.liveKeys.length && spec2.rows.length) {
+      emitChart_(cursor, ctx, { title: '圖2　潛能 × 4S 交叉平均', type: spec2.type, headers: spec2.headers, rows: spec2.rows });
     } else {
       para_(cursor, '（圖2　潛能 × 4S 交叉平均：本次沒有任何潛能與 4S 類別同時有資料的組合。）');
     }
@@ -3361,13 +3883,10 @@ function sectionS4_(cursor, ctx) {
     return;
   }
 
-  var rows = [];
-  for (var i = 0; i < keys.length; i++) {
-    var s = st.s4[keys[i]] || {};
-    rows.push([keys[i], Number(s.mean || 0)]);
-  }
-  rows.sort(function (a, b) { return b[1] - a[1]; });
-  emitChart_(cursor, ctx, { title: '圖3　4S 整備平均', type: 'BAR', headers: ['4S 元素', '平均分'], rows: rows });
+  // 資料的組法抽到 specS4Means_，與填入式的 {{圖_4S整備}} 共用（理由同圖2）。
+  var spec3 = specS4Means_(ctx);
+  var rows = spec3.rows;
+  emitChart_(cursor, ctx, { title: '圖3　4S 整備平均', type: spec3.type, headers: spec3.headers, rows: rows });
 
   var t = [['4S 元素', '評分數', '平均', '標準差']];
   for (var j = 0; j < rows.length; j++) {
@@ -3379,27 +3898,14 @@ function sectionS4_(cursor, ctx) {
   // 各場景對各 4S 的平均。分群規則與 Analysis.html 的 renderS4 相同
   // （以 shortScene 為鍵、取該場景在該 4S 類別下全部評分的平均）。
   // 這裡刻意用「長格式」而不是矩陣：場景數一多，矩陣表會寬到印不下。
-  var bucket = {};
-  var scenarioText = {};
-  var arows = ctx.payload.analysisRows || [];
-  for (var k = 0; k < arows.length; k++) {
-    var r = arows[k];
-    // 對照表要建在 4S 過濾**之前**：Analysis.html 的 renderS4 就是用全部
-    // analysisRows 建它的，而一個場景的題目若 4S 元素欄留空，它仍然是一個
-    // 存在的場景。兩邊規則不一致會讓讀者在儀表板上看到一個場景、在歸檔報告的
-    // 對照表裡卻找不到，無從判斷哪一份才對。
-    var code = shortScene_(r.itemName, ctx.prefix);
-    if (!scenarioText[code]) scenarioText[code] = r.goal || r.itemName || '';
-    if (!r.s4) continue;
-    var key = r.s4 + '␟' + code;
-    if (!bucket[key]) bucket[key] = [];
-    var sc = r.scores || [];
-    for (var s2 = 0; s2 < sc.length; s2++) bucket[key].push(sc[s2].score);
-  }
+  // 分群本身抽到 sceneS4Buckets_，與填入式的 {{圖_場景4S}} 共用（理由同圖2）。
+  var buckets = sceneS4Buckets_(ctx);
+  var bucket = buckets.bucket;
+  var scenarioText = buckets.scenarioText;
   // 對照表排在「各場景在各 4S 類別的平均」**之前**：那張表整欄都是 A1、D2 這種
   // 代號，先給對照表，讀者才有辦法從第一列開始讀懂。放在後面的話，他得先看完
   // 一整張看不懂的表、再回頭對照一次。
-  // 它必須放在上面那個迴圈之後，因為 scenarioText 是在迴圈裡才填好的 ——
+  // 它必須放在 sceneS4Buckets_ 之後，因為 scenarioText 是在那裡才填好的 ——
   // 搬動順序時這是唯一的硬限制。
   heading_(cursor, '場景編號對照表', 2);
   var allCodes = [];
@@ -3457,13 +3963,11 @@ function sectionPotential_(cursor, ctx) {
       figureNo++;
       continue;
     }
-    var chartRows = [];
-    for (var k = 0; k < rows.length; k++) {
-      chartRows.push([cleanIndicator_(rows[k].indicator) || rows[k].questionId || '（未命名）', Number(rows[k].mean || 0)]);
-    }
+    // 資料的組法抽到 specPotentialRadar_，與填入式的 {{圖_雷達_*}} 共用（理由同圖2）。
+    var specP = specPotentialRadar_(ctx, p);
     emitChart_(cursor, ctx, {
       title: '圖' + figureNo + '　' + p + '潛能各指標平均',
-      type: 'RADAR', headers: ['指標', '平均分'], rows: chartRows
+      type: specP.type, headers: specP.headers, rows: specP.rows
     });
     figureNo++;
     var t = [['場景編號', '指標', '評核題目', '平均', '標準差']];
@@ -3497,11 +4001,9 @@ function sectionCoverage_(cursor, ctx) {
     para_(cursor, '本次沒有歸類為「覆蓋率」的題目。');
     return;
   }
-  var chartRows = [];
-  for (var i = 0; i < rows.length; i++) {
-    chartRows.push([cleanIndicator_(rows[i].indicator) || rows[i].questionId || '（未命名）', Number(rows[i].mean || 0)]);
-  }
-  emitChart_(cursor, ctx, { title: '圖7　演習覆蓋率各指標平均', type: 'RADAR', headers: ['指標', '平均分'], rows: chartRows });
+  // 資料的組法抽到 specCoverageRadar_，與填入式的 {{圖_覆蓋率}} 共用（理由同圖2）。
+  var specC = specCoverageRadar_(ctx);
+  emitChart_(cursor, ctx, { title: '圖7　演習覆蓋率各指標平均', type: specC.type, headers: specC.headers, rows: specC.rows });
   var t = [['場景編號', '指標', '評核題目', '平均', '標準差']];
   var sorted = sortByMeanAsc_(rows);
   for (var j = 0; j < sorted.length; j++) {
@@ -3890,34 +4392,15 @@ function sectionAppendixB_(cursor, ctx) {
 // 檔名可以印（這一段資料本來就在金鑰保護的後面），試算表 ID、金鑰、/exec 網址
 // 永遠不印 —— 比照後端 meta 的既有分界：檔名不是憑證、ID 是。
 function sectionAppendixC_(cursor, ctx) {
-  var m = ctx.meta;
   var st = ctx.st;
   heading_(cursor, sectionById_('APPC').title, 1);
-  var rows = [['項目', '內容']];
-  rows.push(['報告編號', st.runId]);
-  rows.push(['報告產生時間', st.generatedAtText]);
-  // 這一份原始碼同時存在於容器綁定專案與獨立部署的報告 Web App，兩邊都是手貼。
-  // 印出版本與入口，是「兩份副本有沒有漂移」唯一從交付物上看得出來的線索。
-  rows.push(['產生程式版本', REPORT_BUILD_]);
-  rows.push(['產生入口', st.webMode ? '分析平台（報告 Web App）' : '設定試算表的「' + MENU_TITLE_ + '」選單']);
-  if (st.folderName) rows.push(['輸出資料夾名稱', String(st.folderName)]);
-  rows.push(['設定檔名稱', txt_(m.configFileName)]);
-  rows.push(['紀錄檔名稱', txt_(m.recordFileName)]);
-  rows.push(['紀錄分頁名稱', txt_(m.recordSheetName)]);
-  rows.push(['紀錄表原始列數', String(m.recordRowCount || 0)]);
-  rows.push(['機構代號', m.tenant ? String(m.tenant) : '—（單一演習模式）']);
-  rows.push(['演習代號', m.exercise ? String(m.exercise) : '—（單一演習模式）']);
-  rows.push(['租戶解析來源', txt_(m.tenantSource)]);
-  // ⚠️ 印雜湊、不印指紋本身（見 fingerprint_ 上方的註解）。這一行與後端
-  // 「這個分支沒有認證」的慣例同級：改動前請先確認新內容不含任何代號。
-  rows.push(['資料指紋（SHA-256 前 16 碼）', fingerprintDigest_(st.fingerprint)]);
-  rows.push(['匿名模式', st.identified ? '⚠ 含可識別評核官代號' : '已匿名（評核官 1…N）']);
-  rows.push(['ICC 驗算結論', ctx.icc.note]);
-  rows.push(['圖表能力探測結果', (st.cap && st.cap.detail && st.cap.detail.length)
-    ? st.cap.detail.join('；') : '未探測']);
-  rows.push(['報告快照工作表', SNAPSHOT_SHEET_NAME_ + '（第 ' + st.snapStartRow + ' 列起共 ' +
-    st.snapCount + ' 列，以報告編號關聯）']);
-  table_(cursor, rows);
+  // 這張 provenance 表抽到 appendixCRows_，與填入式文件最後自動附加的
+  // 「報告產生紀錄」共用同一份 —— 兩種模式對「這份報告是怎麼來的」不可以各說
+  // 各話。裡面包含「產生程式版本」與「產生入口」：這一份原始碼同時手貼在容器
+  // 綁定專案與獨立部署的報告 Web App，印出版本是「兩份副本有沒有漂移」唯一從
+  // 交付物上看得出來的線索。也包含資料指紋的**雜湊**而不是指紋本身
+  // （見 fingerprint_ 上方的註解）。
+  table_(cursor, appendixCRows_(ctx));
 
   // 業主第一次產生報告後，請回報「圖表能力探測結果」這一行 —— 這是開發端
   // 無法執行這段程式碼時，唯一的實機驗證替代手段。
@@ -3993,6 +4476,811 @@ function sectionAppendixD_(cursor, ctx) {
   heading_(cursor, '文件格式上的限制', 2);
   bullet_(cursor, '頁碼、頁首院徽、字型、邊距與簽核欄全部由報告範本負責，本程式不產生也不修改它們（DocumentApp 沒有插入頁碼的 API，這是硬限制而不是取捨）。要調整版面請直接修改範本 Google 文件，不需要改程式。');
   bullet_(cursor, '報告版次、文件編號、製表／審核／核定欄位由業主在產生出來的 Google 文件中自行填寫，系統不保存這些欄位。');
+}
+
+// ===================================================================
+// 填入式：綜合能力（潛能 × 4S 交叉格）—— 從 Analysis.html 移植
+// ===================================================================
+//
+// ⚠️⚠️ 這是這十二句說明的**第二份副本**。第一份是 Analysis.html 的
+// ABILITY_NOTES（搜 'ABILITY_NOTES' 就找得到），兩份必須在同一個 commit 裡一起改。
+// 沒有任何執行期檢查抓得到不一致：一份是放在網站根目錄的瀏覽器 JS，一份是手工
+// 貼進兩個 Apps Script 專案的 .gs，唯一的辨別方式是把十二個字串 diff 一次。
+// 這個 repo 已經為同一件事付過代價 —— Config.gs 與 ConfigWithSubmit.gs 漂移到
+// 線上那份**不等於任何一個 commit**（見 apps-script/README.md，2026-10-12）。
+//
+// ⚠️ 鍵是 潛能 + '×' + 4S 的**原始值**，而 4S 原始值直接來自 對應指標 的
+// 「4S 元素」欄（目前是 'Space (空間)' 這種中英並列）。業主哪天把那一欄改成
+// 純中文，這十二個鍵就全部對不上，abilityNote_ 會回空字串而「說明」欄整欄變空白
+// —— **不會報錯**，而且螢幕與紙本會同時變空白。改試算表標籤時這裡要跟著改。
+//
+// 句型是「在{4S 的動作片語}上展現出的{潛能}能力」，業主 2026-10-13 定稿：
+// 空間→空間規劃與佈署、人員→人員規劃與佈署、物資→物資規劃與管理、
+// 系統→系統管理與應用。全部用「規劃」（不是「規畫」），且不加括號。
+var ABILITY_NOTES_ = {
+  '反應×Space (空間)': '在空間規劃與佈署上展現出的反應能力',
+  '反應×Staff (人員)': '在人員規劃與佈署上展現出的反應能力',
+  '反應×Stuff (物資)': '在物資規劃與管理上展現出的反應能力',
+  '反應×System (系統)': '在系統管理與應用上展現出的反應能力',
+  '監測×Space (空間)': '在空間規劃與佈署上展現出的監測能力',
+  '監測×Staff (人員)': '在人員規劃與佈署上展現出的監測能力',
+  '監測×Stuff (物資)': '在物資規劃與管理上展現出的監測能力',
+  '監測×System (系統)': '在系統管理與應用上展現出的監測能力',
+  '預期×Space (空間)': '在空間規劃與佈署上展現出的預期能力',
+  '預期×Staff (人員)': '在人員規劃與佈署上展現出的預期能力',
+  '預期×Stuff (物資)': '在物資規劃與管理上展現出的預期能力',
+  '預期×System (系統)': '在系統管理與應用上展現出的預期能力'
+};
+
+// ⚠️ 這裡取的是**潛能 × 4S 的交叉格**，不是個別題目。
+// 第一章既有的「優勢前三／待改善前三」是逐題的（chartRows_ + sortByMeanDesc_），
+// 那是另一個問題的答案。業主手稿寫的是「反應x空間」這種組合名，所以要的一定是
+// 交叉格 —— 而且儀表板的報告檢視（renderReportSummary）早就是這樣答的。
+// **sectionSummary_ 一個字都不改**：錨點式的輸出必須與今天逐位元相同。
+function abilityCells_(ctx) {
+  var by = (ctx.stats && ctx.stats.potentialByS4) || {};
+  var out = [];
+  for (var pot in by) {
+    if (!Object.prototype.hasOwnProperty.call(by, pot)) continue;
+    var row = by[pot] || {};
+    for (var s4 in row) {
+      if (!Object.prototype.hasOwnProperty.call(row, s4)) continue;
+      var c = row[s4] || {};
+      // n:0 的格子代表那個組合完全沒有題目，不是「得 0 分」。放進排序會讓
+      // 待改善前三永遠是三個空格，什麼也沒說。
+      if (!c.n || c.mean === null || c.mean === undefined) continue;
+      out.push({ potential: pot, s4: s4, mean: Number(c.mean), n: c.n });
+    }
+  }
+  return out;
+}
+
+function abilityNote_(pot, s4) {
+  return ABILITY_NOTES_[String(pot) + '×' + String(s4)] || '';
+}
+
+// 「反應x空間」這種顯示名。注意與 abilityNote_ 的不對稱是**刻意的**：
+// 標籤只留括號裡的中文，查說明用的鍵卻是 4S 的原字。兩個字串長得很像，很容易
+// 混成一個。
+function abilityLabel_(pot, s4) {
+  var m = String(s4 == null ? '' : s4).match(/[（(]([^）)]+)[）)]/);
+  return String(pot) + ' x ' + (m ? m[1] : String(s4 == null ? '' : s4));
+}
+
+// 取到第 n 名為止，**同分同名次而且全部列入**（2026-10-12 業主指定）。
+// 競賽排名：分數相同給同一個名次，下一個名次跳過被佔用的位次，所以回傳筆數
+// 不一定是 n —— 1,1,1 三筆、1,2,2 三筆、1,2,3,3,3 五筆。
+// 直接 slice(0,3) 會在同分處硬切，等於從兩個一模一樣的組合裡任選一個印進報告、
+// 另一個丟掉，而紙本上看不出曾經發生過這件事。契約裡的「序號」欄就是這個名次。
+function rankedTop_(cells, n, asc) {
+  var sorted = cells.slice().sort(function (a, b) { return asc ? (a.mean - b.mean) : (b.mean - a.mean); });
+  var out = [];
+  var rank = 0, prev = null;
+  for (var i = 0; i < sorted.length; i++) {
+    var c = sorted[i];
+    if (prev === null || c.mean !== prev) rank = i + 1;
+    if (rank > n) break;
+    out.push({ rank: rank, potential: c.potential, s4: c.s4, mean: c.mean, n: c.n });
+    prev = c.mean;
+  }
+  return out;
+}
+
+// ===================================================================
+// 填入式：場景色譜（與 Analysis.html 的 4S 分頁同一組顏色）
+// ===================================================================
+//
+// ⚠️ 第二份副本警語，與 ABILITY_NOTES_ 同級：色相公式 round(i/(n-1)*300)、
+// 飽和度 55%、亮度 45%、以及 n<=1 時回 '#147d83'，全部逐字照抄
+// Analysis.html 的 renderS4（搜 'colorOf'）。兩邊必須一致，否則紙本上的色塊
+// 指到的場景與螢幕上的色段不是同一個 —— 而兩份文件擺在一起對照正是這張表的用途。
+// 場景碼與文字一律**只從 analysisRows 建**（與 renderS4 相同）：換一組列會重新
+// 編索引，顏色就整組位移。
+function hex2_(v) {
+  var n = Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16);
+  return n.length < 2 ? '0' + n : n;
+}
+
+function hslToHex_(h, s, l) {
+  var ss = s / 100, ll = l / 100;
+  var cc = (1 - Math.abs(2 * ll - 1)) * ss;
+  var hp = (((h % 360) + 360) % 360) / 60;
+  var x = cc * (1 - Math.abs((hp % 2) - 1));
+  var r = 0, g = 0, b = 0;
+  if (hp < 1) { r = cc; g = x; }
+  else if (hp < 2) { r = x; g = cc; }
+  else if (hp < 3) { g = cc; b = x; }
+  else if (hp < 4) { g = x; b = cc; }
+  else if (hp < 5) { r = x; b = cc; }
+  else { r = cc; b = x; }
+  var m = ll - cc / 2;
+  return '#' + hex2_(r + m) + hex2_(g + m) + hex2_(b + m);
+}
+
+function sceneSpectrum_(ctx) {
+  var scenarioText = {};
+  var arows = ctx.payload.analysisRows || [];
+  for (var i = 0; i < arows.length; i++) {
+    var code = shortScene_(arows[i].itemName, ctx.prefix);
+    if (!scenarioText[code]) scenarioText[code] = arows[i].goal || arows[i].itemName || '';
+  }
+  var codes = [];
+  for (var c in scenarioText) {
+    if (Object.prototype.hasOwnProperty.call(scenarioText, c)) codes.push(c);
+  }
+  codes.sort(naturalCompare_);
+  var n = codes.length;
+  var color = {};
+  for (var k = 0; k < n; k++) {
+    color[codes[k]] = (n <= 1) ? '#147d83' : hslToHex_(Math.round(k / (n - 1) * 300), 55, 45);
+  }
+  return { codes: codes, text: scenarioText, color: color };
+}
+
+// ===================================================================
+// 填入式：圖表 spec 建構器（錨點式與填入式**共用同一份**）
+// ===================================================================
+//
+// 這五支是從既有章節寫作器裡抽出來的純函式（spec 進 spec 出，不碰文件）。
+// 共用而不是複製，是為了不產生第二套「潛能×4S 的空格要不要填 0」的規則 ——
+// 那條規則錯一次就會在圖上畫出一根「監測潛能在人員面向得 0 分」的柱子，
+// 而那會被當成頭號發現提報。
+// ⚠️ 它們動到的是已經產出過真實報告的那條路。抽出來的邏輯逐行照搬、輸出相同，
+// 但本機無法執行 .gs —— 合併前必須用骨架範本實跑一次並逐章比對。
+
+function specAbilityCross_(ctx) {
+  var st = ctx.stats;
+  var keys = s4Keys_(st);
+  var pbs = st.potentialByS4 || {};
+  // ⚠️ 沒有題目的格子一律留空白，**絕不填 0**（理由見 sectionOverall_ 圖2 的註解）。
+  // 整欄都沒有資料的 4S 類別直接不進圖，不留一根空軸。
+  var liveKeys = [];
+  for (var kk = 0; kk < keys.length; kk++) {
+    var hasAny = false;
+    for (var pp = 0; pp < POTENTIALS_.length; pp++) {
+      var probe = (pbs[POTENTIALS_[pp]] || {})[keys[kk]] || {};
+      if (probe.n) { hasAny = true; break; }
+    }
+    if (hasAny) liveKeys.push(keys[kk]);
+  }
+  var rows = [];
+  for (var a = 0; a < POTENTIALS_.length; a++) {
+    var line = [POTENTIALS_[a]];
+    var any = false;
+    for (var b = 0; b < liveKeys.length; b++) {
+      var cell = (pbs[POTENTIALS_[a]] || {})[liveKeys[b]] || {};
+      if (cell.n) any = true;
+      line.push(cell.n ? Number(cell.mean) : '');
+    }
+    if (any) rows.push(line);
+  }
+  return {
+    title: '潛能 × 4S 交叉平均', type: 'COLUMN',
+    headers: ['潛能'].concat(liveKeys), rows: rows,
+    allKeys: keys, liveKeys: liveKeys
+  };
+}
+
+function specS4Means_(ctx) {
+  var st = ctx.stats;
+  var keys = s4Keys_(st);
+  var rows = [];
+  for (var i = 0; i < keys.length; i++) {
+    var s = (st.s4 || {})[keys[i]] || {};
+    rows.push([keys[i], Number(s.mean || 0)]);
+  }
+  rows.sort(function (a, b) { return b[1] - a[1]; });
+  return { title: '4S 整備平均', type: 'BAR', headers: ['4S 元素', '平均分'], rows: rows };
+}
+
+function specPotentialRadar_(ctx, p) {
+  var arows = ctx.payload.analysisRows || [];
+  var rows = [];
+  for (var j = 0; j < arows.length; j++) {
+    if (arows[j].potential !== p) continue;
+    rows.push([cleanIndicator_(arows[j].indicator) || arows[j].questionId || '（未命名）', Number(arows[j].mean || 0)]);
+  }
+  return { title: p + '潛能各指標平均', type: 'RADAR', headers: ['指標', '平均分'], rows: rows };
+}
+
+function specCoverageRadar_(ctx) {
+  var crows = ctx.payload.coverageRows || [];
+  var rows = [];
+  for (var i = 0; i < crows.length; i++) {
+    rows.push([cleanIndicator_(crows[i].indicator) || crows[i].questionId || '（未命名）', Number(crows[i].mean || 0)]);
+  }
+  return { title: '演習覆蓋率各指標平均', type: 'RADAR', headers: ['指標', '平均分'], rows: rows };
+}
+
+// 場景 × 4S 的分群。對照表（scenarioText）刻意建在 4S 過濾**之前**：
+// 一個場景的題目若 4S 元素欄留空，它仍然是一個存在的場景，Analysis.html 的
+// renderS4 也是用全部 analysisRows 建它的。兩邊規則不一致會讓讀者在儀表板上
+// 看到一個場景、在歸檔報告的對照表裡卻找不到，無從判斷哪一份才對。
+function sceneS4Buckets_(ctx) {
+  var bucket = {};
+  var scenarioText = {};
+  var arows = ctx.payload.analysisRows || [];
+  for (var k = 0; k < arows.length; k++) {
+    var r = arows[k];
+    var code = shortScene_(r.itemName, ctx.prefix);
+    if (!scenarioText[code]) scenarioText[code] = r.goal || r.itemName || '';
+    if (!r.s4) continue;
+    var key = r.s4 + '␟' + code;
+    if (!bucket[key]) bucket[key] = [];
+    var sc = r.scores || [];
+    for (var s2 = 0; s2 < sc.length; s2++) bucket[key].push(sc[s2].score);
+  }
+  return { bucket: bucket, scenarioText: scenarioText };
+}
+
+// 與 Analysis.html 的 4S 分頁堆疊橫條帶的是同一批數字（那張圖的每個色段標籤
+// 印的就是該場景的實際平均）。堆疊本身是呈現手法，不重現。
+function specSceneByS4_(ctx) {
+  var b = sceneS4Buckets_(ctx);
+  var keys = s4Keys_(ctx.stats);
+  var codes = [];
+  for (var c in b.scenarioText) {
+    if (Object.prototype.hasOwnProperty.call(b.scenarioText, c)) codes.push(c);
+  }
+  codes.sort(naturalCompare_);
+  var rows = [];
+  for (var i = 0; i < codes.length; i++) {
+    var line = [codes[i]];
+    var any = false;
+    for (var j = 0; j < keys.length; j++) {
+      var arr = b.bucket[keys[j] + '␟' + codes[i]];
+      // 同樣的「空白不是 0」規則：這個場景在這個 4S 類別下沒有題目就留空。
+      if (arr && arr.length) { any = true; line.push(Number(avg_(arr))); } else line.push('');
+    }
+    if (any) rows.push(line);
+  }
+  return { title: '各場景在各 4S 類別的平均', type: 'COLUMN', headers: ['場景編號'].concat(keys), rows: rows };
+}
+
+// 一個 id 對一張圖。新增圖片標記只要改 FILL_IMAGE_TOKENS_ 與這支。
+function fillImageSpec_(def, ctx) {
+  switch (def.id) {
+    case 'IMG_ABILITY': return specAbilityCross_(ctx);
+    case 'IMG_S4': return specS4Means_(ctx);
+    case 'IMG_COVERAGE': return specCoverageRadar_(ctx);
+    case 'IMG_RADAR_1':
+    case 'IMG_RADAR_2':
+    case 'IMG_RADAR_3': return specPotentialRadar_(ctx, def.potential);
+    case 'IMG_SCENE_S4': return specSceneByS4_(ctx);
+    default: return null;
+  }
+}
+
+// ===================================================================
+// 填入式：資料列建構器（輸出就是契約的欄位順序）
+// ===================================================================
+
+function abilityValueRows_(list) {
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    out.push([
+      String(list[i].rank),
+      abilityLabel_(list[i].potential, list[i].s4),
+      num_(list[i].mean, 1),
+      abilityNote_(list[i].potential, list[i].s4)
+    ]);
+  }
+  return out;
+}
+
+// 回 { values: [][], colors: []|null }。colors 只有場景對照表會用到。
+// 一個小數位（num_，不是 toFixed）是刻意的：與儀表板的 mean.toFixed(1) 對齊，
+// 同時 null 仍然印「—」而不是一個假的 0。
+function fillRowData_(def, ctx) {
+  var i;
+  var out = [];
+  if (def.id === 'ROW_TOP3') {
+    return { values: abilityValueRows_(rankedTop_(abilityCells_(ctx), 3, false)), colors: null };
+  }
+  if (def.id === 'ROW_BOT3') {
+    return { values: abilityValueRows_(rankedTop_(abilityCells_(ctx), 3, true)), colors: null };
+  }
+  if (def.id === 'ROW_COV') {
+    var cov = sortByMeanAsc_(ctx.payload.coverageRows || []);
+    for (i = 0; i < cov.length; i++) {
+      out.push([cleanIndicator_(cov[i].indicator), txt_(cov[i].question), num_(cov[i].mean, 1)]);
+    }
+    return { values: out, colors: null };
+  }
+  if (def.id === 'ROW_P1' || def.id === 'ROW_P2' || def.id === 'ROW_P3') {
+    var arows = ctx.payload.analysisRows || [];
+    var pool = [];
+    for (i = 0; i < arows.length; i++) {
+      if (arows[i].potential === def.potential) pool.push(arows[i]);
+    }
+    var sorted = sortByMeanAsc_(pool);
+    for (i = 0; i < sorted.length; i++) {
+      out.push([
+        shortScene_(sorted[i].itemName, ctx.prefix),
+        cleanIndicator_(sorted[i].indicator),
+        txt_(sorted[i].question),
+        num_(sorted[i].mean, 1)
+      ]);
+    }
+    return { values: out, colors: null };
+  }
+  if (def.id === 'ROW_SCENE') {
+    var sp = sceneSpectrum_(ctx);
+    var colors = [];
+    for (i = 0; i < sp.codes.length; i++) {
+      out.push(['●', sp.codes[i], txt_(sp.text[sp.codes[i]])]);
+      colors.push(sp.color[sp.codes[i]]);
+    }
+    return { values: out, colors: colors };
+  }
+  return { values: [], colors: null };
+}
+
+// ===================================================================
+// 填入式：儲存格層級的寫入工具
+// ===================================================================
+
+// 把一格清成「剛好一個空段落」。
+// 不用 cell.clear()：TableCell 一定要至少含一個段落，而且保留第 0 個子元素才
+// 留得住業主排好的段落屬性（對齊、行距、字型）—— 降級成文字時那些屬性就是
+// 這一格看起來還像不像話的全部依據。由後往前刪，避免索引位移。
+function clearCellToSingleParagraph_(cell) {
+  for (var i = cell.getNumChildren() - 1; i >= 1; i--) {
+    try { cell.getChild(i).removeFromParent(); } catch (err) {}
+  }
+  var first = null;
+  try { first = cell.getChild(0); } catch (err2) { first = null; }
+  if (first && first.getType() === DocumentApp.ElementType.PARAGRAPH) {
+    var p = first.asParagraph();
+    try { p.editAsText().setText(''); } catch (err3) {}
+    return p;
+  }
+  // 第 0 個不是段落（清單項目或表格）：先補一個空段落再把它刪掉，
+  // 順序不能顛倒 —— 刪成空儲存格會丟錯。
+  var np = cell.insertParagraph(0, '');
+  if (first) { try { first.removeFromParent(); } catch (err4) {} }
+  return np;
+}
+
+function setParaText_(p, text) {
+  var s = String(text == null ? '' : text);
+  try { p.editAsText().setText(s); } catch (err) {
+    try { p.setText(s); } catch (err2) {}
+  }
+  return p;
+}
+
+// 該格可用的寬度（pt）。欄寬設成自動時 getColumnWidth 可能回 null 或丟錯，
+// 此時退回 IMAGE_WIDTH_PT_ —— 對契約說的 1×1 表格這個預設是對的（滿版的一格
+// 就是本文寬度）。夾在 [120, IMAGE_WIDTH_PT_]，讓一個設錯的欄寬既長不出郵票
+// 大小的圖、也撐不破版面。
+function cellUsableWidthPt_(table, colIndex, cell) {
+  var w = 0;
+  try { w = Number(table.getColumnWidth(colIndex)); } catch (err) { w = 0; }
+  if (!w || isNaN(w) || w <= 0) return IMAGE_WIDTH_PT_;
+  try { w -= Number(cell.getPaddingLeft() || 0); } catch (err2) {}
+  try { w -= Number(cell.getPaddingRight() || 0); } catch (err3) {}
+  if (!w || isNaN(w)) return IMAGE_WIDTH_PT_;
+  if (w < 120) return 120;
+  if (w > IMAGE_WIDTH_PT_) return IMAGE_WIDTH_PT_;
+  return Math.round(w);
+}
+
+// 與 insertImage_ 同一套等比例縮放算術，只是容器不同。
+// insertImage_ 本身一個字都不改 —— 錨點式仍然用它。
+function insertImageIntoCell_(para, blob, maxWidthPt) {
+  var img = para.appendInlineImage(blob);
+  try {
+    var w = img.getWidth();
+    var h = img.getHeight();
+    if (w && w > maxWidthPt) {
+      img.setHeight(Math.round(h * (maxWidthPt / w)));
+      img.setWidth(maxWidthPt);
+    }
+  } catch (errSize) {}
+  try { para.setAlignment(DocumentApp.HorizontalAlignment.CENTER); } catch (err2) {}
+  return true;
+}
+
+// 寫一格文字並保住格式。
+// Text.setText 在把一段文字清空再寫入時不保證保留屬性，所以是「先抓屬性、
+// setText、再寫回去」這個 ES5 的穩妥寫法；整段包起來，失敗就退回
+// cell.setText（丟格式總比丟掉整列好）。
+function setCellText_(cell, text) {
+  var s = String(text == null ? '' : text);
+  try {
+    for (var i = cell.getNumChildren() - 1; i >= 1; i--) {
+      try { cell.getChild(i).removeFromParent(); } catch (errC) {}
+    }
+    var p = cell.getChild(0).asParagraph();
+    var attrs = null;
+    try { attrs = p.getAttributes(); } catch (err0) { attrs = null; }
+    p.editAsText().setText(s);
+    if (attrs) { try { p.setAttributes(attrs); } catch (err1) {} }
+    return true;
+  } catch (err) {
+    try { cell.setText(s); return true; } catch (err2) { return false; }
+  }
+}
+
+// 色塊欄：寫一個實心圓並把前景色設成該場景的色譜顏色。
+function setCellTextColored_(cell, text, hex) {
+  if (!setCellText_(cell, text)) return false;
+  try {
+    var t = cell.getChild(0).asParagraph().editAsText();
+    var len = String(text == null ? '' : text).length;
+    if (len > 0 && hex) t.setForegroundColor(0, len - 1, hex);
+  } catch (err) {}
+  return true;
+}
+
+// ===================================================================
+// 填入式：{{圖_*}}
+// ===================================================================
+
+// 儲存格版的降級鏈。①②③ 與 emitChart_ 完全共用同一組函式與同一套判斷
+// （tryChartBlob_ ／ legacyChartBlob_ ／ ctx.cap），只有第 ④ 段不同。
+//
+// ⚠️ 第 ④ 段刻意**不插巢狀表格**。Docs 對巢狀表格的支援本來就差，
+// TableCell.appendTable 在這個部署上從來沒有被執行過，而且一張巢狀表格會撐破
+// 業主為圖片量好的那一格 —— 等於這個降級親手毀掉填入式模式存在的理由。
+// 改成在同一格裡逐列寫文字：數字一樣看得到，而且還留在他的框裡。
+//
+// 不寫圖說。emitChart_ 會補一行「圖：<title>」，但手稿自己畫了圖說，多一段只會
+// 把業主量好的格子撐高。降級的那句話改走 warnings[] 與文件最後的產生紀錄。
+function emitChartIntoCell_(loc, ctx, spec) {
+  var cell = loc.cell;
+  if (!spec || !spec.rows || !spec.rows.length) {
+    // 沒有資料不是降級，不記警告（與 emitChart_ 的第一行同一個判斷）。
+    setParaText_(clearCellToSingleParagraph_(cell), '（' + spec.title + '：本次沒有可呈現的資料。）');
+    return;
+  }
+  var maxW = cellUsableWidthPt_(loc.table, loc.cellIndex, cell);
+  var order = [];
+  if (spec.type === 'RADAR') {
+    if (ctx.cap.radar) order.push('RADAR');
+    order.push('COLUMN');
+  } else {
+    order.push(spec.type);
+    if (spec.type !== 'COLUMN') order.push('COLUMN');
+  }
+  var lastError = '';
+  for (var i = 0; i < order.length; i++) {
+    if (order[i] === 'COLUMN' && !ctx.cap.column && i > 0) continue;
+    var res = tryChartBlob_(ctx.tempSheet, spec, order[i]);
+    if (res.blob) {
+      var ok = false;
+      try {
+        // 每一次嘗試前都重新清格：上一次失敗的 appendInlineImage 可能留下殘骸。
+        ok = insertImageIntoCell_(clearCellToSingleParagraph_(cell), res.blob, maxW);
+      } catch (errIns) { ok = false; }
+      if (ok) {
+        if (spec.type === 'RADAR' && order[i] !== 'RADAR') {
+          ctx.warn('「' + spec.title + '」：雷達圖不可用，已降級為直條圖（數值相同）。');
+        }
+        return;
+      }
+      lastError = '圖片插入儲存格失敗';
+    } else {
+      lastError = res.error;
+    }
+  }
+  var legacy = legacyChartBlob_(spec);
+  if (legacy) {
+    try {
+      if (insertImageIntoCell_(clearCellToSingleParagraph_(cell), legacy, maxW)) {
+        ctx.warn('「' + spec.title + '」：內嵌圖表失敗（' + lastError + '），改用舊版 Charts 服務。');
+        return;
+      }
+    } catch (errLegacy) {}
+  }
+  // 第 ④ 段：同一格裡逐列文字。
+  ctx.warn('「' + spec.title + '」：圖表無法產生（' + lastError + '），已改在同一格內逐列列出數值。');
+  try {
+    setParaText_(clearCellToSingleParagraph_(cell),
+      '（本環境無法產生「' + spec.title + '」這張圖，以下為同一組數字）');
+    for (var r = 0; r < spec.rows.length; r++) {
+      var line = String(spec.rows[r][0]);
+      for (var c = 1; c < spec.rows[r].length; c++) {
+        // 多欄（潛能×4S、場景×4S）要帶欄名，否則一串數字讀不出對應。
+        // num_ 會把 '' 印成「—」，所以「這個組合沒有題目」不會被讀成 0 分。
+        line += '　' + (spec.headers.length > 2 ? String(spec.headers[c]) + ' ' : '') + num_(spec.rows[r][c], 2);
+      }
+      cell.appendParagraph(line);
+    }
+    return;
+  } catch (errText) {
+    lastError = lastError + '；數值也寫不進儲存格（' + msg_(errText) + '）';
+  }
+  // 第 ⑤ 段。
+  try {
+    setParaText_(clearCellToSingleParagraph_(cell),
+      '⚠ 本處的「' + spec.title + '」既無法產生圖表也無法插入數值（原因：' + lastError +
+      '）。同一批數字已經寫進設定試算表的「' + SNAPSHOT_SHEET_NAME_ + '」工作表（報告編號 ' +
+      ctx.st.runId + '），請由該處查閱。');
+  } catch (errLast) {}
+  ctx.skip(spec.title, '圖表與數值皆無法寫入儲存格：' + lastError);
+}
+
+function fillImageSlot_(loc, ctx, def) {
+  var spec = fillImageSpec_(def, ctx);
+  if (!spec) {
+    setParaText_(clearCellToSingleParagraph_(loc.cell), '（' + def.title + '：系統沒有這張圖的資料來源。）');
+    ctx.skip(def.title, '沒有對應的 spec 建構器');
+    return;
+  }
+  spec.title = def.title;
+  emitChartIntoCell_(loc, ctx, spec);
+}
+
+// ===================================================================
+// 填入式：{{列_*}}
+// ===================================================================
+
+// 樣板列複製。
+//
+// 為什麼是「複製列」而不是「append 一列再自己設格式」：
+// 框線寬度／顏色是 **Table 層級**的屬性（table.setBorderWidth(0)），所以業主
+// 設的隱藏框線本來就會被每一列繼承；但儲存格底色、內距、垂直對齊、段落屬性是
+// **逐格**的，appendTableRow() 建出來的是一列預設格式 —— 結果就是「正好帶資料
+// 的那幾列」冒出 1pt 黑框，而業主會以為程式把他的表格弄壞了。row.copy() 把
+// 那些屬性整組帶過來。
+//
+// ⚠️ 順序刻意是「先刪樣板列，再逐列插入」。這是在兩種壞結局之間選一個：
+// 先刪＝一旦撞到 6 分鐘硬上限（連 finally 都不會跑），結果是**少列**，不會是
+// **重複列**；重試時標記已經不在，這個 slot 直接被當成寫完而跳過（與 openCursor_
+// 依賴的「錨點不在了＝這一章已寫完」是同一條不變式）。少列比重複列安靜，
+// 所以 st.fillInflight 負責把它變成一則具名警告。
+function duplicateTemplateRow_(table, rowIndex, values, colors, columnCount) {
+  var donor = table.getRow(rowIndex).copy();
+  var n = values.length;
+  var single = (table.getNumRows() <= 1);
+  if (single) {
+    // 整張表只有這一列：先把第一份複本插在它後面再刪掉它。
+    // 刪掉 Docs 表格的最後一列有機會把整張表一起帶走。
+    table.insertTableRow(rowIndex + 1, donor.copy());
+    table.removeRow(rowIndex);
+  } else {
+    table.removeRow(rowIndex);
+  }
+  var start = rowIndex;
+  var already = single ? 1 : 0;
+  for (var k = already; k < n; k++) {
+    table.insertTableRow(start + k, donor.copy());
+  }
+  // 填值一律對「已經接上文件」的那一列做（對 detached 的複本動手會丟
+  // 「element must be attached」）。
+  for (var i = 0; i < n; i++) {
+    var row = table.getRow(start + i);
+    var cells = row.getNumCells();
+    for (var j = 0; j < columnCount && j < cells; j++) {
+      if (colors && j === 0) setCellTextColored_(row.getCell(j), values[i][j], colors[i]);
+      else setCellText_(row.getCell(j), values[i][j]);
+    }
+  }
+  return n;
+}
+
+function fillRowSlot_(loc, ctx, def) {
+  var table = loc.table;
+  var ti = loc.rowIndex;
+  var st = ctx.st;
+
+  // 檢查過了還是再量一次：範本有可能在「檢查設定」與「產生」之間被改過。
+  var cells = table.getRow(ti).getNumCells();
+  if (cells < def.columns.length) {
+    throw new Error(def.token + ' 所在的表格只有 ' + cells + ' 欄，這個標記需要 ' +
+      def.columns.length + ' 欄（欄位順序由左至右：' + columnContractText_(def) + '）。');
+  }
+
+  var data = fillRowData_(def, ctx);
+  var values = data.values;
+  var colors = data.colors;
+
+  // 零筆：不複製、不刪列。把樣板列就地改成一句說明，其餘欄位清空。
+  // 讓一個 {{列_*}} 活著進到 PDF 是這裡要避免的失敗 —— 而且收尾的殘留掃描會把
+  // 它報成「範本 token 打錯字」，一則假警報，正好訓練操作者忽略真的那些
+  // （2026-10-09 的教訓，見 OWNER_FILLED_TOKENS_）。
+  if (!values.length) {
+    var row0 = table.getRow(ti);
+    setCellText_(row0.getCell(0), '（本次沒有可列出的資料）');
+    for (var z = 1; z < def.columns.length && z < row0.getNumCells(); z++) {
+      setCellText_(row0.getCell(z), '');
+    }
+    return;
+  }
+
+  var truncated = 0;
+  if (values.length > TABLE_ROW_CAP_) {
+    truncated = values.length - TABLE_ROW_CAP_;
+    values = values.slice(0, TABLE_ROW_CAP_);
+    if (colors) colors = colors.slice(0, TABLE_ROW_CAP_);
+  }
+
+  // 寫進執行狀態：硬上限砍掉執行時不會跑 finally，這一格是唯一能讓
+  // 「寫到一半」留下痕跡的東西。
+  st.fillInflight = def.id;
+  writeRunState_(st);
+
+  duplicateTemplateRow_(table, ti, values, colors, def.columns.length);
+
+  // 立刻落地，不要等這次呼叫結束才一起寫。
+  // 不這樣做的話，硬上限正好落在「寫完了、還沒清旗標」這個窗口時，下一次會
+  // 報一則「可能未完整寫入」的假警告 —— 而一則會誤報的警告，正是這個檔案一再
+  // 付代價的那種東西（見 OWNER_FILLED_TOKENS_）。
+  st.fillInflight = '';
+  writeRunState_(st);
+
+  if (truncated > 0) {
+    // 截斷絕不多長一列來說明（那會破壞欄位契約），改走警告與產生紀錄。
+    ctx.warn('「' + def.title + '」共 ' + (values.length + truncated) + ' 筆，為控制產生時間僅填入前 ' +
+      TABLE_ROW_CAP_ + ' 筆，其餘 ' + truncated + ' 筆請查閱「' + SNAPSHOT_SHEET_NAME_ + '」工作表。');
+    ctx.skip(def.title, '資料筆數超過單表上限，已截斷 ' + truncated + ' 筆');
+  }
+}
+
+// ===================================================================
+// 填入式：一個 slot 的寫入（writeSection_ 的對應物）
+// ===================================================================
+
+// 依 token 重新定位。**每一次 HTTP 呼叫都會重新開一次文件**，所以 scan 階段
+// 記下的 Table／TableCell 物件在下一個步驟裡已經失效，不能跨呼叫保存。
+function locateFillToken_(doc, token) {
+  var body = doc.getBody();
+  var tables = [];
+  try { tables = body.getTables() || []; } catch (err) { tables = []; }
+  for (var ti = 0; ti < tables.length; ti++) {
+    var table = tables[ti];
+    var nr = 0;
+    try { nr = table.getNumRows(); } catch (err2) { nr = 0; }
+    for (var r = 0; r < nr; r++) {
+      var row = table.getRow(r);
+      var nc = row.getNumCells();
+      for (var c = 0; c < nc; c++) {
+        var cell = row.getCell(c);
+        var text = '';
+        try { text = String(cell.getText() || ''); } catch (err3) { text = ''; }
+        if (text.indexOf(token) !== -1) {
+          return { table: table, rowIndex: r, cellIndex: c, cell: cell, numCells: nc };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// 一個 slot 寫壞了不可以讓整輪死掉 —— 與 writeSection_ 同一條規則：
+// 把錯誤寫在那一格裡、記進 warnings 與產生紀錄，然後繼續下一個。
+function writeFillSlot_(doc, slotId, ctx) {
+  if (slotId === FILL_RECORD_ID_) {
+    try {
+      writeFillRecord_(doc, ctx);
+    } catch (errRec) {
+      ctx.warn(FILL_RECORD_TITLE_ + '：寫入失敗（' + msg_(errRec) + '）。');
+      ctx.skip(FILL_RECORD_TITLE_, msg_(errRec));
+    }
+    return;
+  }
+  var def = fillDefById_(slotId);
+  if (!def) return;
+
+  var loc = locateFillToken_(doc, def.token);
+  if (!loc) {
+    // 標記不在了＝上一次已經寫完（與 openCursor_ 的「錨點不在了」同一條不變式）。
+    // 唯一的例外是上一次正好死在這個 slot 的寫入途中 —— 那種情況下資料列可能
+    // 只寫了一半，必須具名說出來，不能無聲放過。
+    if (ctx.st.fillInflight === slotId) {
+      ctx.warn(def.token + ' 的資料列可能未完整寫入（上一次呼叫在寫入途中中斷）。');
+      ctx.skip(def.title, '上一次呼叫在寫入途中中斷，資料列可能不完整');
+      ctx.st.fillInflight = '';
+    }
+    return;
+  }
+  try {
+    if (def.kind === 'image') fillImageSlot_(loc, ctx, def);
+    else fillRowSlot_(loc, ctx, def);
+  } catch (err) {
+    ctx.st.fillInflight = '';
+    try {
+      setParaText_(clearCellToSingleParagraph_(loc.cell),
+        '⚠ 本處在產生時發生錯誤：' + msg_(err) + '　同一批數字已經寫進設定試算表的「' +
+        SNAPSHOT_SHEET_NAME_ + '」工作表（報告編號 ' + ctx.st.runId + '），請由該處查閱。');
+    } catch (err2) {}
+    ctx.warn(def.title + '：產生失敗（' + msg_(err) + '）。');
+    ctx.skip(def.title, msg_(err));
+  }
+}
+
+// ===================================================================
+// 填入式：文件最後自動附加的「報告產生紀錄」
+// ===================================================================
+
+// 附錄C 那張 provenance 表抽成共用建構器：錨點式的附錄C 與填入式的產生紀錄
+// 用同一份，兩邊不會各說各話。
+function appendixCRows_(ctx) {
+  var m = ctx.meta;
+  var st = ctx.st;
+  var rows = [['項目', '內容']];
+  rows.push(['報告編號', st.runId]);
+  rows.push(['報告產生時間', st.generatedAtText]);
+  rows.push(['產生程式版本', REPORT_BUILD_]);
+  rows.push(['產生入口', st.webMode ? '分析平台（報告 Web App）' : '設定試算表的「' + MENU_TITLE_ + '」選單']);
+  if (st.folderName) rows.push(['輸出資料夾名稱', String(st.folderName)]);
+  rows.push(['設定檔名稱', txt_(m.configFileName)]);
+  rows.push(['紀錄檔名稱', txt_(m.recordFileName)]);
+  rows.push(['紀錄分頁名稱', txt_(m.recordSheetName)]);
+  rows.push(['紀錄表原始列數', String(m.recordRowCount || 0)]);
+  rows.push(['機構代號', m.tenant ? String(m.tenant) : '—（單一演習模式）']);
+  rows.push(['演習代號', m.exercise ? String(m.exercise) : '—（單一演習模式）']);
+  rows.push(['租戶解析來源', txt_(m.tenantSource)]);
+  rows.push(['資料指紋（SHA-256 前 16 碼）', fingerprintDigest_(st.fingerprint)]);
+  rows.push(['匿名模式', st.identified ? '⚠ 含可識別評核官代號' : '已匿名（評核官 1…N）']);
+  rows.push(['ICC 驗算結論', ctx.icc.note]);
+  rows.push(['圖表能力探測結果', (st.cap && st.cap.detail && st.cap.detail.length)
+    ? st.cap.detail.join('；') : '未探測']);
+  rows.push(['報告快照工作表', SNAPSHOT_SHEET_NAME_ + '（第 ' + st.snapStartRow + ' 列起共 ' +
+    st.snapCount + ' 列，以報告編號關聯）']);
+  return rows;
+}
+
+// 這個版型裝不下、因此本次沒有輸出的東西（帶本次的實際筆數）。
+// 寫出來的理由與附錄D 完全相同：讀者必須分得出「系統沒有這項資料」與
+// 「這次演習表現為零」。一份看不出自己缺什麼的報告，會讓缺口在下一次原封不動
+// 再出現一次。
+function fillModeCoverage_(ctx) {
+  var m = ctx.meta;
+  var st = ctx.stats;
+  var out = [];
+  out.push('學習潛能題目 ' + (ctx.payload.learningRows || []).length +
+    ' 題：填入式範本沒有對應的表格，本報告未列出。');
+  out.push('觀察紀錄 ' + (m.commentCount || 0) +
+    ' 則：填入式範本沒有對應的表格，本報告未列出。');
+  out.push('未收到任何評分的題目 ' + ((st.missingQuestions || []).length) +
+    ' 題：填入式範本沒有對應的表格，本報告未列出（它們不會出現在任何圖上，' +
+    '所以若不特別說明，缺漏是隱形的）。');
+  out.push('評核官差異：本模式一律匿名，且不輸出任何逐評核官資料。');
+  out.push('標準差：填入式的分數欄只有一位小數的平均值，沒有欄位放 SD。');
+  out.push('ICC(2,k)＝' + num_(st.icc2k, 4) + '、相差不超過 1 分比例＝' + pct_(st.within1) +
+    '、未觸發率＝' + pct_((st.untriggered || {}).rate) + '：本模式沒有輸出位置，數值記於此處。');
+  out.push('附錄A（評核題目與指標對應表）與附錄B（逐題 × 逐評核官原始評分）：本模式不產生。');
+  out.push('以上完整數字都在設定試算表的「' + SNAPSHOT_SHEET_NAME_ + '」工作表（報告編號 ' +
+    ctx.st.runId + '）與分析儀表板上。');
+  return out;
+}
+
+// 游標用 finalizeReport_ 第 4b 步同一招：{body, index:getNumChildren()}。
+// ⚠️ 這一段固定落在文件最末，也就是業主手稿的簽核欄之後，而且不可關閉。
+// 一份會被簽、會被影印歸檔的品質紀錄，必須說得出自己有哪幾張圖降級、哪些內容
+// 這個版型裝不下。要移位置是契約變更，不是參數。
+function writeFillRecord_(doc, ctx) {
+  var body = doc.getBody();
+  try { body.appendPageBreak(); } catch (errPb) {}
+  var tail = { body: body, doc: doc, index: body.getNumChildren() };
+
+  heading_(tail, FILL_RECORD_TITLE_, 1);
+  para_(tail, '本節由報告產生程式自動附加於文件最後，不屬於報告正文。' +
+    '它記錄這一次產生的來源、版本與降級情形 —— 一份品質紀錄必須說得出自己是怎麼來的。');
+
+  table_(tail, appendixCRows_(ctx));
+  para_(tail, '本報告的所有統計數值均取自後端 action=analysis 的回傳值，報告端未另行計算；' +
+    '唯一的例外是 ICC(2,k) 的本機驗算（結果如上）。' +
+    '本節刻意不列印任何分析金鑰、試算表 ID、Web App 網址或人員代號對照表。');
+
+  var warnings = ctx.st.warnings || [];
+  heading_(tail, '本次產生的警告與降級紀錄', 2);
+  if (!warnings.length) para_(tail, '無。');
+  else for (var w = 0; w < warnings.length; w++) bullet_(tail, warnings[w]);
+  // 記住印到第幾則；收尾第 4b 步會補上這之後才發生的警告。
+  ctx.st.warningsPrintedCount = warnings.length;
+
+  var skipped = ctx.st.skipped || [];
+  heading_(tail, '被跳過或降級的項目', 2);
+  if (!skipped.length) para_(tail, '無。');
+  else for (var s = 0; s < skipped.length; s++) bullet_(tail, skipped[s].title + '：' + skipped[s].reason);
+
+  heading_(tail, '本報告版型未涵蓋的內容', 2);
+  var cov = fillModeCoverage_(ctx);
+  for (var i = 0; i < cov.length; i++) bullet_(tail, cov[i]);
 }
 
 // ===================================================================
