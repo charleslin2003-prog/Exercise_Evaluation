@@ -1002,9 +1002,13 @@ which keeps the raw 4S string) — two different strings, easy to conflate.
   all tied, fewer than three rows, empty list, and the ascending 待改善 direction. (Commit
   `88f5f88` says "9 種情況" and then lists 8 — the count is off by one in the commit
   message; there is no test file, so the ninth cannot be recovered.)
-- **`ABILITY_NOTES` is an empty object `{}`** keyed `潛能×4S`. The owner is supplying twelve
-  fixed sentences; until then the 說明 column of both tables prints blank. Filling that one
-  object is the only edit needed.
+- **`ABILITY_NOTES` holds the owner's twelve sentences** keyed `潛能×4S` (second version,
+  2026-10-13: the body text of each cell of the owner's 「韌性潛能與 4S 擴容元素整合矩陣表」
+  Word file, copied verbatim without the numbered title; the owner's 預見 is this system's 預期).
+  ⚠️ **There are two copies** — `Analysis.html` `ABILITY_NOTES` and `Report.gs`
+  `ABILITY_NOTES_` — and they must change in the same commit; nothing at runtime notices a
+  mismatch. Changing the `Report.gs` copy also means bumping `REPORT_BUILD_` and repasting
+  the report Web App.
 - The iso-3D chart's pale outline marks the **three globally lowest** cells (`weakSet`,
   `ee41ce0`), not the lowest of each row as it did before — and it includes ties the same
   way, by taking the third-lowest value as a cut and collecting everything `<= cut`.

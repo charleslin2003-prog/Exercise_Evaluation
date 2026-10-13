@@ -62,8 +62,11 @@ Vercel 一推就生效、Apps Script 要手動重貼，「前端已更新、後�
 反過來貼的話，新版 `Report.gs` 拿不到 `stats.rwg`，`verifyRwg_` 會判定不一致，
 每份報告都多一則「r_wg 本機驗算與後端數值不一致」的假警告。
 
-怎麼確認貼成功：`REPORT_BUILD_` 現在是 `'2026-10-13 rwg'`，
+怎麼確認貼成功：`REPORT_BUILD_` 現在是 `'2026-10-13 notes v2'`，
 「檢查設定」的第一列與報告最後的「產生紀錄」都會印它。
+（2026-10-13 晚間實況：`ConfigWithSubmit.gs` 已重貼並驗證回傳 `stats.rwg`；報告 Web App
+已重貼 `'2026-10-13 rwg'` 版。之後 12 句能力說明換成第二版，又升成 `'notes v2'`，
+**報告 Web App 要再貼一次**。容器綁定的 Report 專案已不存在，報告只剩儀表板這條路。）
 （這一節原本寫 `'fill-mode b'`，但那正是線上 `5da5c86` 印的字串 —— `e42f546`
 改了程式卻沒升版號，所以舊指紋分不出貼了沒有。已在後續 commit 升版。）
 
@@ -411,10 +414,11 @@ RECORD_URL  →  "exerciseDate":"2026/10/03"          （同一張表、同一�
 
 ### 等業主給東西（兩件，都卡著）
 
-1. **`ABILITY_NOTES` 的 12 句制式說明。** `Analysis.html:757` 現在是
-   `const ABILITY_NOTES = {};`，所以報告裡「優勢前三項／待改善前三項」兩張表的
-   「說明」欄**一律印空白**。key 是 `潛能×4S`（例如 `反應×Space (空間)`），
-   填它是唯一需要的編輯。
+1. ~~`ABILITY_NOTES` 的 12 句制式說明~~ —— **已完成。** 第一版由 `70baf7c` 填入；
+   2026-10-13 晚間換成第二版（業主 Word 檔「韌性潛能與 4S 擴容元素整合矩陣表」每格的
+   內文）。兩份副本：`Analysis.html` 的 `ABILITY_NOTES` 與 `Report.gs` 的
+   `ABILITY_NOTES_`，必須一起改；後者改了要重貼報告 Web App（`REPORT_BUILD_`
+   = `'2026-10-13 notes v2'`）。
 2. **圖的方向要用實際列印確認。** `--figW:10cm`／`--figH:14.5cm` 是照字面做成
    寬 10、高 14.5。要對調就改 `Analysis.html:62` 那兩個值。
 
