@@ -312,7 +312,9 @@ const WANT_REPORT = Q.get('view') === 'report';
 //    部署好之後只要把 /exec 網址貼進這一行，其他程式都不用動。
 //    合併到 master 時同樣以 '' 合併（按鈕永久停用），跟 REGISTRY_SPREADSHEET_ID
 //    以 '' 合併是同一個道理：寧可按鈕是死的，也不要按下去才發現後端不存在。
-const REPORT_URL = '';
+// dev 沙箱的報告部署（獨立專案「演習評核報告 Web」，2026-10-13 建立）。
+// master 合併時改回 ''。
+const REPORT_URL = 'https://script.google.com/macros/s/AKfycbwEeMUSu5W1rXKTpD-9K9bklv3oXkN-Sz6N8vbUuq2l6rq70rmZfDbRtoxMzbI34z_jrg/exec';
 
 let DATA = null;
 const fmt=x=>x==null?'—':Number(x).toFixed(2); const cls=x=>x==null?'':x<3.3?'low':x<4?'mid':'high';
