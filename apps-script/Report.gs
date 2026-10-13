@@ -1,12 +1,29 @@
 // 演習評核報告產生器（docs/multi-tenant-and-report-plan.md §3.1 的「方案 B」）。
 //
-// ⚠️ 這是一支**容器綁定**腳本，必須貼在「演習評核_設定」那份試算表底下
-// （擴充功能 → Apps Script），不是獨立專案、也不是 Web App。
+// ⚠️ 這一份原始碼要貼到**兩個**專案，兩份內容逐字相同：
+//
+//   (A) 容器綁定：貼在「演習評核_設定」那份試算表底下（擴充功能 → Apps
+//       Script），**不部署**。存檔、重新載入試算表，「演習評核報告」選單就出現。
+//       這條路已經產出過 6 份真實報告，它的行為一個位元都不能變。
+//   (B) 獨立專案「演習評核報告 Web」：同一份原始碼，另外**部署成 Web App**
+//       （執行身分「我」、存取權「任何人」），/exec 就是 Analysis.html 的
+//       REPORT_URL。這條路沒有容器試算表，SpreadsheetApp.getActive() 會回
+//       **null（不是丟例外）**，所以每一個用得到試算表的地方都改走
+//       targetSpreadsheet_()，由註冊表解析出來的 設定試算表ID 開檔。
+//       在 (B) 裡 onOpen 永遠不會觸發、SpreadsheetApp.getUi() 會丟進既有的
+//       try/catch，所以選單那一段只是無害的死碼，不需要條件編譯。
+//
 // 容器綁定腳本**不需要部署**：存檔、重新載入試算表，選單就出現了。
 // 這一點就是整個方案 B 的全部理由 —— 業主拉不動「重新部署 Web App」那根槓桿
 // （選錯「新增部署」會換掉 /exec 網址、靜靜打壞評核單與分析頁，見 CLAUDE.md
 // 「Backend / data architecture」那一節），所以報告功能一行都不能碰
-// ConfigWithSubmit.gs。
+// ConfigWithSubmit.gs。(B) 是**新增**一支 /exec，不是在 ConfigWithSubmit 上
+// 加分支 —— 後端的「無金鑰分支只有兩條」那條不變式沒有被動到，而這一支新部署
+// 的無金鑰行為是零：沒有金鑰的呼叫只拿得到字串 unauthorized。
+//
+// ⚠️ 兩份手貼的副本一定會漂移（Config.gs 線上那份就是同一個 repo 裡的實例：
+// 它不等於任何一個 commit）。唯一從外部看得出來的防線是 REPORT_BUILD_ ——
+// reportCheck 與附錄C 都會印它，兩邊對不上就是其中一份沒重貼。
 //
 // 它與後端的關係只有一條：用 UrlFetchApp 打 ConfigWithSubmit.gs 的
 // `action=analysis`，然後把回傳的數字排版進一份 Google 文件。
@@ -28,6 +45,10 @@
 
 var MENU_TITLE_ = '演習評核報告';
 
+// 兩份手貼副本的指紋。**改這個檔案就要改這一行**，否則它會從「可查核的版本號」
+// 退化成「兩邊都印同一個字串的裝飾」。reportCheck 與附錄C 都會印它。
+var REPORT_BUILD_ = '2026-10-13 web-entry';
+
 // ===== 指令碼屬性鍵 =====
 var PROP_ANALYSIS_KEY_ = 'REPORT_ANALYSIS_KEY';
 var PROP_API_URL_ = 'REPORT_API_URL';
@@ -37,6 +58,24 @@ var PROP_TENANT_ = 'REPORT_TENANT';
 var PROP_EXERCISE_ = 'REPORT_EXERCISE';
 var PROP_BUDGET_ = 'REPORT_TIME_BUDGET_MS';
 var PROP_RUN_STATE_ = 'REPORT_RUN_STATE';
+// 只有獨立部署 (B) 需要的兩個。註冊表模式填前者，單一演習模式填後者。
+var PROP_REGISTRY_ID_ = 'REPORT_REGISTRY_ID';
+var PROP_CONFIG_SS_ID_ = 'REPORT_CONFIG_SPREADSHEET_ID';
+
+// 網頁模式的執行狀態：每一輪各自一個屬性，外加每場次一個「目前有誰在跑」標記。
+// 容器選單模式**完全不碰這兩個前綴**，仍然只用單一的 REPORT_RUN_STATE。
+// 為什麼不沿用單一槽位：兩家醫院同時產報告會互相覆寫，而 reportContinue 的
+// runId 比對會把其中一輪判成「有另一輪插進來」直接中止。
+var PROP_RUN_PREFIX_ = 'REPORT_RUN_';
+var PROP_ACTIVE_PREFIX_ = 'REPORT_ACTIVE_';
+// 終局（done/partial/failed）的執行狀態會被壓成小小的墓碑，只留 reportStatus
+// 答得出問題所需的欄位。超過這個年紀的墓碑在下一次 reportStart 時清掉 ——
+// 指令碼屬性整個專案約 500KB，一輪完整狀態約 8KB，不掃會慢慢撐爆。
+var TOMBSTONE_TTL_MS_ = 604800000; // 7 天
+// 單次 HTTP 呼叫的硬上限（Apps Script 的 6 分鐘）。網頁模式用它當「這一輪
+// 目前有沒有別的呼叫在飛」的過期時間：被硬上限砍掉的執行不會跑 finally，
+// 所以旗標只能靠時間自己過期，不能靠程式清。
+var HTTP_CALL_CAP_MS_ = 360000;
 
 // ===== 分頁名稱 =====
 var SNAPSHOT_SHEET_NAME_ = '報告快照';
@@ -140,6 +179,27 @@ var TABLE_ROW_CAP_ = 300;
 
 var S4_PREFERRED_ORDER_ = ['Space (空間)', 'Staff (人員)', 'Stuff (物資)', 'System (系統)'];
 var POTENTIALS_ = ['反應', '監測', '預期'];
+
+// ===== 租戶註冊表（只有獨立部署 (B) 的網頁入口會讀） =====
+// 欄名與別名逐字照抄 ConfigWithSubmit.gs，因為「哪一列有效」這件事兩邊必須
+// 同意：這支腳本判有效、後端判無效的話，報告會先複製好文件才在 fetchAnalysis_
+// 被 ROW_INVALID 擋下來，留下一份孤兒 Doc。
+var REG_SHEET_NAME_ = '租戶註冊表';
+var REG_HID_ALIASES_ = ['醫院代號', '機構代號'];
+var REG_EXID_ALIASES_ = ['演習代號', '場次代號'];
+var REG_NAME_ALIASES_ = ['顯示名稱', '名稱'];
+var REG_CONFIGID_ALIASES_ = ['設定試算表ID', '設定檔ID'];
+var REG_RECORDID_ALIASES_ = ['紀錄試算表ID', '紀錄檔ID'];
+var REG_RECORDSHEET_ALIASES_ = ['紀錄分頁名稱', '紀錄分頁'];
+var REG_KEY_ALIASES_ = ['分析金鑰', '金鑰'];
+var REG_ENABLED_ALIASES_ = ['啟用', '啟用中'];
+var REG_DEFAULT_RECORD_SHEET_ = '評核紀錄';
+// 與後端同樣 120 秒。沒有快取的話，一個沒有金鑰的呼叫每次都會開一次註冊表 ——
+// 這個端點的 DoS 上限就從「一次快取讀取」變成「一次 Drive 開檔」。
+var REG_CACHE_KEY_ = 'rptreg:v1';
+var REG_CACHE_TTL_ = 120;
+// 組合鍵分隔字元（U+241F），理由同 ConfigWithSubmit.gs 的 KEY_SEP_。
+var REG_KEY_SEP_ = '␟';
 
 // ===================================================================
 // 選單
@@ -253,14 +313,16 @@ function showLastReport() {
 function showPropertyHelp() {
   var p = props_();
   var defs = [
-    [PROP_ANALYSIS_KEY_, '必填', '本場演習的「分析金鑰」。單一演習模式下＝後端 ConfigWithSubmit.gs 的 ANALYSIS_KEY 常數值；啟用租戶註冊表後＝該列的 分析金鑰。', true],
-    [PROP_API_URL_, '必填', '後端 Web App 的 /exec 網址（RECORD_URL 那一支，只有它有 action=analysis）。', false],
-    [PROP_TEMPLATE_ID_, '必填', '報告範本 Google 文件的檔案 ID（網址 /d/ 與 /edit 之間那一段）。', false],
-    [PROP_OUTPUT_FOLDER_, '選填', '報告 Doc 與 PDF 的輸出資料夾 ID。未設時用這份試算表所在的資料夾。', false],
-    [PROP_TENANT_, '選填', '醫院代號。有設就帶上 &t=，並要求後端回的 meta.tenant 完全相符。單一演習模式請留空。', false],
-    [PROP_EXERCISE_, '選填', '演習代號。規則同上，對應 &ex=。', false],
+    [PROP_ANALYSIS_KEY_, '必填（選單模式）', '本場演習的「分析金鑰」。單一演習模式下＝後端 ConfigWithSubmit.gs 的 ANALYSIS_KEY 常數值；啟用租戶註冊表後＝該列的 分析金鑰。（啟用 ' + PROP_REGISTRY_ID_ + ' 之後，從分析平台產生報告時不會讀這個屬性——憑證是網址上帶來的那一把金鑰。）', true],
+    [PROP_API_URL_, '必填', '後端 Web App 的 /exec 網址（RECORD_URL 那一支，只有它有 action=analysis）。兩種模式都必填。', false],
+    [PROP_TEMPLATE_ID_, '必填', '報告範本 Google 文件的檔案 ID（網址 /d/ 與 /edit 之間那一段）。兩種模式都必填。', false],
+    [PROP_OUTPUT_FOLDER_, '選填／網頁模式實際上必填', '報告 Doc 與 PDF 的輸出資料夾 ID。未設時用「該場演習設定試算表」所在的資料夾。從分析平台產生時，檔案會落在這個部署帳號的雲端硬碟，點按鈕的人不一定看得到——請指定一個已經分享給報告讀者的資料夾。', false],
+    [PROP_TENANT_, '選填（僅容器選單模式使用）', '醫院代號。有設就帶上 &t=，並要求後端回的 meta.tenant 完全相符。單一演習模式請留空。從分析平台產生報告時由網址參數決定，這個屬性不會被讀取。', false],
+    [PROP_EXERCISE_, '選填（僅容器選單模式使用）', '演習代號。規則同上，對應 &ex=。從分析平台產生報告時由網址參數決定，這個屬性不會被讀取。', false],
+    [PROP_REGISTRY_ID_, '網頁模式必填', '租戶註冊表試算表的 ID（與後端 ConfigWithSubmit.gs 的 REGISTRY_SPREADSHEET_ID 同一份）。只有獨立部署的報告 Web App 會讀它，用來把網址上的 ?t=&ex= 解析成「該場演習的設定試算表ID 與 分析金鑰」。容器選單模式完全不讀。', false],
+    [PROP_CONFIG_SS_ID_, '網頁模式且未啟用註冊表時必填', '設定試算表的 ID。只有在 ' + PROP_REGISTRY_ID_ + ' 留空（註冊表關閉）時，網頁入口才用它決定要寫 報告快照 的檔案；此時金鑰比對的對象是 ' + PROP_ANALYSIS_KEY_ + '。', false],
     [PROP_BUDGET_, '選填', '單次步驟的時間預算毫秒數，預設 ' + DEFAULT_BUDGET_MS_ + '（低於 6 分鐘硬上限約兩分鐘的安全邊際）。', false],
-    [PROP_RUN_STATE_, '程式維護', '執行紀錄，業主不要手動設。卡住時用選單的「重設產生狀態」清除。', false]
+    [PROP_RUN_STATE_, '程式維護', '執行紀錄（僅容器選單模式），業主不要手動設。卡住時用選單的「重設產生狀態」清除。網頁模式另外用 ' + PROP_RUN_PREFIX_ + '<報告編號> 與 ' + PROP_ACTIVE_PREFIX_ + '<醫院>/<演習>，會自己清。', false]
   ];
   var body = '';
   for (var i = 0; i < defs.length; i++) {
@@ -278,7 +340,10 @@ function showPropertyHelp() {
     '把下面的鍵與值一組一組加進去，最後按「儲存指令碼屬性」。</p>' +
     '<table style="border-collapse:collapse">' + body + '</table>' +
     '<p style="color:#555">刻意不設 ADMIN_KEY：這支腳本從不呼叫 action=selftest 或 action=flush，' +
-    '所以不需要、也不應該持有管理金鑰。</p></div>';
+    '所以不需要、也不應該持有管理金鑰。</p>' +
+    '<p style="color:#555">⚠️ 這份原始碼會貼在兩個專案（這個容器綁定專案，以及獨立部署的報告 Web App），' +
+    '而<b>指令碼屬性是各專案各一份</b>，不會互通。改了一邊要記得改另一邊。' +
+    '本專案目前的程式版本：<code>' + esc_(REPORT_BUILD_) + '</code>。</p></div>';
   showInfoDialog_(html, '指令碼屬性設定說明');
 }
 
@@ -304,13 +369,23 @@ function resetRunState() {
     notes.push('❌ 清除執行紀錄失敗：' + msg_(err));
   }
   try {
-    var ss = SpreadsheetApp.getActive();
-    var sh = ss.getSheetByName(TEMP_SHEET_NAME_);
-    if (sh) {
-      resetTempSheet_(sh);
-      notes.push('✅ 已清空 ' + TEMP_SHEET_NAME_);
+    // 這一項是選單專屬的。獨立部署那一份貼進去也必須**解析得過**，所以不直接
+    // 呼叫 SpreadsheetApp.getActive()（在獨立專案裡它回 null，`null.getSheetByName`
+    // 的英文 TypeError 會讓人去查一個根本不存在的分頁問題）。
+    // HTTP 這一側的對應動作是 action=reportAbandon：它清每場次的執行標記、把
+    // 那一輪的快照列標成「中斷」，但刻意不去碰任何它沒有解析過的試算表。
+    var ss = activeSpreadsheetOrNull_();
+    if (!ss) {
+      notes.push('ℹ️ 這個專案沒有容器試算表（它是獨立部署的報告產生器），沒有 ' +
+        TEMP_SHEET_NAME_ + ' 可以清');
     } else {
-      notes.push('ℹ️ 沒有 ' + TEMP_SHEET_NAME_ + ' 分頁，不需要清');
+      var sh = ss.getSheetByName(TEMP_SHEET_NAME_);
+      if (sh) {
+        resetTempSheet_(sh);
+        notes.push('✅ 已清空 ' + TEMP_SHEET_NAME_);
+      } else {
+        notes.push('ℹ️ 沒有 ' + TEMP_SHEET_NAME_ + ' 分頁，不需要清');
+      }
     }
   } catch (err2) {
     notes.push('❌ 清空 ' + TEMP_SHEET_NAME_ + ' 失敗：' + msg_(err2));
@@ -351,6 +426,26 @@ function statusText_(s) {
 // 訊息裡擦掉。**不是**拿來傳遞設定用的（設定一律走 requireConfig_ 的回傳值）。
 var SECRET_KEY_ = '';
 
+// 本次執行用到的試算表／文件／資料夾 ID，同樣只存在於記憶體裡，用途也只有
+// 一個：讓 scrub_ 把它們從錯誤訊息裡擦掉。
+//
+// ⚠️ 為什麼需要：openById／getFileById／getFolderById 失敗時，Apps Script 的
+// 例外訊息常常會把**那個 ID 原樣**寫進去，而網頁入口會把 msg_() 的結果當成
+// JSON 的 error 欄位回給瀏覽器 —— 那正好違反「任何回應都不得含試算表 ID」
+// 這條紅線。（2026-10-13 用樁測試打到的真實洩漏，不是假想。）
+//
+// ⚠️ **只在網頁模式填**。容器選單模式的訊息只進業主自己的對話框，而業主本來
+// 就看得到自己的指令碼屬性；在那裡遮蔽等於無謂地改掉既有行為，而那一條路是
+// 已經產出過 6 份真實報告的那一條。
+var SECRET_IDS_ = [];
+
+function rememberSecretId_(id) {
+  var s = String(id == null ? '' : id).replace(/^\s+|\s+$/g, '');
+  if (s.length < 20) return;            // 太短的字串遮起來會把正常文字打穿。
+  if (SECRET_IDS_.indexOf(s) !== -1) return;
+  SECRET_IDS_.push(s);
+}
+
 // 把任何可能外洩的金鑰從字串裡擦掉。
 // 為什麼需要：金鑰是以查詢字串帶進 UrlFetchApp.fetch 的，而 Apps Script 的
 // 連線類例外（Invalid argument / DNS error / Address unavailable）會把**整個
@@ -371,6 +466,9 @@ function scrub_(s) {
   // 保險絲：就算 SECRET_KEY_ 還沒設定（例如 requireConfig_ 自己丟錯），
   // 任何 ?key=／&key= 後面的內容一律擦掉。
   t = t.replace(/([?&](?:key|adminKey)=)[^&\s"'<>]*/gi, '$1…金鑰已遮蔽…');
+  for (var i = 0; i < SECRET_IDS_.length; i++) {
+    t = t.split(SECRET_IDS_[i]).join('…檔案ID已遮蔽…');
+  }
   return t;
 }
 
@@ -406,6 +504,53 @@ function tz_() {
     return Session.getScriptTimeZone() || 'Asia/Taipei';
   } catch (err) {
     return 'Asia/Taipei';
+  }
+}
+
+// ⚠️ 在獨立（非容器綁定）專案裡，SpreadsheetApp.getActive() **回 null，不丟例外**。
+// 所以 try/catch 不是守衛：少了這個明確的 null 檢查，呼叫端會拿到一個英文的
+// 「Cannot call method getSheetByName of null」，而那句話指不到真正的原因。
+// 所有「這個專案有沒有容器」的判斷一律走這裡，不要在別處再寫一次 getActive()。
+function activeSpreadsheetOrNull_() {
+  try {
+    return SpreadsheetApp.getActive() || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// 這一輪要寫 報告快照／_報告暫存 的那份試算表。
+//   選單模式：ssId 是容器試算表自己的 ID（或空字串）→ 回 getActive()，
+//             與改這一版之前逐字同一個物件，不多繞一次 openById。
+//   網頁模式：ssId 來自**註冊表那一列的 設定試算表ID**。
+// ⚠️ 代號（醫院代號／演習代號）永遠不會被拿來 openById —— 試算表 ID 只能從
+// 註冊表儲存格讀出來，而且要先過 isSpreadsheetIdR_。這條界線跟
+// ConfigWithSubmit.gs 的是同一條：沒有它，這支部署就變成「任意 Drive 檔案
+// 讀取代理」。
+function targetSpreadsheet_(ssId) {
+  var active = activeSpreadsheetOrNull_();
+  if (active) {
+    if (!ssId) return active;
+    try {
+      if (active.getId() === ssId) return active;
+    } catch (errId) {}
+  }
+  if (!ssId) {
+    throw new Error('這個專案沒有容器試算表（它是獨立部署的報告產生器），' +
+      '而這一次呼叫也沒有解析出任何一場演習的設定試算表。\n' +
+      '從分析平台產生報告時，網址必須同時帶 ?t=（醫院代號）與 &ex=（演習代號）；' +
+      '若尚未啟用租戶註冊表，請改設指令碼屬性 ' + PROP_CONFIG_SS_ID_ + '。');
+  }
+  try {
+    return SpreadsheetApp.openById(ssId);
+  } catch (err) {
+    // 刻意不把 ID 本身印出來：這個訊息會一路走到 HTTP 回應與對話框紅字，
+    // 而 openById 的例外訊息**常常自己就含著那個 ID**。這裡在 SECRET_IDS_
+    // 之外再擦一次，不依賴「誰記得先註冊」的順序。
+    throw new Error('無法開啟這場演習的設定試算表（租戶註冊表「' +
+      REG_CONFIGID_ALIASES_[0] + '」那一格指到的檔案）：' +
+      String(msg_(err)).split(ssId).join('…檔案ID已遮蔽…') +
+      '\n請確認執行報告的 Google 帳號對那份試算表有編輯權限，且檔案沒有被刪除或移到垃圾桶。');
   }
 }
 
@@ -499,19 +644,31 @@ function chartRows_(payload) {
 
 // 三個必填屬性缺任一就中止，而且訊息要逐字指名「缺哪一個鍵、它是什麼、去哪裡設」
 // —— 「設定錯誤」這種訊息對業主等於沒有訊息。
-function requireConfig_() {
+//
+// target === undefined/null  → 容器選單模式。與改這一版之前逐字相同：金鑰與
+//   租戶代號全部來自指令碼屬性。
+// target === {hid, exid, ssId, analysisKey, registryOff}  → 網頁模式。金鑰是
+//   呼叫端在網址上帶來、而且**已經比對過註冊表那一列**的那一把；
+//   REPORT_TENANT／REPORT_EXERCISE 在這個模式下連讀都不讀（讀了就等於把被這次
+//   改動拆掉的「釘死」問題從後門放回來）。
+function requireConfig_(target) {
+  var webMode = !!target;
   var cfg = {
-    analysisKey: prop_(PROP_ANALYSIS_KEY_),
+    analysisKey: webMode ? String(target.analysisKey || '') : prop_(PROP_ANALYSIS_KEY_),
     apiUrl: prop_(PROP_API_URL_),
     templateId: prop_(PROP_TEMPLATE_ID_),
     outputFolderId: prop_(PROP_OUTPUT_FOLDER_),
-    tenant: prop_(PROP_TENANT_),
-    exercise: prop_(PROP_EXERCISE_),
+    // 註冊表關閉的網頁模式：代號對路由零影響，所以也**不送給後端、不做身分
+    // 比對**，行為與今天的單一演習選單模式完全一樣。
+    tenant: webMode ? (target.registryOff ? '' : String(target.hid || '')) : prop_(PROP_TENANT_),
+    exercise: webMode ? (target.registryOff ? '' : String(target.exid || '')) : prop_(PROP_EXERCISE_),
+    ssId: webMode ? String(target.ssId || '') : '',
+    webMode: webMode,
     budgetMs: DEFAULT_BUDGET_MS_
   };
   var where = '（設定位置：擴充功能 → Apps Script → ⚙ 專案設定 → 指令碼屬性 → 新增指令碼屬性）';
   var missing = [];
-  if (!cfg.analysisKey) missing.push(PROP_ANALYSIS_KEY_ + '：本場演習的分析金鑰，與分析儀表板網址 ?key= 的那一串相同');
+  if (!cfg.analysisKey && !webMode) missing.push(PROP_ANALYSIS_KEY_ + '：本場演習的分析金鑰，與分析儀表板網址 ?key= 的那一串相同');
   if (!cfg.apiUrl) missing.push(PROP_API_URL_ + '：後端 Web App 的 /exec 網址（RECORD_URL 那一支，只有它有 action=analysis）');
   if (!cfg.templateId) missing.push(PROP_TEMPLATE_ID_ + '：報告範本 Google 文件的檔案 ID（網址 /d/ 與 /edit 之間那一段）');
   if (missing.length) {
@@ -533,18 +690,36 @@ function requireConfig_() {
   // 讓 scrub_ 知道要遮蔽哪一串。設在這裡而不是取資料時，是因為 requireConfig_
   // 之後的每一條路徑（含完全無關的例外）都可能把網址帶出來。
   SECRET_KEY_ = cfg.analysisKey;
+  // 網頁模式才遮 ID：這些訊息會變成 HTTP 回應的 error 欄位，而 DriveApp／
+  // SpreadsheetApp 的例外常常把 ID 原樣寫進訊息裡。選單模式刻意不動。
+  if (webMode) {
+    rememberSecretId_(cfg.templateId);
+    rememberSecretId_(cfg.outputFolderId);
+    rememberSecretId_(cfg.ssId);
+  }
   return cfg;
 }
 
-function readRunState_() {
+// st.propKey 決定這一輪的狀態寫到哪一個屬性：
+//   選單模式不設它 → 一律 REPORT_RUN_STATE（與今天逐字相同）。
+//   網頁模式設成 REPORT_RUN_<報告編號> → 每一輪一格，兩家醫院同時跑不會互相覆寫。
+function runStateKeyOf_(st) {
+  return (st && st.propKey) ? String(st.propKey) : PROP_RUN_STATE_;
+}
+
+function readRunStateAt_(key) {
   try {
-    var raw = props_().getProperty(PROP_RUN_STATE_);
+    var raw = props_().getProperty(key);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (err) {
     // 壞掉的 JSON 當成「沒有紀錄」，不要讓它把整個功能卡死。
     return null;
   }
+}
+
+function readRunState_() {
+  return readRunStateAt_(PROP_RUN_STATE_);
 }
 
 // 指令碼屬性單值的上限約 9KB，而那是**位元組**，不是字元。
@@ -606,14 +781,25 @@ function serializeRunState_(st) {
 // 寫不進去最壞的後果只是「開啟上一份報告」少一筆紀錄，遠比假失敗輕。
 function writeRunState_(st) {
   try {
-    props_().setProperty(PROP_RUN_STATE_, serializeRunState_(st));
+    props_().setProperty(runStateKeyOf_(st), serializeRunState_(st));
     return true;
   } catch (err) {
     // 最後手段：只留「找得回那份文件」與「下一個步驟還接得下去」所需的欄位。
     // queue／unwritten／snap 座標／fingerprint 都很小但缺一不可 —— 少了 queue，
     // 下一次 reportContinue 會以為已經寫完而直接收尾，產出一份沒有內容的報告。
     try {
-      props_().setProperty(PROP_RUN_STATE_, JSON.stringify({
+      props_().setProperty(runStateKeyOf_(st), JSON.stringify({
+        // propKey／ssId／runToken／hid／exid 缺一不可：少了 propKey 下一次會
+        // 寫錯格子；少了 ssId 網頁模式接不下去（它沒有容器試算表可以退回）；
+        // 少了 runToken 原本那個分頁也續不下去。
+        propKey: st.propKey || '',
+        runToken: st.runToken || '',
+        webMode: st.webMode === true,
+        hid: st.hid || '',
+        exid: st.exid || '',
+        ssId: st.ssId || '',
+        busyUntil: st.busyUntil || 0,
+        folderName: st.folderName || '',
         runId: st.runId || '',
         status: st.status || '',
         startedAt: st.startedAt || 0,
@@ -1729,7 +1915,11 @@ function insertImage_(cursor, blob) {
 
 // 不靠猜：真的建立一個 0 位元組的暫存檔再立刻丟進垃圾桶。
 // 「以為有權限、寫到一半才失敗」會留下一份半成品 Doc 在業主的 Drive 上。
-function resolveOutputFolder_(cfg) {
+// ss 是這一輪已經解析出來的設定試算表（選單模式＝容器，網頁模式＝註冊表那一列
+// 指到的那一份）。沒設 REPORT_OUTPUT_FOLDER_ID 時就用它的上層資料夾 ——
+// 一場演習一份設定檔之後，報告會落在那一場自己的設定檔旁邊，比「腳本剛好綁在
+// 哪一份試算表」合理。
+function resolveOutputFolder_(cfg, ss) {
   var folder = null;
   if (cfg.outputFolderId) {
     try {
@@ -1741,7 +1931,7 @@ function resolveOutputFolder_(cfg) {
     }
   } else {
     try {
-      var parents = DriveApp.getFileById(SpreadsheetApp.getActive().getId()).getParents();
+      var parents = DriveApp.getFileById(ss.getId()).getParents();
       if (parents.hasNext()) folder = parents.next();
     } catch (err2) {
       folder = null;
@@ -1872,7 +2062,10 @@ function coverTokenMap_(payload, st) {
 //   (1) 輸出資料夾寫入權限 —— 建立一個 0 位元組暫存檔再立刻丟進垃圾桶。
 //   (2) 圖表能力 —— 在隱藏分頁「_報告暫存」寫入一組假資料、畫一張圖、隨即清空。
 // 除此之外不碰任何工作表；「報告快照」在檢查模式下刻意不建立。
-function reportValidateOnly() {
+// target === undefined → 容器選單模式（「檢查設定」選單項目，ReportDialog 直接
+//   呼叫 .reportValidateOnly()，零個引數）。行為與改這一版之前逐字相同。
+// target === {...} → 網頁模式（action=reportCheck）。
+function reportValidateOnly(target) {
   var checks = [];
   var ok = true;
   function add(label, pass, detail) {
@@ -1880,7 +2073,13 @@ function reportValidateOnly() {
     if (!pass) ok = false;
   }
 
-  var st = readRunState_();
+  checks.push({
+    label: '程式版本', ok: true,
+    detail: REPORT_BUILD_ + '　（這份原始碼同時貼在容器綁定專案與獨立部署的報告 Web App；' +
+      '兩邊印出來的版本不一樣就是其中一份沒重貼。）'
+  });
+
+  var st = target ? readActiveRunFor_(target) : readRunState_();
   if (st && st.status === 'running') {
     var age = Date.now() - Number(st.startedAt || 0);
     add('上一輪執行狀態', age > RUN_STALE_MS_,
@@ -1893,12 +2092,25 @@ function reportValidateOnly() {
 
   var cfg = null;
   try {
-    cfg = requireConfig_();
-    add('指令碼屬性', true, '必填三項齊備；單次時間預算 ' + cfg.budgetMs + ' ms。' +
+    cfg = requireConfig_(target);
+    add('指令碼屬性', true, (cfg.webMode
+        ? '必填項齊備（網頁模式的分析金鑰來自網址，不讀 ' + PROP_ANALYSIS_KEY_ + '）；單次時間預算 '
+        : '必填三項齊備；單次時間預算 ') + cfg.budgetMs + ' ms。' +
       (cfg.tenant || cfg.exercise ? '　指定租戶：' + (cfg.tenant || '（空）') + ' / ' + (cfg.exercise || '（空）') : '　未指定租戶（單一演習模式）。'));
   } catch (err) {
     add('指令碼屬性', false, msg_(err));
     return { ok: false, checks: checks };
+  }
+
+  // 這一輪要寫 報告快照／_報告暫存 的那份試算表。解析失敗時不要讓後面三關
+  // 跟著丟一堆看起來無關的錯誤，而是直接指名原因。
+  var ss = null;
+  try {
+    ss = targetSpreadsheet_(cfg.ssId);
+    add('設定試算表', true, '「' + safeName_(ss) + '」可開啟。' +
+      (cfg.webMode ? '　（本次的 ' + SNAPSHOT_SHEET_NAME_ + ' 與 ' + TEMP_SHEET_NAME_ + ' 都會寫在這一份。）' : ''));
+  } catch (errSs) {
+    add('設定試算表', false, msg_(errSs));
   }
 
   var tpl = null;
@@ -1942,12 +2154,18 @@ function reportValidateOnly() {
     }
   }
 
-  try {
-    var folder = resolveOutputFolder_(cfg);
-    probeFolderWritable_(folder);
-    add('輸出資料夾', true, '「' + safeName_(folder) + '」可寫入（已用 0 位元組暫存檔實測並刪除）。');
-  } catch (err4) {
-    add('輸出資料夾', false, msg_(err4));
+  if (ss) {
+    try {
+      var folder = resolveOutputFolder_(cfg, ss);
+      probeFolderWritable_(folder);
+      add('輸出資料夾', true, '「' + safeName_(folder) + '」可寫入（已用 0 位元組暫存檔實測並刪除）。' +
+        (cfg.webMode ? '　⚠ 從分析平台產生時，檔案建立在這個 Web App 部署帳號的雲端硬碟裡，' +
+          '不是點按鈕那個人的；若開啟後顯示沒有權限，請向系統管理者索取存取權。' : ''));
+    } catch (err4) {
+      add('輸出資料夾', false, msg_(err4));
+    }
+  } else {
+    add('輸出資料夾', false, '設定試算表解析失敗，無法決定預設輸出位置。');
   }
 
   var payload = null;
@@ -1962,26 +2180,37 @@ function reportValidateOnly() {
     var m = payload.meta || {};
     // 這是擋住「腳本綁在 A 院的設定表上，金鑰卻把資料路由到 B 院」的唯一一道
     // 防線 —— 那種錯誤產出的 PDF 會印著 A 院的封面與 B 院的分數。
+    // 提示要指對地方：網頁模式的代號來自網址，叫人去改 REPORT_TENANT 是錯的。
+    var fromWhere = cfg.webMode ? '網址參數 ?t=／&ex=' : '指令碼屬性 ' + PROP_TENANT_ + '／' + PROP_EXERCISE_;
     if (cfg.tenant || cfg.exercise) {
       var tOk = (!cfg.tenant || String(m.tenant || '') === cfg.tenant) &&
         (!cfg.exercise || String(m.exercise || '') === cfg.exercise);
       add('租戶身分比對', tOk, tOk
-        ? '後端回的 tenant/exercise 與指令碼屬性一致（' + txt_(m.tenant) + ' / ' + txt_(m.exercise) + '）。'
-        : '不一致！屬性要求 ' + (cfg.tenant || '（空）') + ' / ' + (cfg.exercise || '（空）') +
-          '，後端實際回 ' + txt_(m.tenant) + ' / ' + txt_(m.exercise) +
-          '。請檢查 ' + PROP_ANALYSIS_KEY_ + ' 是否用到了別場演習的金鑰。');
+        ? '後端回的 tenant/exercise 與' + fromWhere + '一致（' + txt_(m.tenant) + ' / ' + txt_(m.exercise) + '）。'
+        : '不一致！' + fromWhere + ' 要求 ' + (cfg.tenant || '（空）') + ' / ' + (cfg.exercise || '（空）') +
+          '，後端實際回 ' + txt_(m.tenant) + ' / ' + txt_(m.exercise) + '。' +
+          (cfg.webMode
+            ? '請確認這支報告部署的 ' + PROP_REGISTRY_ID_ + ' 與後端 ConfigWithSubmit.gs 的 REGISTRY_SPREADSHEET_ID 是同一份註冊表。'
+            : '請檢查 ' + PROP_ANALYSIS_KEY_ + ' 是否用到了別場演習的金鑰。'));
     } else {
-      add('租戶身分比對', true, '未設定 ' + PROP_TENANT_ + '／' + PROP_EXERCISE_ +
-        '，略過比對（後端 tenantSource=' + txt_(m.tenantSource) + '）。');
+      add('租戶身分比對', true, (cfg.webMode
+          ? '這個部署未啟用租戶註冊表，網址上的代號沒有路由效果，'
+          : '未設定 ' + PROP_TENANT_ + '／' + PROP_EXERCISE_ + '，') +
+        '略過比對（後端 tenantSource=' + txt_(m.tenantSource) + '）。');
     }
-    var activeName = '';
-    try { activeName = SpreadsheetApp.getActive().getName(); } catch (errN) {}
+    // 比對對象是「這一輪即將寫入 報告快照 的那份試算表」，不是「腳本剛好綁在
+    // 哪一份」。網頁模式下這一關因此比以前強：它證明的是「後端讀的檔案 ==
+    // 快照要寫進去的檔案」，而不只是「操作者打開了對的試算表」。
+    // 仍然維持非失敗的 ⚠ 提示 —— 改過檔名是完全正當的事。
+    var activeName = ss ? safeName_(ss) : '';
     checks.push({
       label: '設定檔名稱比對', ok: true,
-      detail: (m.configFileName && activeName && m.configFileName !== activeName)
-        ? '⚠ 後端讀的設定檔叫「' + m.configFileName + '」，本試算表叫「' + activeName +
-          '」。若只是改過檔名可以忽略；若不是同一份檔案，報告會印出別場演習的數字。'
-        : '一致（' + txt_(m.configFileName) + '）。'
+      detail: !activeName
+        ? '無法取得本次目標試算表的名稱，略過比對。'
+        : ((m.configFileName && m.configFileName !== activeName)
+          ? '⚠ 後端讀的設定檔叫「' + m.configFileName + '」，本次要寫入的試算表叫「' + activeName +
+            '」。若只是改過檔名可以忽略；若不是同一份檔案，報告會印出別場演習的數字。'
+          : '一致（' + txt_(m.configFileName) + '）。')
     });
 
     var total = (payload.analysisRows || []).length + (payload.coverageRows || []).length +
@@ -2005,34 +2234,43 @@ function reportValidateOnly() {
     });
   }
 
-  try {
-    var cap = chartCapability_(SpreadsheetApp.getActive());
-    // ⚠ 誠實揭露：這一關與上面的「輸出資料夾」是整個檢查流程裡唯二會寫東西的
-    // 兩步 —— 它必須真的畫一張圖才知道能不能畫，而畫圖需要一份資料落在某個
-    // 工作表上。寫的對象只有隱藏分頁 _報告暫存（固定名稱、跨執行重複使用、
-    // 探測完就清空），不會碰任何正式工作表，後端也從不以這個名稱讀取任何分頁。
-    // 對話框會把這兩項副作用原字印給業主看。
-    checks.push({
-      label: '圖表能力探測', ok: true,
-      detail: cap.detail.join('　／　') +
-        '　（探測會在隱藏分頁「' + TEMP_SHEET_NAME_ + '」寫入並隨即清除一組假資料，' +
-        '不會動到任何正式工作表，也不會建立任何檔案。）'
-    });
-  } catch (err6) {
-    checks.push({ label: '圖表能力探測', ok: true, detail: '探測失敗（' + msg_(err6) + '），圖表將全部改以數值表呈現。' });
-  }
-
-  try {
-    var info = ensureSnapshotSheet_(SpreadsheetApp.getActive(), false);
-    if (info.missingSheet) {
-      add('報告快照工作表', true, '「' + SNAPSHOT_SHEET_NAME_ +
-        '」尚未建立；第一次產生報告時會自動建立（本檢查刻意不建立它）。');
-    } else {
-      add('報告快照工作表', true, '「' + SNAPSHOT_SHEET_NAME_ + '」欄位齊備，目前 ' +
-        Math.max(0, info.sheet.getLastRow() - 1) + ' 列。');
+  if (ss) {
+    try {
+      var cap = chartCapability_(ss);
+      // ⚠ 誠實揭露：這一關與上面的「輸出資料夾」是整個檢查流程裡唯二會寫東西的
+      // 兩步 —— 它必須真的畫一張圖才知道能不能畫，而畫圖需要一份資料落在某個
+      // 工作表上。寫的對象只有隱藏分頁 _報告暫存（固定名稱、跨執行重複使用、
+      // 探測完就清空），不會碰任何正式工作表，後端也從不以這個名稱讀取任何分頁。
+      // 對話框會把這兩項副作用原字印給業主看。
+      // 網頁模式下**要連檔名一起說**：操作者看不到自己正在動哪一份試算表。
+      checks.push({
+        label: '圖表能力探測', ok: true,
+        detail: cap.detail.join('　／　') +
+          '　（探測會在試算表「' + safeName_(ss) + '」的隱藏分頁「' + TEMP_SHEET_NAME_ +
+          '」寫入並隨即清除一組假資料，不會動到任何正式工作表，也不會建立任何檔案。）'
+      });
+    } catch (err6) {
+      checks.push({ label: '圖表能力探測', ok: true, detail: '探測失敗（' + msg_(err6) + '），圖表將全部改以數值表呈現。' });
     }
-  } catch (err7) {
-    add('報告快照工作表', false, msg_(err7));
+
+    try {
+      // createIfMissing=false 不能改。它存在的理由（不要在一場正在進行的演習的
+      // 設定檔上長出業主沒要求的新分頁）在 HTTP 這一側只有更強：呼叫端可能是
+      // 一位從來沒見過那份試算表的醫院使用者。
+      var info = ensureSnapshotSheet_(ss, false);
+      if (info.missingSheet) {
+        add('報告快照工作表', true, '「' + SNAPSHOT_SHEET_NAME_ +
+          '」尚未建立；第一次產生報告時會自動建立（本檢查刻意不建立它）。');
+      } else {
+        add('報告快照工作表', true, '「' + SNAPSHOT_SHEET_NAME_ + '」欄位齊備，目前 ' +
+          Math.max(0, info.sheet.getLastRow() - 1) + ' 列。');
+      }
+    } catch (err7) {
+      add('報告快照工作表', false, msg_(err7));
+    }
+  } else {
+    checks.push({ label: '圖表能力探測', ok: true, detail: '設定試算表解析失敗，未探測。' });
+    add('報告快照工作表', false, '設定試算表解析失敗，無法檢查。');
   }
 
   return { ok: ok, checks: checks };
@@ -2053,20 +2291,54 @@ function reportValidateOnly() {
 //       程式從不寫入任何既有的報告檔案，所以就算鎖與狀態都失效，最壞結果是
 //       兩份各自獨立的報告，永遠不會是半份蓋掉一份好的
 //   (d) 報告快照 只追加，絕不清空或覆寫既有列
+//
+// 網頁模式（opts.target）只動其中一條：(a) 的 tryLock(0) 換成「短鎖 + 每場次
+// 一個 REPORT_ACTIVE_<醫院>/<演習> 標記」。LockService 的鎖是**整個專案**共用的，
+// 在 HTTP 入口下會讓 A 院產報告時 B 院直接失敗，而且一握就是一次呼叫的六分鐘。
+// (b) 改成逐場次判斷，(c)(d) 原封不動 —— 最壞情況仍然是兩份各自獨立的完整報告，
+// 永遠不會是半份蓋掉一份好的。
 function reportStart(opts) {
   var lock = null;
+  var st = null;
+  var ss = null;
+  var target = (opts && opts.target) || null;
+  var activeKey = target ? activeMarkerKey_(target) : '';
+  var runId = '';
+  var claimed = false;
   try {
     opts = opts || {};
-    lock = acquireLock_();
 
-    var prev = readRunState_();
-    if (prev && prev.status === 'running' && (Date.now() - Number(prev.startedAt || 0)) < RUN_STALE_MS_) {
-      throw new Error('上一輪報告（編號 ' + prev.runId + '）仍在產生中。\n' +
-        (prev.docUrl ? '文件連結：' + prev.docUrl + '\n' : '') +
-        '請等它完成，或使用選單的「' + MENU_TITLE_ + ' → 重設產生狀態」之後再試一次。');
+    if (target) {
+      // 先掃掉過期的執行狀態：(1) 屬性額度（一輪約 8KB／專案約 500KB），
+      // (2) 卡在「產生中」的快照列要在這裡被標成「中斷」—— 但**只掃同一場次**，
+      //     絕不去動別家醫院飛行中的列。
+      sweepStaleRuns_(target);
+      lock = briefLock_();
+      var live = readActiveRunFor_(target);
+      if (live && live.status === 'running' &&
+          (Date.now() - Number(live.startedAt || 0)) < RUN_STALE_MS_) {
+        throw reportError_('這場演習已經有一份報告正在產生中（編號 ' + live.runId + '）。\n' +
+          (live.docUrl ? '文件連結：' + live.docUrl + '\n' : '') +
+          '請等它完成，或在產生面板按「捨棄這一輪」之後再試一次。', 'REPORT_BUSY');
+      }
+      // 在這裡就先占位：報告編號要等驗證做完才有意義，但「這場次有人在跑」
+      // 必須在任何驗證之前就成立，否則連點兩下會有兩輪同時通過檢查。
+      runId = makeRunId_();
+      writeActiveMarker_(activeKey, runId);
+      claimed = true;
+      releaseLock_(lock);
+      lock = null;
+    } else {
+      lock = acquireLock_();
+      var prev = readRunState_();
+      if (prev && prev.status === 'running' && (Date.now() - Number(prev.startedAt || 0)) < RUN_STALE_MS_) {
+        throw new Error('上一輪報告（編號 ' + prev.runId + '）仍在產生中。\n' +
+          (prev.docUrl ? '文件連結：' + prev.docUrl + '\n' : '') +
+          '請等它完成，或使用選單的「' + MENU_TITLE_ + ' → 重設產生狀態」之後再試一次。');
+      }
     }
 
-    var cfg = requireConfig_();
+    var cfg = requireConfig_(target);
 
     // 識別模式三道門，缺一不可：勾選、二次確認、範本有 {{SEC_評核官差異}} 錨點。
     // commit 54b33dd 刻意把具名逐評核官分數表從儀表板上拿掉，方案B 不得成為
@@ -2085,20 +2357,33 @@ function reportStart(opts) {
       opts.identifiedDowngraded = true;
     }
 
-    var folder = resolveOutputFolder_(cfg);
+    // 這一輪要寫 報告快照／_報告暫存 的那份試算表。網頁模式下它是註冊表那一列
+    // 的 設定試算表ID；選單模式下就是容器。**在複製範本之前**解析，理由同下面
+    // ensureSnapshotSheet_ 那一行：任何「開不起來」都要在 Drive 上出現第一個
+    // 檔案之前擋下來。
+    ss = targetSpreadsheet_(cfg.ssId);
+
+    var folder = resolveOutputFolder_(cfg, ss);
     probeFolderWritable_(folder);
 
     var payload = fetchAnalysis_(cfg);
     var meta = payload.meta || {};
 
+    // 提示要指對地方：選單模式的代號來自指令碼屬性，網頁模式來自網址參數。
+    // 在網頁模式下叫人去改 REPORT_TENANT，正好是把人送去檢查唯一不相干的東西。
+    var whoSet = cfg.webMode ? '網址參數 ?t=' : '指令碼屬性 ' + PROP_TENANT_;
+    var whoSetEx = cfg.webMode ? '網址參數 &ex=' : '指令碼屬性 ' + PROP_EXERCISE_;
+    var keyHint = cfg.webMode
+      ? '這通常表示租戶註冊表那一列的 ' + REG_CONFIGID_ALIASES_[0] + '／' + REG_KEY_ALIASES_[0] +
+        ' 與後端解析出來的不是同一場（兩邊的註冊表可能不是同一份）。'
+      : '這通常表示 ' + PROP_ANALYSIS_KEY_ + ' 用到了別場演習的金鑰。';
     if (cfg.tenant && String(meta.tenant || '') !== cfg.tenant) {
-      throw new Error('租戶身分不符：指令碼屬性 ' + PROP_TENANT_ + ' 設為「' + cfg.tenant +
-        '」，但後端回傳的是「' + txt_(meta.tenant) + '」。\n' +
-        '這通常表示 ' + PROP_ANALYSIS_KEY_ + ' 用到了別場演習的金鑰。已中止，以免產出' +
-        '「封面是這一院、分數是另一院」的報告。');
+      throw new Error('租戶身分不符：' + whoSet + ' 要求「' + cfg.tenant +
+        '」，但後端回傳的是「' + txt_(meta.tenant) + '」。\n' + keyHint +
+        '已中止，以免產出「封面是這一院、分數是另一院」的報告。');
     }
     if (cfg.exercise && String(meta.exercise || '') !== cfg.exercise) {
-      throw new Error('演習身分不符：指令碼屬性 ' + PROP_EXERCISE_ + ' 設為「' + cfg.exercise +
+      throw new Error('演習身分不符：' + whoSetEx + ' 要求「' + cfg.exercise +
         '」，但後端回傳的是「' + txt_(meta.exercise) + '」。已中止。');
     }
 
@@ -2108,13 +2393,27 @@ function reportStart(opts) {
       throw new Error('紀錄表目前沒有可用的評分資料，請確認是否已有評核官送出。');
     }
 
-    var ss = SpreadsheetApp.getActive();
     ensureSnapshotSheet_(ss); // 欄位不符要在建立任何檔案之前就擋下來。
 
-    var runId = makeRunId_();
+    if (!runId) runId = makeRunId_();
     var startedAt = Date.now();
-    var st = {
+    st = {
       runId: runId,
+      // 網頁模式一輪一格屬性；選單模式 propKey 為空 → 仍是單一 REPORT_RUN_STATE。
+      propKey: target ? (PROP_RUN_PREFIX_ + runId) : '',
+      webMode: !!target,
+      // runToken 只在 reportStart 的回應裡出現一次，之後任何回應都不再帶它。
+      // 這是真正擋住「第二個瀏覽器接手別人那一輪」的那一層 —— 報告編號不是
+      // 秘密（它印在封面、檔名與 報告快照 的「報告編號」欄裡）。
+      runToken: target ? makeRunToken_() : '',
+      hid: target ? String(target.hid || '') : '',
+      exid: target ? String(target.exid || '') : '',
+      // 目標試算表凍結在這裡。之後每一次 HTTP 呼叫都用這個 ID 重新開檔、
+      // **不再讀註冊表** —— 否則產生到一半有人改了註冊表，第七章會落到跟
+      // 第三章不同的試算表裡（與「各章節必須來自同一次資料快照」同一條規則）。
+      ssId: (function () { try { return ss.getId(); } catch (errGid) { return cfg.ssId || ''; } })(),
+      folderName: safeName_(folder),
+      busyUntil: 0,
       status: 'running',
       startedAt: startedAt,
       startedAtText: Utilities.formatDate(new Date(startedAt), tz_(), 'yyyy-MM-dd HH:mm'),
@@ -2161,6 +2460,10 @@ function reportStart(opts) {
     }
     if (String(meta.tenantSource || '') === 'fallback' && (cfg.tenant || cfg.exercise)) {
       addWarning_(st, '後端 tenantSource 為 fallback，指定的租戶代號沒有實際路由效果（註冊表尚未啟用）。');
+    }
+    if (target && target.registryOff && (target.requestedHid || target.requestedExid)) {
+      addWarning_(st, '這個報告部署未啟用租戶註冊表，網址帶的機構／演習代號沒有路由效果，' +
+        '本報告的資料與輸出位置都來自指令碼屬性設定的那一場。');
     }
 
     var icc = verifyIcc_(payload);
@@ -2228,12 +2531,20 @@ function reportStart(opts) {
     try {
       if (st && st.runId && st.snapStartRow) {
         st.status = 'failed';
+        st.busyUntil = 0;
         addWarning_(st, '產生中斷：' + msg_(err));
         writeRunState_(st);
-        updateSnapshotStatus_(SpreadsheetApp.getActive(), st.snapStartRow, st.snapCount,
+        // ⚠️ 這裡**不可以**退回 SpreadsheetApp.getActive()：在獨立部署裡它回
+        // null，updateSnapshotStatus_ 會在第一行就丟錯、被自己的 try 吞掉，
+        // 於是這一輪的快照列永遠停在「產生中」—— 正是這一段存在要防的殘留。
+        // ss 一定已經解析好了：st.snapStartRow 只有在 appendSnapshot_(ss, …)
+        // 成功之後才會是非零。
+        updateSnapshotStatus_(ss || targetSpreadsheet_(st.ssId), st.snapStartRow, st.snapCount,
           st.snapStatusCol, '中斷');
       }
     } catch (err2) {}
+    // 占了位子卻沒跑起來，就要把位子還回去，否則這一場要等 15 分鐘才解得開。
+    try { if (claimed && activeKey) clearActiveMarker_(activeKey, runId); } catch (err3) {}
     return failure_(err, (st && st.runId) ? st : null);
   } finally {
     releaseLock_(lock);
@@ -2260,24 +2571,39 @@ function titleOf_(id) {
 // 這裡在寫下一章之前檢查本次呼叫已經用掉多少時間，超出預算就結束這次呼叫、
 // 回 done:false，由對話框再發一次。**至少寫一章**才檢查預算，否則預算設太小
 // 時會變成永遠在來回而不前進。
-function reportContinue(runId) {
+//
+// ⚠️ 第二個參數 target 是後加的，而 ReportDialog.html 呼叫
+// `.reportContinue(state.runId)` 只傳一個引數 —— 所以 target === undefined
+// 就是容器選單模式，那個檔案一個字都不用改。
+//
+// HTTP 重試是安全的，靠的是 openCursor_ 的 BEGIN 標記不變式（見該函式上方的
+// 註解）：重試時若 BEGIN 標記還在，就先刪掉標記到錨點之間的殘留再重寫；若連
+// 錨點都不在了，代表那一章已經寫完、直接跳過。沒有這條不變式，一次網路抖動
+// 就會讓某一章在文件裡出現兩遍，所以前端對 reportContinue 的網路錯誤可以、
+// 也應該用同一組 runId+runToken 重試一次。
+function reportContinue(runId, target) {
   var lock = null;
   var st = null;
   try {
-    lock = acquireLock_();
-    st = readRunState_();
-    if (!st || !st.runId) {
-      throw new Error('找不到進行中的產生作業（可能已被「重設產生狀態」清除）。請重新產生一份報告。');
-    }
-    if (runId && st.runId !== runId) {
-      throw new Error('執行紀錄的報告編號（' + st.runId + '）與對話框的（' + runId +
-        '）不符，可能有另一輪產生作業插進來了。請重新產生一份報告。');
+    if (target) {
+      // 網頁模式：短鎖只罩「讀—驗—標記飛行中—寫」這一小段，立刻放掉。
+      st = beginWebStep_(runId, target);
+    } else {
+      lock = acquireLock_();
+      st = readRunState_();
+      if (!st || !st.runId) {
+        throw new Error('找不到進行中的產生作業（可能已被「重設產生狀態」清除）。請重新產生一份報告。');
+      }
+      if (runId && st.runId !== runId) {
+        throw new Error('執行紀錄的報告編號（' + st.runId + '）與對話框的（' + runId +
+          '）不符，可能有另一輪產生作業插進來了。請重新產生一份報告。');
+      }
     }
     if (st.status !== 'running') {
       return progress_(st, '這一輪已經結束（' + statusText_(st.status) + '）', true);
     }
 
-    var cfg = requireConfig_();
+    var cfg = requireConfig_(target);
     var payload = loadPayloadForStep_(st, cfg);
     var ctx = buildContext_(st, payload, cfg);
 
@@ -2345,16 +2671,21 @@ function reportContinue(runId) {
     } else {
       try { doc.saveAndClose(); } catch (errSave) {}
     }
+    st.busyUntil = 0; // 這一次 HTTP 呼叫結束了，放掉「飛行中」旗標。
     writeRunState_(st);
     return progress_(st, label, finished);
   } catch (err) {
     if (st && st.runId && st.status === 'running') {
       st.status = 'failed';
+      st.busyUntil = 0;
       addWarning_(st, '產生中斷：' + msg_(err));
       try { writeRunState_(st); } catch (err2) {}
       try {
-        updateSnapshotStatus_(SpreadsheetApp.getActive(), st.snapStartRow, st.snapCount,
-          st.snapStatusCol, '中斷');
+        // 同 reportStart 的 catch：絕不退回 getActive()（獨立部署裡它是 null，
+        // 整段會被自己的 try 吞掉，留下一批停在「產生中」的快照列）。
+        // ctx 可能在建構時就失敗了，所以還要能從執行狀態裡的 ssId 重開。
+        updateSnapshotStatus_((ctx && ctx.ss) ? ctx.ss : targetSpreadsheet_(st.ssId),
+          st.snapStartRow, st.snapCount, st.snapStatusCol, '中斷');
       } catch (err3) {}
     }
     return failure_(err, st);
@@ -2364,7 +2695,13 @@ function reportContinue(runId) {
 }
 
 function buildContext_(st, payload, cfg) {
-  var ss = SpreadsheetApp.getActive();
+  // ⚠️ 每一次呼叫都從**執行狀態裡凍結的 ssId** 重開，不從註冊表重新解析。
+  // ctx.ss 有三個下游：繪圖暫存分頁（tempSheet_）、第三章的 readLocalCriteria_
+  // （評分標準），以及 finalizeReport_ 的 updateSnapshotStatus_。
+  // 行為改變值得講明白：第三章的評分尺度從此來自「該場演習自己的設定檔」，
+  // 不再是「腳本剛好綁在哪一份」；設定檔被複製時忘了帶 評分標準 分頁的場次，
+  // 會拿到 readLocalCriteria_ 既有的那句錯誤說明，而不是別場的尺度。
+  var ss = targetSpreadsheet_(st.ssId);
   var meta = payload.meta || {};
   var ctx = {
     st: st,
@@ -2523,7 +2860,7 @@ function finalizeReport_(doc, st, ctx, aborted) {
   try {
     var file = DriveApp.getFileById(st.docId);
     var blob = file.getAs('application/pdf').setName(finalName + '.pdf');
-    var folder = resolveOutputFolder_(ctx.cfg);
+    var folder = resolveOutputFolder_(ctx.cfg, ctx.ss);
     var pdf = folder.createFile(blob);
     st.pdfId = pdf.getId();
     st.pdfUrl = 'https://drive.google.com/file/d/' + st.pdfId + '/view';
@@ -2565,6 +2902,10 @@ function failure_(err, st) {
     done: true,
     status: 'failed',
     error: msg_(err),
+    // 純增欄位，給 HTTP 這一側分辨「這一輪死了」與「這次呼叫根本沒進得去
+    // 那一輪」（RUN_NOT_FOUND／RUN_TOKEN_MISMATCH／REPORT_BUSY）。
+    // ReportDialog.html 只讀 ok／error，多一個鍵對它完全沒有影響。
+    errorCode: (err && err.reportCode) || 'REPORT_FAILED',
     warnings: st ? (st.warnings || []).slice() : [],
     docUrl: st ? (st.docUrl || '') : '',
     pdfUrl: ''
@@ -3537,6 +3878,11 @@ function sectionAppendixC_(cursor, ctx) {
   var rows = [['項目', '內容']];
   rows.push(['報告編號', st.runId]);
   rows.push(['報告產生時間', st.generatedAtText]);
+  // 這一份原始碼同時存在於容器綁定專案與獨立部署的報告 Web App，兩邊都是手貼。
+  // 印出版本與入口，是「兩份副本有沒有漂移」唯一從交付物上看得出來的線索。
+  rows.push(['產生程式版本', REPORT_BUILD_]);
+  rows.push(['產生入口', st.webMode ? '分析平台（報告 Web App）' : '設定試算表的「' + MENU_TITLE_ + '」選單']);
+  if (st.folderName) rows.push(['輸出資料夾名稱', String(st.folderName)]);
   rows.push(['設定檔名稱', txt_(m.configFileName)]);
   rows.push(['紀錄檔名稱', txt_(m.recordFileName)]);
   rows.push(['紀錄分頁名稱', txt_(m.recordSheetName)]);
@@ -3629,4 +3975,771 @@ function sectionAppendixD_(cursor, ctx) {
   heading_(cursor, '文件格式上的限制', 2);
   bullet_(cursor, '頁碼、頁首院徽、字型、邊距與簽核欄全部由報告範本負責，本程式不產生也不修改它們（DocumentApp 沒有插入頁碼的 API，這是硬限制而不是取捨）。要調整版面請直接修改範本 Google 文件，不需要改程式。');
   bullet_(cursor, '報告版次、文件編號、製表／審核／核定欄位由業主在產生出來的 Google 文件中自行填寫，系統不保存這些欄位。');
+}
+
+// ===================================================================
+// 網頁入口（只有獨立部署 (B) 會跑到；容器綁定那一份裡這整段是死碼）
+// ===================================================================
+//
+// 這一段讓分析平台（Analysis.html）可以直接叫出報告，不必請業主切到設定試算表
+// 去按選單。它是**新增一支 /exec**，不是在 ConfigWithSubmit.gs 上加分支 ——
+// 後端「無金鑰分支恰好兩條（設定分支、action=sessions）」那條不變式沒有被動到。
+//
+// ⚠️ 這支部署的無金鑰行為是**零**：沒帶對金鑰的呼叫只拿得到字串 unauthorized。
+//
+// 授權規則與 action=analysis 完全相同：網址上的 key 必須逐字等於
+// (t, ex) 那一列的 分析金鑰 —— 「讀得到資料的人就報得了這場的報告」是字面成立，
+// 不是大致成立。資訊增量因此是零：報告只是把同一份 payload 重新排版。
+//
+// 新增的不是資訊而是**副作用**。一次成功的呼叫會在「部署這支 Web App 的那個
+// Google 帳號」底下：
+//   (a) 建立一份 Doc（範本複本）與一份 PDF；
+//   (b) 在該場演習的設定試算表追加約 23 列 報告快照，並建立／清空隱藏分頁
+//       _報告暫存；
+//   (c) 吃掉該帳號的 UrlFetchApp／Docs／執行配額（每次 HTTP 呼叫最多 6 分鐘）。
+// 使其可接受的四道界線：
+//   • 目的地有界：資料夾只能是 REPORT_OUTPUT_FOLDER_ID 或「解析出來那份設定
+//     試算表的上層資料夾」，永遠不是呼叫端指定的；檔名固定是
+//     「<報告編號> <顯示名稱> 評核報告」；內容固定是業主範本的複本。
+//     寫入路徑上沒有任何一個欄位來自呼叫端。
+//   • 寫入分頁有界：只有 報告快照（只追加）與 _報告暫存（固定名稱、會清空），
+//     兩者後端都不讀。演習資訊／項目與問題／人員代號／評分標準／對應指標 對這支
+//     腳本是唯讀，紀錄試算表則從頭到尾不會被打開。
+//   • 跨場次可達範圍有界：(hid, exid) → 設定試算表ID 的對應只來自「分析金鑰等於
+//     呈示金鑰」的那一列，而健全性規則 3 禁止同一把金鑰出現在兩個不同的 醫院代號。
+//   • 速率有界：每場次一個 REPORT_ACTIVE_ 標記，最多一輪在跑，15 分鐘後過期。
+// 剩下的殘餘風險是「一個已經握有該院全部評核資料讀取權的人，拿配額去騷擾部署者
+// 的雲端硬碟」—— 比那把金鑰本來就允許的傷害小，而且被上面四條框住。
+//
+// ⛔ 絕不接受：沒有金鑰的報告請求、與解析列不符的金鑰、解析到無效列的 (t,ex)。
+
+// 代號解析失敗／註冊表問題一律用這個錯誤物件，reportCode 是機器可讀的那一半。
+function reportError_(message, code) {
+  var err = new Error(message);
+  err.reportCode = code;
+  return err;
+}
+
+// ⚠️ 逐字 'unauthorized'。Analysis.html 會把這個字串原樣印出來，而
+// ConfigWithSubmit.gs 的 action=analysis 回的就是這一組 —— 一家醫院的操作者在
+// 兩支 /exec 上應該看到同一套詞彙。
+function unauthorizedError_() {
+  return reportError_('unauthorized', 'UNAUTHORIZED');
+}
+
+function jsonOut_(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// 這些代碼代表「這次呼叫連進不進得了那一輪都還沒確定」，所以回純錯誤形狀，
+// 不回進度形狀 —— 否則前端會把一個驗證失敗誤讀成「那一輪死掉了」。
+var PREFLIGHT_CODES_ = ['RUN_NOT_FOUND', 'RUN_TOKEN_MISMATCH', 'REPORT_BUSY'];
+
+// -------------------------------------------------------------------
+// 回傳值紅線：整個網頁入口只有這兩個函式組裝回應物件
+// -------------------------------------------------------------------
+//
+// ⚠️ 這兩個函式裡**永遠不得**出現：任何試算表 ID、分析金鑰、ADMIN_KEY、
+// REPORT_REGISTRY_ID、註冊表列號、檔案擁有者、紀錄分頁名稱、人員代號、
+// 任何儲存格內容。允許出現的只有：報告編號、章節進度、狀態、警告文字、
+// Doc／PDF 連結、以及資料夾「名稱」（檔名不是憑證、ID 是 —— 與後端 meta
+// 畫的是同一條線）。
+// 想多回一個欄位就得改這裡，這也正是這條線查得動的原因
+// （對照 ConfigWithSubmit.gs 的 sessionSortable_）。
+function webProgressOut_(res, st) {
+  var out = {
+    ok: res.ok !== false,
+    runId: String(res.runId || ''),
+    step: Number(res.step || 0),
+    totalSteps: Number(res.totalSteps || 0),
+    label: String(res.label || ''),
+    done: !!res.done,
+    status: String(res.status || ''),
+    identified: !!(st ? st.identified : res.identified),
+    warnings: (res.warnings || []).slice(),
+    docUrl: String(res.docUrl || ''),
+    pdfUrl: String(res.pdfUrl || ''),
+    folderName: String((st && st.folderName) || ''),
+    startedAtText: String((st && st.startedAtText) || ''),
+    stale: !!(st && st.status === 'running' &&
+      (Date.now() - Number(st.startedAt || 0)) > RUN_STALE_MS_)
+  };
+  if (res.ok === false) {
+    out.error = String(res.error || '');
+    out.errorCode = String(res.errorCode || 'REPORT_FAILED');
+  }
+  return out;
+}
+
+function webErrorShape_(message, code) {
+  if (code === 'UNAUTHORIZED') return { error: 'unauthorized', errorCode: 'UNAUTHORIZED' };
+  return { error: String(message == null ? '' : message), errorCode: String(code || 'REPORT_FAILED') };
+}
+
+function webErrorOut_(err) {
+  return webErrorShape_(msg_(err), (err && err.reportCode) || 'REPORT_FAILED');
+}
+
+// -------------------------------------------------------------------
+// doGet：唯一的 HTTP 入口
+// -------------------------------------------------------------------
+//
+// 全部用 GET + 查詢字串、全部回 HTTP 200（Apps Script 設不了狀態碼），
+// 也不帶任何自訂標頭 —— 維持成 CORS simple request，與 Analysis.html 現有的
+// action=analysis 呼叫同一個形狀，不會觸發 Apps Script 答不了的 preflight。
+function doGet(e) {
+  var params = (e && e.parameter) || {};
+  // ⚠️ 第一件事，而且要在任何可能丟錯的程式之前：把這次的金鑰交給 scrub_。
+  // Apps Script 的連線類例外會把**整個請求網址**（含 &key=）塞進訊息裡，
+  // 而那條訊息會一路走到 HTTP 回應、瀏覽器 console 與附錄C。
+  try { SECRET_KEY_ = String(params.key == null ? '' : params.key); } catch (errKey) {}
+  var action = String(params.action || '');
+  try {
+    if (action === 'reportCheck') return jsonOut_(webCheck_(params));
+    if (action === 'reportStart') return jsonOut_(webStart_(params));
+    if (action === 'reportContinue') return jsonOut_(webContinue_(params));
+    if (action === 'reportStatus') return jsonOut_(webStatus_(params));
+    if (action === 'reportAbandon') return jsonOut_(webAbandon_(params));
+    return jsonOut_(webErrorShape_(
+      '這個網址是報告產生器，不提供評核單設定或分析資料。' +
+      '支援的 action：reportCheck／reportStart／reportContinue／reportStatus／reportAbandon。',
+      'BAD_ACTION'));
+  } catch (err) {
+    return jsonOut_(webErrorOut_(err));
+  }
+}
+
+// -------------------------------------------------------------------
+// 五個 action
+// -------------------------------------------------------------------
+
+function webCheck_(params) {
+  var target = resolveWebTarget_(params);
+  // reportValidateOnly 的每一條 detail 都只印檔名／資料夾名／分頁名／欄名／
+  // 計數與代號，不印任何 ID 或金鑰（它本來就是對話框要給業主看的東西）。
+  var res = reportValidateOnly(target);
+  return { ok: !!res.ok, checks: res.checks };
+}
+
+function webStart_(params) {
+  var target = resolveWebTarget_(params);
+  var res = reportStart({
+    target: target,
+    includeComments: String(params.includeComments || '') !== '0',
+    includeAppendixB: String(params.includeAppendixB || '') === '1',
+    // 識別模式的三道門一道都沒少：伺服器端這一關（reportStart 自己檢查
+    // identifiedConfirmed）仍然是權威，HTTP 只是把兩個旗標搬過來而已。
+    identified: String(params.identified || '') === '1',
+    identifiedConfirmed: String(params.identifiedConfirmed || '') === '1'
+  });
+  var st = res.runId ? readRunStateAt_(PROP_RUN_PREFIX_ + res.runId) : null;
+  if (st && st.status && st.status !== 'running') closeWebRun_(target, st);
+  var out = webProgressOut_(res, st);
+  // runToken **只在這裡回一次**。它不寫進任何其他回應，也不印在文件、檔名或
+  // 報告快照裡 —— 報告編號會出現在那三個地方，所以報告編號不是秘密，光靠它
+  // 擋不住「同院的另一把瀏覽器插進別人那一輪」。
+  if (res.ok !== false && st && st.runToken) out.runToken = String(st.runToken);
+  return out;
+}
+
+function webContinue_(params) {
+  var target = resolveWebTarget_(params);
+  target.runToken = String(params.runToken == null ? '' : params.runToken);
+  var runId = String(params.runId || '');
+  var res = reportContinue(runId, target);
+  if (res.ok === false && PREFLIGHT_CODES_.indexOf(String(res.errorCode || '')) !== -1) {
+    return webErrorShape_(res.error, res.errorCode);
+  }
+  var st = readRunStateAt_(PROP_RUN_PREFIX_ + (res.runId || runId));
+  if (st && st.status && st.status !== 'running') closeWebRun_(target, st);
+  return webProgressOut_(res, st);
+}
+
+// 唯讀，而且刻意**不收 runToken 當續跑憑證**：重新整理過的分頁只能問狀態，
+// 不能接手。這與今天「業主把對話框關掉」的處境是同一件事，那個情況也接不下去。
+function webStatus_(params) {
+  var target = resolveWebTarget_(params);
+  var runId = String(params.runId || '');
+  var st = runId ? readRunStateAt_(PROP_RUN_PREFIX_ + runId) : null;
+  if (!st || !st.runId) {
+    throw reportError_('找不到報告編號 ' + runId + ' 的紀錄（它可能已經結束並被清除）。', 'RUN_NOT_FOUND');
+  }
+  assertRunBelongsTo_(st, target);
+  return webProgressOut_({
+    ok: true,
+    runId: st.runId,
+    step: st.doneCount || 0,
+    totalSteps: st.totalCount || 0,
+    label: statusText_(st.status),
+    done: st.status !== 'running',
+    status: st.status,
+    warnings: (st.warnings || []).slice(),
+    docUrl: st.docUrl || '',
+    pdfUrl: st.pdfUrl || ''
+  }, st);
+}
+
+// 選單的「重設產生狀態」在 HTTP 這一側的對應動作。沒有它，只能用網頁產報告的
+// 醫院在卡住時完全無路可走（那個選單項目需要容器試算表）。
+function webAbandon_(params) {
+  var target = resolveWebTarget_(params);
+  target.runToken = String(params.runToken == null ? '' : params.runToken);
+  var runId = String(params.runId || '');
+  var lock = briefLock_();
+  try {
+    var st = readRunStateAt_(PROP_RUN_PREFIX_ + runId);
+    if (!st || !st.runId) {
+      throw reportError_('找不到報告編號 ' + runId + ' 的紀錄。', 'RUN_NOT_FOUND');
+    }
+    assertRunBelongsTo_(st, target);
+    if (!st.runToken || st.runToken !== target.runToken) {
+      throw reportError_('這一輪報告的驗證碼不正確，無法捨棄。', 'RUN_TOKEN_MISMATCH');
+    }
+    if (st.status === 'running') {
+      st.status = 'failed';
+      st.busyUntil = 0;
+      st.snapPending = true;
+      writeRunState_(st);
+      try {
+        updateSnapshotStatus_(targetSpreadsheet_(st.ssId), st.snapStartRow, st.snapCount,
+          st.snapStatusCol, '中斷');
+        st.snapPending = false;
+      } catch (errSnap) {
+        // 標不動就留著 snapPending，下一次同場次的 reportStart 掃描時會補。
+      }
+    }
+    closeWebRun_(target, st);
+    return webProgressOut_({
+      ok: true, runId: st.runId, step: st.doneCount || 0, totalSteps: st.totalCount || 0,
+      label: '已捨棄這一輪', done: true, status: st.status,
+      warnings: [], docUrl: st.docUrl || '', pdfUrl: st.pdfUrl || ''
+    }, st);
+  } finally {
+    releaseLock_(lock);
+  }
+}
+
+// 一把金鑰只能驅動它自己那一場的執行。金鑰已經在 resolveWebTarget_ 對過了，
+// 這一關擋的是「拿 A 場的金鑰去動 B 場那一輪」。
+function assertRunBelongsTo_(st, target) {
+  if (String(st.hid || '') !== String(target.hid || '') ||
+      String(st.exid || '') !== String(target.exid || '')) {
+    throw reportError_('這一輪報告不屬於目前這場演習。', 'RUN_NOT_FOUND');
+  }
+}
+
+// -------------------------------------------------------------------
+// 場次解析（鏡像 ConfigWithSubmit.gs 的 resolveTenant_）
+// -------------------------------------------------------------------
+//
+// 順序是控制本身，不是實作細節：金鑰比對只需要讀註冊表。在它之前**不得**有
+// 任何 DriveApp 呼叫、不得 openById 設定試算表、不得 UrlFetchApp、不得複製
+// 範本、不得寫任何指令碼屬性。那個順序就是「沒帶金鑰的呼叫只花掉一次（有快取
+// 的）註冊表讀取」與「沒帶金鑰的呼叫可以把部署者的雲端硬碟撐大」的全部差別。
+function resolveWebTarget_(params) {
+  var rawHid = String(params.t == null ? '' : params.t);
+  var rawExid = String(params.ex == null ? '' : params.ex);
+  var key = String(params.key == null ? '' : params.key);
+  var hid = normSlugR_(rawHid);
+  var exid = normSlugR_(rawExid);
+  // 有填但格式不合是硬錯誤，絕不悄悄當成沒填 —— 否則一個打錯的代號會靜靜
+  // 變成「報了另一場的報告」。
+  if (trim_(rawHid) && !hid) {
+    throw reportError_('連結裡的機構代號格式不正確，請確認連結是否完整。', 'BAD_CODE');
+  }
+  if (trim_(rawExid) && !exid) {
+    throw reportError_('連結裡的演習代號格式不正確，請確認連結是否完整。', 'BAD_CODE');
+  }
+
+  var registryId = prop_(PROP_REGISTRY_ID_);
+  rememberSecretId_(registryId);
+  if (!registryId) {
+    // 註冊表關閉的單一演習模式。master 在還沒有正式註冊表之前就是靠這一支
+    // 合併進去的（與後端把 REGISTRY_SPREADSHEET_ID 以 '' 合併同一個姿態）。
+    // 此時 t／ex 原樣收下但**對路由零影響**，也因此不會送給後端、不做身分比對。
+    var ssId = prop_(PROP_CONFIG_SS_ID_);
+    var wantKey = prop_(PROP_ANALYSIS_KEY_);
+    rememberSecretId_(ssId);
+    if (!ssId || !wantKey) {
+      throw reportError_('這個報告部署尚未完成設定：未設定 ' + PROP_REGISTRY_ID_ +
+        '（註冊表模式），也沒有同時設定 ' + PROP_CONFIG_SS_ID_ + ' 與 ' +
+        PROP_ANALYSIS_KEY_ + '（單一演習模式）。請聯絡系統管理者。', 'REPORT_NOT_CONFIGURED');
+    }
+    if (!isSpreadsheetIdR_(ssId)) {
+      throw reportError_('指令碼屬性 ' + PROP_CONFIG_SS_ID_ + ' 看起來不是試算表 ID。',
+        'REPORT_NOT_CONFIGURED');
+    }
+    if (!key || key !== wantKey) throw unauthorizedError_();
+    return {
+      hid: '', exid: '', ssId: ssId, analysisKey: wantKey, displayName: '',
+      registryOff: true, requestedHid: hid, requestedExid: exid, runToken: ''
+    };
+  }
+
+  // 註冊表模式下兩個代號都是必填：儀表板本來就知道自己正在看哪一場，
+  // 在這裡猜「預設演習」正是會產出一份跟螢幕不一致的報告的做法。
+  if (!hid) {
+    throw reportError_('這個連結沒有帶機構代號，無法確認要產生哪一場演習的報告。', 'NO_TENANT');
+  }
+  if (!exid) {
+    throw reportError_('這個連結沒有帶演習代號，無法確認要產生哪一場演習的報告。', 'NO_EXERCISE');
+  }
+
+  var reg = readReportRegistry_(registryId);
+  // 註冊表讀不到時**刻意不退回單一演習模式**。後端的設定分支那樣做是對的
+  // （硬擋會讓演習當天全場評核官無法評分），但拒絕產生一份報告不會讓任何事
+  // 停擺，而「安靜地報了另一家醫院」會產出一份封面寫錯的、已簽核的 PDF。
+  if (!reg.readable || !reg.sheetFound || !reg.rowCount) {
+    throw reportError_('目前無法取得演習註冊資料，請稍後再試或聯絡系統管理者。', 'REGISTRY_OFF');
+  }
+
+  var hit = null;
+  var sameHid = 0;
+  for (var i = 0; i < reg.rows.length; i++) {
+    var r = reg.rows[i];
+    if (r.hid !== hid) continue;
+    sameHid++;
+    if (r.exid === exid) {
+      // 同一組 (醫院, 演習) 出現兩列有效列是不可能的（健全性規則 1 會把整組
+      // 標成無效），但不假設 —— 身分絕不取決於列的順序。
+      if (hit) throw reportError_('這場演習的註冊資料有問題，請聯絡系統管理者。', 'ROW_INVALID');
+      hit = r;
+    }
+  }
+  if (!hit) {
+    for (var j = 0; j < reg.invalid.length; j++) {
+      if (reg.invalid[j].hid === hid && reg.invalid[j].exid === exid) {
+        // 無效列**對解析完全不可見**：只回一句通用訊息，絕不回另一列的資料、
+        // 也絕不退回別的場次。具體原因只有後端的 action=selftest 看得到。
+        throw reportError_('這場演習的註冊資料有問題，請聯絡系統管理者。', 'ROW_INVALID');
+      }
+    }
+    if (!sameHid) {
+      throw reportError_('找不到這家機構的設定（代號：' + hid + '），請確認連結是否正確。', 'NO_TENANT');
+    }
+    throw reportError_('找不到這場演習（機構：' + hid + '／演習：' + exid + '），請確認連結是否正確。', 'NO_EXERCISE');
+  }
+
+  // ⚠️ 授權就在這一行，而且在它之前沒有任何 Drive／Docs／UrlFetch／屬性寫入。
+  if (!key || key !== hit.analysisKey) throw unauthorizedError_();
+
+  rememberSecretId_(hit.configId);
+  return {
+    hid: hid,
+    exid: exid,
+    // 試算表 ID **只**從註冊表儲存格來，而且已經過 isSpreadsheetIdR_。
+    // 代號永遠不會被拿去 openById —— 這條界線就是「這支部署不是任意 Drive
+    // 讀取代理」的全部理由。
+    ssId: hit.configId,
+    analysisKey: key,
+    displayName: hit.displayName,
+    registryOff: false,
+    requestedHid: hid,
+    requestedExid: exid,
+    runToken: ''
+  };
+}
+
+// -------------------------------------------------------------------
+// 租戶註冊表的最小讀取器
+// -------------------------------------------------------------------
+//
+// ⚠️ 這是 Report.gs 第一段會讀後端資料來源的程式。ConfigWithSubmit.gs 的兩條
+// 界線必須一起抄進來，否則這支部署就會變成它刻意沒有變成的那個東西：
+//   (1) normSlugR_ —— 代號只允許小寫英數／-／_，最多 32 字，Date 直接拒絕；
+//   (2) isSpreadsheetIdR_ —— 任何要進 openById 的字串都得先過它，而且只能
+//       來自註冊表儲存格。
+function trim_(s) {
+  return String(s == null ? '' : s).replace(/^\s+|\s+$/g, '');
+}
+
+function normSlugR_(s) {
+  if (s instanceof Date) return '';
+  if (s == null) return '';
+  var v = String(s).trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(v)) return '';
+  return v;
+}
+
+function isSpreadsheetIdR_(s) {
+  if (s instanceof Date) return false;
+  return /^[A-Za-z0-9_-]{20,}$/.test(trim_(s));
+}
+
+function isNoR_(v) {
+  if (v === false) return true;
+  var s = trim_(v);
+  return s === 'N' || s === 'n' || s === '否' || s === '停用' ||
+    s === 'FALSE' || s === 'False' || s === 'false';
+}
+
+// 與 ConfigWithSubmit.gs 的 findHeaderCol_ 同一條規則：先整輪精確比對，
+// 再做前綴比對。絕不用欄位位置。
+function regFindHeaderCol_(header, names) {
+  for (var i = 0; i < header.length; i++) {
+    if (names.indexOf(String(header[i] || '')) !== -1) return i;
+  }
+  for (var j = 0; j < header.length; j++) {
+    var cell = String(header[j] || '');
+    for (var k = 0; k < names.length; k++) {
+      if (cell.indexOf(names[k]) === 0) return j;
+    }
+  }
+  return -1;
+}
+
+// 回傳 {readable, sheetFound, rowCount, rows:[瘦身列], invalid:[{hid,exid}]}。
+// 快取 120 秒，與後端同一個數字。沒有快取的話，一個沒帶金鑰的呼叫每次都會開
+// 一次 Drive 檔案 —— 這個端點的 DoS 成本就從「一次快取讀取」跳成「一次開檔」。
+// ⚠️ 快取內容含 分析金鑰（後端的 reg:v2 也一樣）。它從不出現在任何回應裡，
+// 但新增欄位時要記得這一格是憑證、不是普通字串。
+function readReportRegistry_(registryId) {
+  var cache = null;
+  try { cache = CacheService.getScriptCache(); } catch (errCache) { cache = null; }
+  if (cache) {
+    var hit = cache.get(REG_CACHE_KEY_);
+    if (hit) {
+      try { return JSON.parse(hit); } catch (errParse) {}
+    }
+  }
+  var out = { readable: false, sheetFound: false, rowCount: 0, rows: [], invalid: [] };
+  try {
+    var ss = SpreadsheetApp.openById(registryId);
+    out.readable = true;
+    var sheet = ss.getSheetByName(REG_SHEET_NAME_);
+    if (sheet) {
+      out.sheetFound = true;
+      readRegRows_(sheet, out);
+    }
+  } catch (err) {
+    // 刪檔／改名／沒權限／ID 填錯都走到這裡。刻意不分類：對報告來說三種的
+    // 處置都一樣（拒絕產生），而猜原因只會把人送去檢查沒壞的東西。
+  }
+  if (cache) {
+    try { cache.put(REG_CACHE_KEY_, JSON.stringify(out), REG_CACHE_TTL_); } catch (errPut) {}
+  }
+  return out;
+}
+
+function readRegRows_(sheet, out) {
+  var values = sheet.getDataRange().getValues();
+  var header = values.length ? values[0] : [];
+  var cols = {
+    hid: regFindHeaderCol_(header, REG_HID_ALIASES_),
+    exid: regFindHeaderCol_(header, REG_EXID_ALIASES_),
+    displayName: regFindHeaderCol_(header, REG_NAME_ALIASES_),
+    configId: regFindHeaderCol_(header, REG_CONFIGID_ALIASES_),
+    recordId: regFindHeaderCol_(header, REG_RECORDID_ALIASES_),
+    recordSheet: regFindHeaderCol_(header, REG_RECORDSHEET_ALIASES_),
+    analysisKey: regFindHeaderCol_(header, REG_KEY_ALIASES_),
+    enabled: regFindHeaderCol_(header, REG_ENABLED_ALIASES_)
+  };
+  // 必填「欄」不見了＝整張表不能用（rowCount 留 0 → 呼叫端回 REGISTRY_OFF）。
+  // 這正是 2026-10-09 那次「有人清掉 G1 表頭」的狀況：報告寧可整個拒絕，
+  // 也不能在表頭壞掉時退回去報另一場。
+  if (cols.hid === -1 || cols.exid === -1 || cols.configId === -1 ||
+      cols.recordId === -1 || cols.analysisKey === -1) return;
+
+  var parsed = [];
+  for (var i = 1; i < values.length; i++) {
+    if (regBlankRow_(values[i])) continue;
+    parsed.push(parseRegRow_(cols, values[i], i + 1));
+  }
+  out.rowCount = parsed.length;
+  assertRegSane_(parsed);
+  for (var j = 0; j < parsed.length; j++) {
+    var r = parsed[j];
+    if (r.reasons.length) {
+      // 無效列只留「有這麼一列」，不留原因、不留列號 —— 原因字串只有後端的
+      // action=selftest 可以吐。
+      out.invalid.push({ hid: r.hid, exid: r.exid });
+      continue;
+    }
+    out.rows.push({
+      hid: r.hid, exid: r.exid, displayName: r.displayName,
+      configId: r.configId, analysisKey: r.analysisKey, enabled: r.enabled
+    });
+  }
+}
+
+function regBlankRow_(row) {
+  for (var i = 0; i < row.length; i++) {
+    if (trim_(row[i]) !== '') return false;
+  }
+  return true;
+}
+
+function parseRegRow_(cols, row, rowNumber) {
+  var reasons = [];
+  var r = {
+    hid: regSlugCell_(row[cols.hid], reasons),
+    exid: regSlugCell_(row[cols.exid], reasons),
+    displayName: cols.displayName !== -1 ? trim_(row[cols.displayName]) : '',
+    configId: regIdCell_(row[cols.configId], reasons),
+    recordId: regIdCell_(row[cols.recordId], reasons),
+    recordSheet: REG_DEFAULT_RECORD_SHEET_,
+    analysisKey: trim_(row[cols.analysisKey]),
+    // 啟用=N 的列照樣可以產報告，刻意的：演習結束（封存）之後才要做報告，
+    // 與後端 action=analysis 不擋 啟用=N 是同一個理由。
+    enabled: true,
+    rowNumber: rowNumber,
+    reasons: reasons
+  };
+  if (cols.recordSheet !== -1) {
+    var sn = trim_(row[cols.recordSheet]);
+    if (sn) r.recordSheet = sn;
+  }
+  if (!r.analysisKey) reasons.push('key-blank');
+  if (cols.enabled !== -1) r.enabled = !isNoR_(row[cols.enabled]);
+  return r;
+}
+
+function regSlugCell_(value, reasons) {
+  if (value instanceof Date) { reasons.push('slug-date'); return ''; }
+  var raw = trim_(value);
+  if (!raw) { reasons.push('slug-blank'); return ''; }
+  var slug = normSlugR_(raw);
+  if (!slug) { reasons.push('slug-format'); return ''; }
+  return slug;
+}
+
+function regIdCell_(value, reasons) {
+  var raw = trim_(value);
+  if (!raw) { reasons.push('id-blank'); return ''; }
+  if (!isSpreadsheetIdR_(raw)) { reasons.push('id-format'); return ''; }
+  return raw;
+}
+
+// 跨列的三條健全性規則，與 ConfigWithSubmit.gs 的 assertRegistrySane_ 同義。
+// 為什麼要在這裡再做一次：如果兩邊對「哪一列有效」的判斷不同，報告會先把
+// 範本複製好、才在 fetchAnalysis_ 被後端的 ROW_INVALID 擋下來，在業主的雲端
+// 硬碟上留下一份孤兒 Doc。規則 2 需要 紀錄試算表ID＋分頁名稱，所以上面即使
+// 報告端用不到也照讀。
+// 一律「整組都標無效」而不是「第一列優先」：身分不可以取決於列的順序。
+function assertRegSane_(rows) {
+  markRegDuplicates_(
+    rows.filter(function (r) { return r.hid && r.exid; }),
+    function (r) { return r.hid + REG_KEY_SEP_ + r.exid; });
+  markRegDuplicates_(
+    rows.filter(function (r) { return r.recordId; }),
+    function (r) { return r.recordId + REG_KEY_SEP_ + r.recordSheet; });
+  // 規則 3：同一把金鑰出現在**不同** 醫院代號 才是漏洞；同一家醫院跨場次共用
+  // 是刻意允許的（而且是分析平台場次下拉能運作的前提）。
+  var byKey = {};
+  rows.forEach(function (r) {
+    if (!r.analysisKey || !r.hid) return;
+    if (!byKey[r.analysisKey]) byKey[r.analysisKey] = [];
+    byKey[r.analysisKey].push(r);
+  });
+  Object.keys(byKey).forEach(function (k) {
+    var group = byKey[k];
+    group.forEach(function (r) {
+      var others = group.filter(function (o) { return o !== r && o.hid && o.hid !== r.hid; });
+      if (others.length) r.reasons.push('key-cross-hospital');
+    });
+  });
+  return rows;
+}
+
+function markRegDuplicates_(rows, keyOf) {
+  var byKey = {};
+  rows.forEach(function (r) {
+    var k = keyOf(r);
+    if (!byKey[k]) byKey[k] = [];
+    byKey[k].push(r);
+  });
+  Object.keys(byKey).forEach(function (k) {
+    if (byKey[k].length < 2) return;
+    byKey[k].forEach(function (r) { r.reasons.push('duplicate'); });
+  });
+}
+
+// -------------------------------------------------------------------
+// 網頁模式的執行狀態：每輪一格 + 每場次一個標記
+// -------------------------------------------------------------------
+
+function makeRunToken_() {
+  var chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var s = '';
+  for (var i = 0; i < 16; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+  return s;
+}
+
+// ⚠️ 網頁模式刻意**不**用 acquireLock_ 的 tryLock(0)。LockService 的鎖是整個
+// 專案共用的：在 HTTP 入口下，A 院產報告會讓 B 院直接拿到「報告正在產生中」，
+// 而且一握就是一次呼叫的六分鐘。這裡的鎖只罩「讀—改—寫執行狀態屬性」那一小段，
+// 真正的互斥是每場次一個 REPORT_ACTIVE_ 標記，範圍才對。
+// 代價要講明白：兩個**不同場次**的執行從此真的會並行，共用部署者的
+// UrlFetchApp／Docs／Drive 配額。併發上限是「每場次一輪」，不是「整個專案一輪」。
+function briefLock_() {
+  var lock = null;
+  try { lock = LockService.getScriptLock(); } catch (err) { return null; }
+  var got = false;
+  try { got = lock.tryLock(10000); } catch (err2) { got = false; }
+  if (!got) throw reportError_('系統忙碌中，請稍候再試一次。', 'REPORT_BUSY');
+  return lock;
+}
+
+function activeMarkerKey_(target) {
+  return PROP_ACTIVE_PREFIX_ + (String(target.hid || '') || '-') + '/' +
+    (String(target.exid || '') || '-');
+}
+
+function writeActiveMarker_(key, runId) {
+  try {
+    props_().setProperty(key, JSON.stringify({ runId: String(runId), startedAt: Date.now() }));
+  } catch (err) {}
+}
+
+function readActiveMarker_(key) {
+  try {
+    var raw = props_().getProperty(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// 只清自己占的那個位子。別人的位子清掉等於替別人解鎖。
+function clearActiveMarker_(key, runId) {
+  var cur = readActiveMarker_(key);
+  if (!cur) return;
+  if (runId && String(cur.runId || '') !== String(runId)) return;
+  try { props_().deleteProperty(key); } catch (err) {}
+}
+
+function readActiveRunFor_(target) {
+  var marker = readActiveMarker_(activeMarkerKey_(target));
+  if (!marker || !marker.runId) return null;
+  var st = readRunStateAt_(PROP_RUN_PREFIX_ + marker.runId);
+  if (st) return st;
+  // ⚠️ 標記存在、執行狀態還沒寫 —— 這是 reportStart 裡「已占位、正在跑範本與
+  // 後端驗證」的那十幾秒。若在這裡回 null，連點兩下的第二次會看不到第一次、
+  // 兩輪一起通過檢查，整個 (b) 層防線就只在「狀態已落地之後」才成立。
+  // 用標記自己的時間戳合成一個最小的「產生中」。
+  return {
+    runId: String(marker.runId),
+    status: 'running',
+    startedAt: Number(marker.startedAt || 0),
+    docUrl: ''
+  };
+}
+
+// 每一次 reportContinue 的開頭：驗明正身、標記「飛行中」，然後立刻放鎖。
+function beginWebStep_(runId, target) {
+  var id = String(runId || '');
+  if (!id) throw reportError_('這次呼叫沒有帶報告編號。', 'RUN_NOT_FOUND');
+  var lock = briefLock_();
+  try {
+    var st = readRunStateAt_(PROP_RUN_PREFIX_ + id);
+    if (!st || !st.runId) {
+      throw reportError_('找不到報告編號 ' + id + ' 的紀錄（它可能已經結束並被清除）。請重新產生一份報告。',
+        'RUN_NOT_FOUND');
+    }
+    assertRunBelongsTo_(st, target);
+    if (!st.runToken || st.runToken !== String(target.runToken || '')) {
+      throw reportError_('這一輪報告的驗證碼不正確。驗證碼只在開始產生時回傳一次，' +
+        '重新整理分頁就會遺失，也就無法接續 —— 請改用「捨棄這一輪」之後重新產生。',
+        'RUN_TOKEN_MISMATCH');
+    }
+    if (st.status === 'running' && Number(st.busyUntil || 0) > Date.now()) {
+      throw reportError_('這一輪報告的上一次呼叫還在執行中，請稍候再試。', 'REPORT_BUSY');
+    }
+    if (st.status === 'running') {
+      // 這個旗標只能靠時間過期，不能靠程式清：撞到 6 分鐘硬上限的執行會被
+      // 直接終止，連 finally 都不保證會跑。
+      st.busyUntil = Date.now() + HTTP_CALL_CAP_MS_;
+      writeRunState_(st);
+    }
+    return st;
+  } finally {
+    releaseLock_(lock);
+  }
+}
+
+// 終局狀態壓成墓碑：reportStatus 還答得出問題，但不再占著 8KB。
+// 快照座標與 ssId 刻意保留 —— snapPending 還沒清掉時，下一次同場次的
+// reportStart 要靠它們把停在「產生中」的那幾列補標成「中斷」。
+function tombstoneOf_(st) {
+  return {
+    tombstone: true,
+    propKey: st.propKey || '',
+    webMode: st.webMode === true,
+    runId: st.runId || '',
+    hid: st.hid || '',
+    exid: st.exid || '',
+    ssId: st.ssId || '',
+    status: st.status || '',
+    identified: !!st.identified,
+    startedAt: st.startedAt || 0,
+    startedAtText: st.startedAtText || '',
+    finishedAt: st.finishedAt || Date.now(),
+    doneCount: st.doneCount || 0,
+    totalCount: st.totalCount || 0,
+    docUrl: st.docUrl || '',
+    pdfUrl: st.pdfUrl || '',
+    folderName: st.folderName || '',
+    snapStartRow: st.snapStartRow || 0,
+    snapCount: st.snapCount || 0,
+    snapStatusCol: st.snapStatusCol || 0,
+    snapPending: st.snapPending === true,
+    busyUntil: 0,
+    warnings: (st.warnings || []).slice(0, 12)
+  };
+}
+
+function closeWebRun_(target, st) {
+  try { clearActiveMarker_(activeMarkerKey_(target), st.runId); } catch (err) {}
+  try {
+    st.finishedAt = Date.now();
+    props_().setProperty(PROP_RUN_PREFIX_ + st.runId, JSON.stringify(tombstoneOf_(st)));
+  } catch (err2) {}
+}
+
+// reportStart 之前的清掃。兩個目的：
+//   (1) 配額 —— 一輪完整狀態約 8KB，整個專案的指令碼屬性約 500KB，不掃會撐爆，
+//       而撐爆時 reportStart 會死在一個看不懂的屬性寫入錯誤上。
+//   (2) 把被關掉的分頁留下的「產生中」快照列補標成「中斷」。
+// ⚠️ 改快照列的動作**只對同一場次做**：別家醫院飛行中的列絕對不能碰。
+// 別的場次只壓成墓碑、保留 snapPending，等那一場自己的下一次 reportStart 處理。
+function sweepStaleRuns_(target) {
+  var p, keys;
+  try { p = props_(); keys = p.getKeys(); } catch (err) { return; }
+  var now = Date.now();
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    if (k.indexOf(PROP_RUN_PREFIX_) !== 0) continue;
+    var st = readRunStateAt_(k);
+    if (!st || !st.runId) { try { p.deleteProperty(k); } catch (errDel) {} continue; }
+
+    var sameSession = !!target &&
+      String(st.hid || '') === String(target.hid || '') &&
+      String(st.exid || '') === String(target.exid || '');
+
+    if (st.status === 'running') {
+      if ((now - Number(st.startedAt || 0)) <= RUN_STALE_MS_) continue;
+      st.status = 'failed';
+      st.busyUntil = 0;
+      st.snapPending = true;
+      try { clearActiveMarker_(PROP_ACTIVE_PREFIX_ +
+        (String(st.hid || '') || '-') + '/' + (String(st.exid || '') || '-'), st.runId); } catch (errM) {}
+    } else {
+      var finishedAt = Number(st.finishedAt || st.startedAt || 0);
+      if (finishedAt && (now - finishedAt) > TOMBSTONE_TTL_MS_) {
+        try { p.deleteProperty(k); } catch (errDel2) {}
+        continue;
+      }
+      if (st.tombstone && !st.snapPending) continue;
+    }
+
+    if (sameSession && st.snapPending && st.snapStartRow) {
+      try {
+        updateSnapshotStatus_(targetSpreadsheet_(st.ssId), st.snapStartRow, st.snapCount,
+          st.snapStatusCol, '中斷');
+        st.snapPending = false;
+      } catch (errSnap) {}
+    }
+    try { p.setProperty(k, JSON.stringify(tombstoneOf_(st))); } catch (errPut) {}
+  }
 }
