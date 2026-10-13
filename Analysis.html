@@ -50,8 +50,39 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 .exPicker{border:1px solid rgba(255,255,255,.5);background:#fff;color:var(--ink);padding:8px 12px;border-radius:999px;font-weight:700;font-size:13px;cursor:pointer;max-width:320px}
 .exPicker:disabled{opacity:.5;cursor:wait}
 /* 沿用 .viewTab:disabled 完全相同的處理（opacity .4 + not-allowed），讓
-   「產生報告」在資料讀取完成前的停用狀態看起來跟其他停用按鈕一致。 */
+   「列印檢視」在資料讀取完成前的停用狀態看起來跟其他停用按鈕一致。 */
 .refreshBtn:disabled{opacity:.4;cursor:not-allowed}
+/* 「產生 Google 文件」。它跟隔壁三顆一樣是 .refreshBtn，但它是這一頁唯一一顆
+   會在瀏覽器之外留下東西的按鈕（在系統管理者的雲端硬碟裡生出一份文件與一份
+   PDF），所以從那排半透明白框裡拉出來：實心白底＋青綠字。這組值不是新造的，
+   是這個檔案既有的強調寫法（.viewTab.active 用的就是同一組）。
+   停用時刻意退回框線外觀，才不會出現「一顆高亮但按不下去」的按鈕。 */
+.docBtn{background:#fff;border-color:#fff;color:var(--teal)}
+.docBtn:disabled{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff}
+
+/* ===== 產生 Google 文件的進度卡 =====
+   固定在右下角，不插進版面裡：產生一份報告是數分鐘級的事，使用者會一邊看報表
+   一邊等，卡片若跟著頁面捲走就等於沒有進度可看。
+   data-screenonly 讓它直接沿用上面既有的列印規則隱藏，不必再寫一條 @media
+   print；它**沒有** data-reportonly，所以報告模式下仍看得到進行中的進度。 */
+#docProgress{position:fixed;right:18px;bottom:18px;z-index:70;width:min(420px,92vw);
+  max-height:76vh;overflow:auto;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;box-shadow:0 18px 48px rgba(20,55,65,.26);padding:16px 18px;font-size:13px}
+#docProgress .sec{font-size:15px;margin:0}
+#docProgress .bar{margin:12px 0 8px}
+#docProgress .docMeta{font-family:Consolas,monospace;font-size:11.5px;color:var(--muted)}
+#docProgress .docSteps{list-style:none;margin:8px 0 0;padding:0;max-height:150px;overflow:auto}
+#docProgress .docSteps li{padding:2px 0;font-size:12px;color:#45616a}
+#docProgress .docWarn{margin:6px 0 0;padding-left:20px;font-size:12px;color:#8a5a00}
+#docProgress .docOpts label{display:block;margin:8px 0;cursor:pointer;font-weight:700}
+#docProgress .docOpts .hint{font-weight:400;color:var(--muted);font-size:11.5px;margin:2px 0 0 22px;line-height:1.6}
+#docProgress .docOpts .hint.danger{color:var(--red)}
+#docProgress .docRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#docProgress .docRow button{padding:7px 14px;font-weight:700}
+#docProgress .docRow button.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+#docProgress .docLinks a{display:inline-block;margin-right:14px;color:var(--teal);font-weight:700}
+#docProgress .docErr{color:var(--red);white-space:pre-wrap;font-size:12.5px;margin-top:8px}
+#docProgress .docClose{border:0;background:transparent;font-size:20px;line-height:1;color:var(--muted);cursor:pointer;padding:0 2px}
 
 /* ===== 報告裡的圖一律固定尺寸 =====
    業主 2026-10-12：報告中每個圖都截 10×14.5cm。這裡照字面做成寬 10、高 14.5。
@@ -169,18 +200,32 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
              「現在在看哪一場」做成一顆沒有狀態的按鈕，本來就講不出任何資訊；
              下拉自己就是答案。
              切換場次不換網址（那會把 ?key= 留在網址列與瀏覽紀錄裡），而是就地
-             改 currentExid 再重抓一次 analysis。「產生報告」讀的是同一份 DATA，
-             所以報告必然就是下拉上選的那一場，不需要再傳一次場次參數——這是
-             設計，不是巧合：報告與畫面不可能指向不同場次。
+             改 currentExid 再重抓一次 analysis。「列印檢視」讀的是同一份 DATA、
+             「產生 Google 文件」送的是同一份 DATA 的 meta.tenant／meta.exercise，
+             所以兩種報告必然都是下拉上選的那一場——這是設計，不是巧合：報告與
+             畫面不可能指向不同場次。
              只有後端真的從註冊表解析到機構代號時才會出現；回退模式下只有一場，
              一個只有一個選項的下拉是雜訊，不是資訊。 -->
         <select class="exPicker" id="exPicker" style="display:none" title="選擇要檢視與產生報告的演習場次"></select>
         <button class="viewTab" type="button" disabled title="之後開放">演習回饋管理</button>
         <button class="refreshBtn" id="refreshBtn">重新整理</button>
-        <!-- 預設 disabled：按下「產生報告」會把網址列的 ?key= 清掉（見
-             enterReport()），若在資料還沒讀進來（或讀取失敗）時就被按下，使用者
-             會既看不到報告、又失去手上那條帶金鑰的連結。init() 成功後才解鎖。 -->
-        <button class="refreshBtn" id="reportBtn" type="button" disabled title="資料讀取完成後才能產生報告">產生報告</button>
+        <!-- ⚠️ 這顆原本叫「產生報告」，2026-10-13 改名為「列印檢視」。
+             理由是旁邊多了一顆真的會產生檔案的按鈕：兩顆並排時，「產生報告」這個
+             名字會變成整個版面最容易按錯的地方——它不產生任何檔案，只是把本頁重新
+             排版成可列印／另存 PDF 的樣子。改名後兩顆一個是「檢視」、一個是「檔案
+             類型」，掃過去就分得出來。
+             代價誠實講：業主一直是按「產生報告」進列印檢視的，這個改名會讓他意外
+             一次。緩解寫在列印檢視裡的第一張卡（#reportHint）：那裡有一行說明兩條
+             路線分別是什麼、什麼時候該用哪一條。
+             預設 disabled：按下去會把網址列的 ?key= 清掉（見 enterReport()），若在
+             資料還沒讀進來（或讀取失敗）時就被按下，使用者會既看不到報告、又失去
+             手上那條帶金鑰的連結。init() 成功後才解鎖。 -->
+        <button class="refreshBtn" id="reportBtn" type="button" disabled title="資料讀取完成後才能使用列印檢視">列印檢視</button>
+        <!-- 這一頁唯一一顆會在瀏覽器之外留下東西的按鈕（在系統管理者的雲端硬碟
+             裡建立一份 Google 文件與一份 PDF）。不能按的時候一律是停用狀態、而且
+             title 直接寫出是哪一個條件不成立——不是按下去才失敗。條件見
+             docBtnBlockReason()。初值是「尚未啟用」，因為 REPORT_URL 預設是空字串。 -->
+        <button class="refreshBtn docBtn" id="docBtn" type="button" disabled title="此部署尚未啟用報告產生器">產生 Google 文件</button>
         <button class="refreshBtn" id="backBtn" type="button" style="display:none">返回儀表板</button>
       </div>
       <div class="genAt" id="genAt"></div>
@@ -254,6 +299,20 @@ let currentExid = EX_PARAM;
 // 快取，而且場次在一場演習進行中不會變動）。
 let exListLoaded = false;
 const WANT_REPORT = Q.get('view') === 'report';
+
+// 報告產生器（方案B）的 /exec。⚠️ 這**不是** RECORD_URL，是另一個獨立部署的
+// Apps Script 專案（「演習評核報告 Web」，跑的是 Report.gs 加上 doGet 入口）。
+//
+// 為什麼不在 ConfigWithSubmit.gs 上多加一個 action：那支檔案目前剛好有兩條
+// 完全不需要金鑰的分支（設定分支與 action=sessions），而報告端點是會在雲端硬碟
+// 裡建立檔案的。把「會寫檔案」的分支混進同一支，等於讓「哪幾條分支免金鑰」變成
+// 要讀完整個檔案才看得出來的事。分開部署，那支新部署就可以是「零條免金鑰分支」。
+//
+// ⚠️ 空字串 = 這個部署還沒有報告產生器，「產生 Google 文件」會維持停用並說明原因。
+//    部署好之後只要把 /exec 網址貼進這一行，其他程式都不用動。
+//    合併到 master 時同樣以 '' 合併（按鈕永久停用），跟 REGISTRY_SPREADSHEET_ID
+//    以 '' 合併是同一個道理：寧可按鈕是死的，也不要按下去才發現後端不存在。
+const REPORT_URL = '';
 
 let DATA = null;
 const fmt=x=>x==null?'—':Number(x).toFixed(2); const cls=x=>x==null?'':x<3.3?'low':x<4?'mid':'high';
@@ -525,7 +584,10 @@ function init(){
   // 按下去只會清掉網址列的金鑰、畫面卻什麼都沒有。
   const reportBtn = document.getElementById('reportBtn');
   reportBtn.disabled = false;
-  reportBtn.title = '';
+  reportBtn.title = '在本頁排版成可列印／另存 PDF 的版面，不會產生任何檔案';
+  // 「產生 Google 文件」的解鎖條件比列印檢視多（還要有後端網址、有金鑰、而且
+  // 這一場真的是由註冊表路由的），所以交給 docBtnBlockReason() 逐條判斷。
+  updateDocBtn();
   if (WANT_REPORT) enterReport();
 }
 // 指標欄位是「反應1 (職責與自我組織)」這種「代號 + 括號說明」格式，表格裡只
@@ -702,8 +764,9 @@ function renderReportHint(){
     `<ul class="hintList">`+
       `<li>列印對話框請展開「更多設定」並勾選 <b>「背景圖形」（Background graphics）</b>；沒勾的話等角立體柱狀圖與場景色譜會整片印成白色方塊。</li>`+
       `<li>版面請選 <b>A4、縱向、邊界「預設」、縮放 100%</b>。</li>`+
-      `<li><b>頁碼的取捨：</b>Chrome 不支援 CSS 分頁邊界，本頁無法自己印出頁碼；唯一的頁碼來源是列印對話框的「頁首及頁尾」，但那個頁尾<b>同時會印出本頁網址</b>，等於把存取金鑰印在紙上。因此按下「產生報告」時已把網址列的查詢參數（含金鑰）清掉，頁尾只會印出不含金鑰的網址。<b>代價：此後用瀏覽器重新載入（F5／重新整理圖示）會失去金鑰，必須重新取得帶金鑰的連結</b>；頁面上的「重新整理」按鈕不受影響，它用的是已經讀進記憶體的金鑰。</li>`+
-      `<li>本頁產出的是<b>院內檢視用列印版</b>：沒有頁碼、沒有目錄、沒有文件編號自動編排，<b>不是可歸檔的醫院品質記錄</b>。正式交付版需另走「設定試算表選單 → 範本 Google 文件 → PDF」的路線。</li>`+
+      `<li><b>頁碼的取捨：</b>Chrome 不支援 CSS 分頁邊界，本頁無法自己印出頁碼；唯一的頁碼來源是列印對話框的「頁首及頁尾」，但那個頁尾<b>同時會印出本頁網址</b>，等於把存取金鑰印在紙上。因此按下「列印檢視」時已把網址列的查詢參數（含金鑰）清掉，頁尾只會印出不含金鑰的網址。<b>代價：此後用瀏覽器重新載入（F5／重新整理圖示）會失去金鑰，必須重新取得帶金鑰的連結</b>；頁面上的「重新整理」按鈕不受影響，它用的是已經讀進記憶體的金鑰。</li>`+
+      `<li>本頁產出的是<b>院內檢視用列印版</b>：沒有頁碼、沒有目錄、沒有文件編號自動編排，<b>不是可歸檔的醫院品質記錄</b>。</li>`+
+      `<li><b>兩條路線的分工（標頭上那兩顆按鈕）：</b>「<b>列印檢視</b>」就是你現在看到的這一頁，供院內檢視、討論、隨手印一份，<b>不會產生任何檔案</b>；要<b>可歸檔的正式交付版</b>（有頁碼、目錄、文件編號、簽核欄）請按「<b>產生 Google 文件</b>」，由後端依範本產生 Google 文件與 PDF，存到系統管理者的雲端硬碟。那顆按鈕停用時，滑鼠移上去會直接說明是哪個條件不成立；也可以改走「設定試算表選單 → 演習評核報告」那條舊路線，兩條產出的是同一份報告。</li>`+
       `<li>逐評核官具名分數表與 CSV 匯出<b>不會</b>出現在報告裡，任何模式、任何勾選都不會。</li>`+
     `</ul>`+
     `<div class="repOpts">`+
@@ -914,6 +977,10 @@ function enterReport(){
   if(!DATA) return;
   document.body.classList.add('reportMode');
   document.getElementById('reportBtn').style.display='none';
+  // 「產生 Google 文件」也要一起藏：報告模式是要被列印／另存 PDF 的版面，裡面
+  // 留一顆會產生檔案的按鈕，紙上印出來是一塊沒有意義的色塊，螢幕上則是一個
+  // 「在報告裡再產生一份報告」的入口。
+  document.getElementById('docBtn').style.display='none';
   document.getElementById('backBtn').style.display='';
   // 把網址列的查詢字串（key / t / ex）清掉，這樣 Chrome 列印頁尾印出來的網址
   // 就不含金鑰。DATA 已經在記憶體裡，不會重新發出任何請求；代價是此時按
@@ -924,8 +991,378 @@ function enterReport(){
 function exitReport(){
   document.body.classList.remove('reportMode');
   document.getElementById('reportBtn').style.display='';
+  document.getElementById('docBtn').style.display='';
   document.getElementById('backBtn').style.display='none';
   window.scrollTo(0,0);
+}
+
+/* ============================================================================
+   產生 Google 文件（方案B）—— 請後端的報告產生器寫出正式文件與 PDF
+
+   跟上面那段列印檢視的關係，一句話：列印檢視是「這一頁重新排版」，這一段是
+   「請後端生一份檔案」。瀏覽器裡沒有 DocumentApp，所以有頁碼、有目錄、有文件
+   編號的正式版不可能在這個檔案裡產生，只能由一支獨立部署的 Apps Script 去做。
+
+   為什麼要分很多次 HTTP 往返，而不是一次請求等它跑完：Apps Script 單次執行的
+   硬上限是 6 分鐘，而一份報告大約 20–60 次 API 呼叫。每一次 reportContinue 都是
+   一次**獨立執行**、各有自己的六分鐘額度，所以章節由這個分頁逐批驅動。這跟
+   ReportDialog.html（試算表選單那條路）是同一個模型，差別只在傳輸層：那邊是
+   google.script.run，這邊是 fetch。也因此這個分頁就是驅動者——關掉它，報告會停
+   在半成品（文件留著草稿橫幅、檔名帶「（產生中）」），進度卡從第一秒就這樣寫。
+
+   產生對象是「下拉目前顯示的那一場」，但送出去的不是下拉的值，而是
+   DATA.meta.tenant／DATA.meta.exercise——也就是**後端上一次真的解析到的那一場**。
+   兩者在 init() 之後必然相同，而後者多擋掉一種情況：使用者用 ?t= 不帶 ?ex= 進
+   來時，下拉在清單回來之前是空的，meta 卻已經是預設演習。報告與畫面不可能指向
+   不同場次，這是設計不是巧合。
+   ============================================================================ */
+
+// 這一輪產生的狀態。runToken 只有 reportStart 會回一次，之後每次 reportContinue
+// 都要帶著它：runId 本身不是秘密（它印在文件封面、檔名與「報告快照」裡），所以
+// 擋住「另一個瀏覽器插進別人正在跑的那一輪」的其實是這個 token。
+// t／ex 在開始的瞬間就凍結：產生途中使用者仍可以切換場次看別的資料，但這一輪
+// 必須繼續寫它自己那一場，不能跟著畫面走。
+const docRun = {
+  running:false, runId:'', runToken:'', t:'', ex:'', sessionLabel:'',
+  startedAt:0, timer:null, retried:false, docUrl:'', pdfUrl:'', folderName:''
+};
+
+// 停用原因。回空字串＝可以按。順序就是「最該先講的那一條」：正在跑 > 沒部署 >
+// 沒金鑰 > 沒資料 > 不是註冊表路由。
+// 刻意每一條都給**具體**的句子而不是一句通用的「目前無法產生」：這個 repo 這幾天
+// 已經被三個指錯方向的提示坑過，提示寧可沒有也不要指錯地方。
+function docBtnBlockReason(){
+  if (docRun.running) return '報告產生中…';
+  if (!REPORT_URL) return '此部署尚未啟用報告產生器';
+  if (!KEY) return '沒有分析金鑰，無法產生報告';
+  if (!DATA || DATA.error) return '資料讀取完成後才能產生';
+  const m = DATA.meta || {};
+  // 回退模式（後端沒有註冊表、或這條連結沒帶 ?t=）下沒有註冊表那一列，也就沒有
+  // 「設定試算表ID」可以解析，報告端點做不出這一場的報告。所以按鈕在按下去之前
+  // 就是死的，並直接指向那條還能用的路線。
+  if (!m.tenant || !m.exercise) return '這場演習不是由租戶註冊表路由，請改用設定試算表的「演習評核報告」選單';
+  return '';
+}
+function updateDocBtn(){
+  const b = document.getElementById('docBtn');
+  if (!b) return;
+  const why = docBtnBlockReason();
+  b.disabled = !!why;
+  b.title = why || '由後端產生正式報告文件與 PDF，存到系統管理者的雲端硬碟';
+}
+
+// 全部用 GET + 查詢字串、不加任何自訂標頭，所以是 CORS 的 simple request，跟這
+// 一頁既有的 action=analysis 呼叫同一種形狀（Apps Script 回不了 preflight）。
+function docEndpoint(action, extra){
+  let u = REPORT_URL + '?action=' + encodeURIComponent(action)
+        + '&t=' + encodeURIComponent(docRun.t)
+        + '&ex=' + encodeURIComponent(docRun.ex)
+        + '&key=' + encodeURIComponent(KEY);
+  const e = extra || {};
+  for (const k of Object.keys(e)) u += '&' + k + '=' + encodeURIComponent(e[k]);
+  return u;
+}
+function docFetch(action, extra){
+  return fetch(docEndpoint(action, extra)).then(r=>r.json());
+}
+
+function docCard(){ return document.getElementById('docProgress'); }
+function docShow(on){ docCard().style.display = on ? '' : 'none'; }
+
+function docElapsedText(){
+  const s = Math.max(0, Math.round((Date.now()-docRun.startedAt)/1000));
+  const mm = Math.floor(s/60), ss = s%60;
+  return (mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+}
+function docTick(){ const el=document.getElementById('docElapsed'); if(el) el.textContent=docElapsedText(); }
+function docStartTimer(){ docRun.startedAt=Date.now(); docStopTimer(); docRun.timer=setInterval(docTick,1000); }
+function docStopTimer(){ if(docRun.timer){ clearInterval(docRun.timer); docRun.timer=null; } }
+
+// ---- 選項面板（第一次按下按鈕時出現）----
+// 三個選項與那段識別模式的二次確認，與 ReportDialog.html 逐字相同：同一支
+// Report.gs 服務兩條路線，兩邊對業主講的話若不一樣，他會以為是兩個功能。
+function openDocOptions(){
+  if (docRun.running){ docShow(true); return; }
+  const m = (DATA && DATA.meta) || {};
+  docRun.t = m.tenant || '';
+  docRun.ex = m.exercise || '';
+  docRun.sessionLabel = displayName();
+  docCard().innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">`+
+      `<div class="sec">產生 Google 文件</div>`+
+      `<button type="button" class="docClose" id="docCancel" aria-label="關閉">×</button>`+
+    `</div>`+
+    `<div class="small">對象：${esc(docRun.sessionLabel)}（演習代號 ${esc(docRun.ex||'—')}）<br>報告的統計數字全部取自後端的分析結果，與這一頁上的數字完全一致。</div>`+
+    `<div class="docOpts" style="margin-top:10px">`+
+      `<label><input type="checkbox" id="docComments" checked>附上觀察紀錄彙整（第十二章）</label>`+
+      `<div class="hint danger">⚠ 觀察紀錄是評核官自由填寫的文字。評核官代號會被匿名化，但匿名化<b>無法遮蔽文字內容本身出現的姓名或職稱</b>。質性內容是這份報告最有價值的部分，但請在知情的情況下選擇附上，並於分發前人工檢視該章。</div>`+
+      `<label><input type="checkbox" id="docAppendixB">附上附錄B 原始評分資料（逐題 × 逐評核官）</label>`+
+      `<div class="hint">即使匿名，這仍是一張完整的個別評分矩陣，所以預設不附。勾選後仍會套用匿名映射，除非下面的識別模式也同時開啟。</div>`+
+      `<label><input type="checkbox" id="docIdentified"><span style="color:var(--red)">附上可識別的評核官代號（識別模式）</span></label>`+
+      `<div class="hint">預設為匿名：所有評核官一律顯示為「評核官 1…N」，編號規則與這一頁的報告摘要相同。勾選這一項會印出實際的人員代號，並在封面與附錄C 留下可見標記。</div>`+
+    `</div>`+
+    `<div class="note" style="margin-top:12px;font-size:12px">產生期間請不要關閉這個分頁——<b>分頁是驅動者</b>，關掉會讓報告停在半成品。檔案會建立在<b>系統管理者的雲端硬碟</b>裡，不是你的。</div>`+
+    `<div class="docRow">`+
+      `<button type="button" id="docCheckBtn">先檢查設定</button>`+
+      `<button type="button" id="docStartBtn" class="primary">開始產生</button>`+
+    `</div>`+
+    `<div id="docCheckOut"></div>`;
+  document.getElementById('docCancel').onclick=()=>docShow(false);
+  document.getElementById('docCheckBtn').onclick=runDocCheck;
+  document.getElementById('docStartBtn').onclick=docStart;
+  docShow(true);
+}
+
+// ---- 先檢查設定（action=reportCheck）----
+// 跟選單那條路的「檢查設定（不產生報告）」是同一個後端函式。副作用照實寫出來，
+// 不寫「完全不會動到任何東西」——那句話在這裡是假的。
+function runDocCheck(){
+  const out = document.getElementById('docCheckOut');
+  const btn = document.getElementById('docCheckBtn');
+  btn.disabled = true;
+  out.innerHTML = `<div class="small" style="margin-top:10px">檢查中，請稍候…（會向後端取一次資料，約需數秒）</div>`;
+  docFetch('reportCheck').then(res=>{
+    btn.disabled = false;
+    if (!res || res.error){ out.innerHTML = `<div class="docErr">${esc((res&&res.error)||'沒有取得檢查結果。')}</div>`; return; }
+    const checks = res.checks || [];
+    out.innerHTML =
+      `<div class="small" style="margin-top:12px;font-weight:700">${res.ok?'檢查結果：全部通過':'檢查結果：有項目未通過'}</div>`+
+      checks.map(c=>`<div class="small" style="padding:5px 0;border-bottom:1px dashed var(--line)"><b>${c.ok?'✅':'❌'}　${esc(c.label)}</b><div style="white-space:pre-wrap">${esc(c.detail)}</div></div>`).join('')+
+      `<div class="small" style="margin-top:8px">本檢查不會產生報告文件、不會寫入任何評分或快照資料；「報告快照」工作表若尚未建立，本檢查刻意不建立它。但為了實測權限與能力，它會：在輸出資料夾建立一個 0 位元組測試檔並立刻丟進垃圾桶、在設定試算表的隱藏工作表「_報告暫存」寫入一組假資料畫一張測試圖並隨即清空。${res.ok?'':'請依上面的中文說明修正後再按一次「先檢查設定」。'}</div>`;
+  }).catch(err=>{
+    btn.disabled = false;
+    out.innerHTML = `<div class="docErr">無法連線到報告產生器：${esc(String((err&&err.message)||err))}</div>`;
+  });
+}
+
+// ---- 進度面板 ----
+function docProgressSkeleton(){
+  docCard().innerHTML =
+    `<div class="sec" id="docTitle">產生中…</div>`+
+    `<div class="small" id="docWho">對象：${esc(docRun.sessionLabel)}（演習代號 ${esc(docRun.ex||'—')}）</div>`+
+    `<div class="bar"><div class="fill" id="docBar" style="width:0"></div></div>`+
+    `<div class="docMeta" id="docMeta">正在建立報告文件…　｜　已耗時 <span id="docElapsed">00:00</span></div>`+
+    `<ul class="docSteps" id="docSteps"></ul>`+
+    `<div id="docWarnBox" style="display:none"><div class="small" style="margin-top:10px;font-weight:700">警告與降級紀錄</div><ul class="docWarn" id="docWarnList"></ul><div class="small">同樣的內容也會印在報告的附錄C。</div></div>`+
+    `<div class="note" id="docKeepOpen" style="margin-top:10px;font-size:12px">產生期間請不要關閉這個分頁——<b>分頁是驅動者</b>，關掉會讓報告停在半成品。</div>`+
+    `<div class="docLinks" id="docLinks" style="margin-top:10px"></div>`+
+    `<div class="docErr" id="docError" style="display:none"></div>`+
+    `<div class="docRow" id="docActions"></div>`;
+}
+function docAppendStep(text){
+  const ul = document.getElementById('docSteps');
+  if (!ul) return;
+  const li = document.createElement('li');
+  li.textContent = '• ' + text;
+  ul.appendChild(li);
+  ul.scrollTop = ul.scrollHeight;
+}
+function docRenderWarnings(list){
+  if (!list || !list.length) return;
+  const box = document.getElementById('docWarnBox'), ul = document.getElementById('docWarnList');
+  if (!box || !ul) return;
+  box.style.display='';
+  ul.innerHTML='';
+  list.forEach(w=>{ const li=document.createElement('li'); li.textContent=w; ul.appendChild(li); });
+}
+function docSetProgress(res){
+  const total = res.totalSteps || 1, done = res.step || 0;
+  const bar = document.getElementById('docBar');
+  if (bar) bar.style.width = Math.min(100, Math.round(done/total*100)) + '%';
+  const meta = document.getElementById('docMeta');
+  if (meta) meta.innerHTML = '報告編號 '+esc(res.runId||docRun.runId)+'　｜　章節 '+done+' / '+total+
+    '　｜　已耗時 <span id="docElapsed">'+docElapsedText()+'</span>';
+  if (res.label) docAppendStep(res.label);
+  if (res.docUrl) docRun.docUrl = res.docUrl;
+  if (res.pdfUrl) docRun.pdfUrl = res.pdfUrl;
+  if (res.folderName) docRun.folderName = res.folderName;
+  docRenderWarnings(res.warnings);
+}
+
+// ---- 執行迴圈 ----
+function docStart(){
+  const m = (DATA && DATA.meta) || {};
+  const idEl = document.getElementById('docIdentified');
+  let identified = !!(idEl && idEl.checked);
+  let identifiedConfirmed = false;
+  if (identified){
+    // 二次確認的內容必須明確寫出後果。commit 54b33dd 刻意把具名逐評核官分數表
+    // 從這個儀表板上拿掉，這裡不得成為繞過它的後門。
+    // （伺服器端 Report.gs 另有一道 identified 必須搭配 identifiedConfirmed 的檢查，
+    //  這個勾選框只是方便，權威在後端。）
+    identifiedConfirmed = window.confirm(
+      '本報告將印出評核官的人員代號。\n\n' +
+      '在十餘人的品管部門中，人員代號等同可還原到個人的假名。' +
+      '這個呈現方式曾在 commit 54b33dd 中被刻意從分析儀表板上移除。\n\n' +
+      '請確認已取得必要的同意，並會依院內個資規範控管本文件的流通。\n\n' +
+      '按「確定」以識別模式產生；按「取消」改回匿名模式。');
+    if (!identifiedConfirmed){ idEl.checked = false; identified = false; }
+  }
+  const opts = {
+    includeComments: (document.getElementById('docComments')||{}).checked ? 1 : 0,
+    includeAppendixB: (document.getElementById('docAppendixB')||{}).checked ? 1 : 0,
+    identified: identified ? 1 : 0,
+    identifiedConfirmed: identifiedConfirmed ? 1 : 0
+  };
+  docRun.running = true;
+  docRun.runId=''; docRun.runToken=''; docRun.retried=false;
+  docRun.docUrl=''; docRun.pdfUrl=''; docRun.folderName='';
+  docRun.t = m.tenant || docRun.t;
+  docRun.ex = m.exercise || docRun.ex;
+  docRun.sessionLabel = displayName();
+  updateDocBtn();
+  docProgressSkeleton();
+  docShow(true);
+  docStartTimer();
+  docFetch('reportStart', opts).then(docOnStep).catch(err=>docFail('無法連線到報告產生器：'+String((err&&err.message)||err)));
+}
+
+function docOnStep(res){
+  if (!res){ docFail('伺服器沒有回傳結果。'); return; }
+  if (res.error){ docServerError(res); return; }
+  if (res.runId) docRun.runId = res.runId;
+  if (res.runToken) docRun.runToken = res.runToken;   // 只有 reportStart 會回這個
+  docRun.retried = false;   // 這一步成功了，下一步重新擁有一次重試額度
+  docSetProgress(res);
+  if (res.done || res.ok === false){ docFinish(res); return; }
+  docFetch('reportContinue', {runId:docRun.runId, runToken:docRun.runToken})
+    .then(docOnStep).catch(docRetryContinue);
+}
+
+// 網路錯誤只自動重試一次，而且用同一組 runId + runToken。
+// 這件事之所以安全，是 Report.gs 的章節寫入本身是冪等的：每章開頭會留一個 BEGIN
+// 標記，重送時若找到標記就先刪掉上一次寫到一半的內容再重寫，找不到錨點就跳過。
+// 沒有這個性質的話，一次閃斷就會讓某一章在文件裡出現兩份。
+function docRetryContinue(err){
+  if (docRun.retried){ docFail('連線中斷：'+String((err&&err.message)||err)); return; }
+  docRun.retried = true;
+  docAppendStep('連線中斷，正在重試一次…');
+  docFetch('reportContinue', {runId:docRun.runId, runToken:docRun.runToken})
+    .then(docOnStep).catch(e=>docFail('連線中斷：'+String((e&&e.message)||e)));
+}
+
+// 後端用 HTTP 200 + {error, errorCode} 回報錯誤（Apps Script 設不了狀態碼），
+// 所以錯誤要在這裡判，不是在 fetch 的 catch。error 那句中文是後端寫好要原樣印的。
+function docServerError(res){
+  const code = res.errorCode || '';
+  let extra = '';
+  if (code === 'UNAUTHORIZED' || res.error === 'unauthorized'){
+    // 這一條的原因是可以從機制上證明的，所以可以明講：報告端點比對的是註冊表
+    // **那一列**的分析金鑰，跟 action=analysis 同一條規則。看得到資料卻產不了
+    // 報告，只會是這一頁帶的金鑰不等於那一列的金鑰。
+    extra = '這一頁使用的分析金鑰與「'+esc(docRun.ex)+'」那一列的不同。報告端點比對的規則與讀取資料完全相同，所以請確認網址上的 ?key= 或租戶註冊表裡那一格。';
+  } else if (code === 'REPORT_BUSY'){
+    extra = '同一場演習同時只允許一輪產生。若那一輪是別的分頁或別台電腦開的，等它跑完即可；若它已經中斷（例如分頁被關掉），約 15 分鐘後會自動失效，之後就能重新產生。';
+    // 後端會把那一輪的編號一起回來。記下來，下面才給得出「查看那一輪的狀態」。
+    // 刻意**不**給「捨棄」：捨棄要 runToken，而那把 token 只發給開始它的那個分頁，
+    // 所以這裡按了必然失敗——按了才知道按不得的按鈕比沒有那顆更糟。
+    if (res.runId) docRun.runId = res.runId;
+  }
+  docFinish({ ok:false, status:'failed', error:res.error, _extra:extra, runId:res.runId, docUrl:res.docUrl });
+}
+
+function docFinish(res){
+  docRun.running = false;
+  docStopTimer();
+  updateDocBtn();
+  const partial = res.status === 'partial';
+  const failed = res.ok === false || res.status === 'failed';
+  const t = document.getElementById('docTitle');
+  if (t) t.textContent = failed ? '已中止' : (partial ? '已收尾（部分完成）' : '已完成');
+  const keep = document.getElementById('docKeepOpen');
+  if (keep) keep.style.display='none';
+  if (res.docUrl) docRun.docUrl = res.docUrl;
+  if (res.pdfUrl) docRun.pdfUrl = res.pdfUrl;
+  if (res.folderName) docRun.folderName = res.folderName;
+
+  let links = '';
+  if (docRun.docUrl) links += `<a href="${esc(docRun.docUrl)}" target="_blank" rel="noopener">開啟 Google 文件</a>`;
+  if (docRun.pdfUrl) links += `<a href="${esc(docRun.pdfUrl)}" target="_blank" rel="noopener">開啟 PDF</a>`;
+  if (docRun.docUrl || docRun.pdfUrl){
+    // 這句不是客套話，是這條路線跟試算表選單那條真正的差別：按按鈕的人不一定是
+    // 檔案的擁有者，連結對他可能是 404。程式刻意不呼叫任何共用設定去「順手修好」
+    // ——報告裡可能有觀察紀錄原文，識別模式下還有人員代號，自動開放共用會是比
+    // 404 嚴重得多的缺陷。要讓別人看得到，必須是有人刻意去做的動作。
+    links += `<div class="small" style="margin-top:8px">報告已建立在<b>系統管理者的雲端硬碟</b>`+
+      (docRun.folderName?`（資料夾：${esc(docRun.folderName)}）`:'')+
+      `。若開啟後顯示沒有權限，請向系統管理者索取存取權。</div>`;
+  }
+  if (partial){
+    links += `<div class="small" style="margin-top:8px">未產生的章節已在文件中就地標示，檔名帶有「（部分完成）」，「報告快照」工作表的狀態欄為「部分完成」。所有數字都已經安全落在快照工作表裡。</div>`;
+  }
+  const linkBox = document.getElementById('docLinks');
+  if (linkBox) linkBox.innerHTML = links;
+
+  const errBox = document.getElementById('docError');
+  if (errBox){
+    const msg = [res.error||'', res._extra||''].filter(Boolean).join('\n');
+    errBox.style.display = msg ? '' : 'none';
+    errBox.innerHTML = msg ? esc(res.error||'')+(res._extra?`<div class="small" style="margin-top:6px">${res._extra}</div>`:'') : '';
+  }
+
+  const act = document.getElementById('docActions');
+  if (act){
+    let html = `<button type="button" id="docCloseBtn">關閉</button>`;
+    // 「捨棄這一輪」只有在手上真的有 runToken 時才提供：後端用 token 認人，沒有
+    // token 按下去必然失敗。按了才知道按不得的按鈕，比沒有那顆按鈕更糟。
+    if (failed && docRun.runId && docRun.runToken) html += `<button type="button" id="docAbandonBtn">捨棄這一輪</button>`;
+    if (failed && docRun.runId && !docRun.runToken) html += `<button type="button" id="docStatusBtn">查看那一輪的狀態</button>`;
+    act.innerHTML = html;
+    document.getElementById('docCloseBtn').onclick=()=>docShow(false);
+    const ab = document.getElementById('docAbandonBtn');
+    if (ab) ab.onclick = docAbandon;
+    const st = document.getElementById('docStatusBtn');
+    if (st) st.onclick = docStatus;
+  }
+}
+
+function docFail(message){
+  docFinish({ ok:false, status:'failed', error:message });
+}
+
+// 捨棄這一輪：把後端那一輪標成失敗、「報告快照」那幾列標成中斷、放掉這一場的
+// 進行中標記，這樣不必等 15 分鐘的逾時就能重新產生。已經建立的文件不會被刪——
+// 每一輪都是複製一份全新的文件，所以最壞情況永遠是「多一份沒寫完的草稿」，
+// 不會是「一份好的被蓋掉一半」。
+function docAbandon(){
+  const btn = document.getElementById('docAbandonBtn');
+  if (btn) btn.disabled = true;
+  docFetch('reportAbandon', {runId:docRun.runId, runToken:docRun.runToken})
+    .then(res=>{
+      const errBox = document.getElementById('docError');
+      if (res && res.error){ if(errBox){ errBox.style.display=''; errBox.textContent=res.error; } if(btn) btn.disabled=false; return; }
+      docAppendStep('已捨棄這一輪（編號 '+docRun.runId+'）。已建立的草稿文件仍留在雲端硬碟裡。');
+      docRun.runId=''; docRun.runToken='';
+      if (btn) btn.remove();
+      updateDocBtn();
+    })
+    .catch(err=>{
+      const errBox = document.getElementById('docError');
+      if (errBox){ errBox.style.display=''; errBox.textContent='無法連線到報告產生器：'+String((err&&err.message)||err); }
+      if (btn) btn.disabled=false;
+    });
+}
+
+// 查看狀態：唯讀，給「另一個分頁／另一台電腦正在跑」或「這個分頁重新載入過、
+// token 掉了」的情況用。刻意不能拿來接手——接手需要 runToken，而重新載入就等於
+// 失去它，這跟選單那條路「關掉對話框就接不回去」是同一個限制。
+function docStatus(){
+  const btn = document.getElementById('docStatusBtn');
+  if (btn) btn.disabled = true;
+  docFetch('reportStatus', {runId:docRun.runId})
+    .then(res=>{
+      if (btn) btn.disabled = false;
+      if (!res || res.error){ docAppendStep('查不到那一輪的狀態：'+((res&&res.error)||'沒有回應')); return; }
+      docAppendStep('編號 '+(res.runId||'—')+'：狀態 '+(res.status||'—')+
+        '，停在第 '+(res.step||0)+' / '+(res.totalSteps||'—')+' 章'+
+        (res.startedAtText?('，開始於 '+res.startedAtText):'')+
+        (res.stale?'（已逾時失效，可以重新產生）':''));
+      if (res.docUrl){
+        const linkBox = document.getElementById('docLinks');
+        if (linkBox) linkBox.innerHTML = `<a href="${esc(res.docUrl)}" target="_blank" rel="noopener">開啟那一輪的 Google 文件</a>`;
+      }
+    })
+    .catch(err=>{ if (btn) btn.disabled=false; docAppendStep('查不到那一輪的狀態：'+String((err&&err.message)||err)); });
 }
 
 // 場次清單：打後端的 action=exercises，列出同一家機構的所有場次（含已結束
@@ -978,6 +1415,7 @@ document.getElementById('exPicker').onchange=function(){
 // 場次切換走上面那個下拉，「演習回饋管理」按鈕仍停用。
 document.getElementById('refreshBtn').onclick=load;
 document.getElementById('reportBtn').onclick=enterReport;
+document.getElementById('docBtn').onclick=openDocOptions;
 document.getElementById('backBtn').onclick=exitReport;
 
 function load(){
@@ -985,7 +1423,12 @@ function load(){
   // 重新整理期間先把報告按鈕鎖回去：讀取失敗時 DATA 可能是舊的或根本沒有，
   // 這時候產生報告只會印出與畫面不一致的內容。init() 成功後會再解鎖。
   document.getElementById('reportBtn').disabled=true;
-  document.getElementById('reportBtn').title='資料讀取完成後才能產生報告';
+  document.getElementById('reportBtn').title='資料讀取完成後才能使用列印檢視';
+  // 「產生 Google 文件」同理：讀取期間（以及讀取失敗時）DATA 可能是舊的那一場，
+  // 這時候產生出來的報告會跟畫面上正在顯示的場次不一致。init() 成功後才解鎖。
+  // 已經在跑的那一輪不受影響——它早就把自己的 t／ex 凍結起來了。
+  document.getElementById('docBtn').disabled=true;
+  document.getElementById('docBtn').title=docRun.running?'報告產生中…':'資料讀取完成後才能產生';
   // 讀取期間鎖住場次下拉。快速連切兩場會送出兩個請求，而先送的那個完全可能
   // 後到，畫面就會停在「不是下拉上顯示的那一場」——而且看不出來。鎖住比事後
   // 比對請求序號便宜，也比較誠實：使用者看得到自己在等什麼。
@@ -1016,6 +1459,12 @@ function load(){
 }
 load();
 </script>
+<!-- 產生 Google 文件的選項／進度卡。內容全部由 JS 填（openDocOptions /
+     docProgressSkeleton），這裡只保留容器。
+     放在 .wrap 之外，所以報告模式那幾條「.panel{display:block}」規則碰不到它；
+     列印時由 data-screenonly 隱藏（沿用既有規則，沒有另寫 @media print）。
+     刻意**不加** data-reportonly：產生中切到列印檢視時，進度還是要看得到。 -->
+<div id="docProgress" data-screenonly="1" style="display:none" role="dialog" aria-label="產生 Google 文件"></div>
 <!-- 場景說明浮層。固定在畫面正中（見 .scenePop），所以表格捲到哪裡都看得到。
      列印時整個隱藏。 -->
 <div id="sceneMask" class="sceneMask" style="display:none"></div>
