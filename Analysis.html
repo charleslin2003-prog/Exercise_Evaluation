@@ -1174,6 +1174,13 @@ function openDocOptions(){
       `<button type="button" class="docClose" id="docCancel" aria-label="關閉">×</button>`+
     `</div>`+
     `<div class="small">對象：${esc(docRun.sessionLabel)}（演習代號 ${esc(docRun.ex||'—')}）<br>報告的統計數字全部取自後端的分析結果，與這一頁上的數字完全一致。</div>`+
+    // 按鈕在選項**上方**（2026-10-13 調整）。檢查結果跟著按鈕走：它可能有二十幾
+    // 列，若留在卡片最底下，按了上面的按鈕卻要捲到底才看得到回應。
+    `<div class="docRow">`+
+      `<button type="button" id="docCheckBtn">先檢查設定</button>`+
+      `<button type="button" id="docStartBtn" class="primary">開始產生</button>`+
+    `</div>`+
+    `<div id="docCheckOut"></div>`+
     `<div class="docOpts" style="margin-top:10px">`+
       `<label><input type="checkbox" id="docComments" checked>附上觀察紀錄彙整（第十二章）</label>`+
       `<div class="hint danger">⚠ 觀察紀錄是評核官自由填寫的文字。評核官代號會被匿名化，但匿名化<b>無法遮蔽文字內容本身出現的姓名或職稱</b>。質性內容是這份報告最有價值的部分，但請在知情的情況下選擇附上，並於分發前人工檢視該章。</div>`+
@@ -1182,12 +1189,7 @@ function openDocOptions(){
       `<label><input type="checkbox" id="docIdentified"><span style="color:var(--red)">附上可識別的評核官代號（識別模式）</span></label>`+
       `<div class="hint">預設為匿名：所有評核官一律顯示為「評核官 1…N」，編號規則與這一頁的報告摘要相同。勾選這一項會印出實際的人員代號，並在封面與附錄C 留下可見標記。</div>`+
     `</div>`+
-    `<div class="note" style="margin-top:12px;font-size:12px">產生期間請不要關閉這個分頁——<b>分頁是驅動者</b>，關掉會讓報告停在半成品。檔案會建立在<b>系統管理者的雲端硬碟</b>裡，不是你的。</div>`+
-    `<div class="docRow">`+
-      `<button type="button" id="docCheckBtn">先檢查設定</button>`+
-      `<button type="button" id="docStartBtn" class="primary">開始產生</button>`+
-    `</div>`+
-    `<div id="docCheckOut"></div>`;
+    `<div class="note" style="margin-top:12px;font-size:12px">產生期間請不要關閉這個分頁——<b>分頁是驅動者</b>，關掉會讓報告停在半成品。檔案會建立在<b>系統管理者的雲端硬碟</b>裡，不是你的。</div>`;
   document.getElementById('docCancel').onclick=()=>docShow(false);
   document.getElementById('docCheckBtn').onclick=runDocCheck;
   document.getElementById('docStartBtn').onclick=docStart;
@@ -1219,13 +1221,15 @@ function runDocCheck(){
 // ---- 進度面板 ----
 function docProgressSkeleton(){
   docCard().innerHTML =
-    `<div class="sec" id="docTitle">產生中…</div>`+
+    // 標題本身就是「不要關分頁」的提醒（2026-10-13），取代原本底下那張警語卡：
+    // 這段期間它是卡片上最重要的一句話，放在標題才不會被進度列表擠下去。
+    // 結束時 docFinish() 會把標題換成 已完成／已中止，提醒自然跟著消失。
+    `<div class="sec" id="docTitle">產生期間請不要關閉這個分頁</div>`+
     `<div class="small" id="docWho">對象：${esc(docRun.sessionLabel)}（演習代號 ${esc(docRun.ex||'—')}）</div>`+
     `<div class="bar"><div class="fill" id="docBar" style="width:0"></div></div>`+
     `<div class="docMeta" id="docMeta">正在建立報告文件…　｜　已耗時 <span id="docElapsed">00:00</span></div>`+
     `<ul class="docSteps" id="docSteps"></ul>`+
     `<div id="docWarnBox" style="display:none"><div class="small" style="margin-top:10px;font-weight:700">警告與降級紀錄</div><ul class="docWarn" id="docWarnList"></ul><div class="small">同樣的內容也會印在報告的附錄C。</div></div>`+
-    `<div class="note" id="docKeepOpen" style="margin-top:10px;font-size:12px">產生期間請不要關閉這個分頁——<b>分頁是驅動者</b>，關掉會讓報告停在半成品。</div>`+
     `<div class="docLinks" id="docLinks" style="margin-top:10px"></div>`+
     `<div class="docErr" id="docError" style="display:none"></div>`+
     `<div class="docRow" id="docActions"></div>`;
@@ -1350,8 +1354,6 @@ function docFinish(res){
   const failed = res.ok === false || res.status === 'failed';
   const t = document.getElementById('docTitle');
   if (t) t.textContent = failed ? '已中止' : (partial ? '已收尾（部分完成）' : '已完成');
-  const keep = document.getElementById('docKeepOpen');
-  if (keep) keep.style.display='none';
   if (res.docUrl) docRun.docUrl = res.docUrl;
   if (res.pdfUrl) docRun.pdfUrl = res.pdfUrl;
   if (res.folderName) docRun.folderName = res.folderName;
