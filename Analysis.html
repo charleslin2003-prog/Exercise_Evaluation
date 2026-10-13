@@ -264,7 +264,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <div id="reportComments" class="card reportSection" data-reportonly="1"></div>
 <div id="reportQuality" class="card reportSection" data-reportonly="1" style="margin-top:16px"></div>
 <div class="reportHead reportChapter" data-reportonly="1">評核方法與評分尺度</div>
-<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均。</li><li>評核官一致性使用 <b>r<sub>wg</sub></b>（within-group agreement index）：逐題計算 r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，再將各題平均。S<sub>x</sub><sup>2</sup> 是該題實際評分的樣本變異數（分母 n−1）；σ<sub>E</sub><sup>2</sup> 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率（uniform）時為 (A<sup>2</sup>−1)∕12，本表為 5 點量表所以 σ<sub>E</sub><sup>2</sup> = (25−1)∕12 = 2。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。只有一位評核官評過的題目無法計算群組內一致性，會被跳過；r<sub>wg</sub> 為負時依慣例截為 0。兩者都會把平均往上拉，所以發生時會在數字旁註明題數。<br><span class="small">粗略解讀：≥ 0.90 一致性很高、0.70–0.90 可接受、&lt; 0.70 偏低。</span></li><li>另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 r<sub>wg</sub> 相同。它與 r<sub>wg</sub> 回答的是不同問題：r<sub>wg</sub> 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
+<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均。</li><li>評核官一致性使用 <b>r<sub>wg</sub><span id="methodRwg"></span></b><span id="methodRwgNote"></span>（within-group agreement index）：逐題計算 r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，再將各題平均。S<sub>x</sub><sup>2</sup> 是該題實際評分的樣本變異數（分母 n−1）；σ<sub>E</sub><sup>2</sup> 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率（uniform）時為 (A<sup>2</sup>−1)∕12，本表為 5 點量表所以 σ<sub>E</sub><sup>2</sup> = (25−1)∕12 = 2。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。只有一位評核官評過的題目無法計算群組內一致性，會被跳過；r<sub>wg</sub> 為負時依慣例截為 0。兩者都會把平均往上拉，所以發生時會在數字旁註明題數。<br><span class="small">粗略解讀：≥ 0.90 一致性很高、0.70–0.90 可接受、&lt; 0.70 偏低。</span></li><li>另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 r<sub>wg</sub> 相同。它與 r<sub>wg</sub> 回答的是不同問題：r<sub>wg</sub> 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
 <div id="reportAppendixC" class="card reportSection" data-reportonly="1"></div>
 <div class="foot">單一檔案 HTML｜資料即時讀取自後台試算表｜此連結請勿公開分享</div>
 </div>
@@ -578,7 +578,7 @@ function init(){
 
   let overviewS4Items=Object.entries(DATA.stats.s4).map(([k,v])=>({label:k,value:v.mean,n:v.n}));
   document.getElementById('overviewS4Chart').innerHTML=barsSVG(overviewS4Items);
-  renderRadars();renderCoverage();renderS4();renderDetail();renderRanking();
+  renderRadars();renderCoverage();renderS4();renderDetail();renderRanking();renderMethod();
 
   // 場次下拉：只有後端真的從註冊表解析到機構代號時才有意義（回退模式下只有
   // 一場演習，列出來也沒東西可選）。不需要使用者先按一顆按鈕——第一次讀到
@@ -764,6 +764,16 @@ function rwgNote(g){
   if(g.skipped) bits.push(`${g.skipped} 題只有一位評核官評分，未納入`);
   if(g.clamped) bits.push(`${g.clamped} 題實際變異數大於無共識期望值、r_wg 為負並依慣例截為 0`);
   return bits.length?`（納入 ${g.items} 題；${bits.join('；')}）`:`（納入 ${g.items} 題）`;
+}
+// 統計方法第 4 點在 r_wg 後面直接寫出這一場的值。其餘文字仍是寫死的說明；
+// 只有這兩個 span 會隨資料變。數字一律走 rwgStat()，所以跟報告摘要、評核官
+// 明細那顆徽章是同一個值。題數註記只在真的有跳過或截斷時才出現 —— 那一點的
+// 說明文字本身就承諾「發生時會在數字旁註明題數」，沒發生時多一句「納入 23 題」
+// 只會把那一行拉長。
+function renderMethod(){
+  const g=rwgStat();
+  document.getElementById('methodRwg').textContent=g==null?'：資料不足':` = ${g.mean.toFixed(2)}`;
+  document.getElementById('methodRwgNote').textContent=g&&(g.skipped||g.clamped)?rwgNote(g):'';
 }
 // 三項潛能 + 覆蓋率（不含學習），跟 stats 的 consistencyRows 範圍一致。
 function coreRows(){return [...DATA.analysisRows,...DATA.coverageRows]}

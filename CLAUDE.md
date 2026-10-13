@@ -937,8 +937,10 @@ places share.
   fixed regardless of table length) holding a `radarTable()` — 場景編號 / 指標 /
   具體評核題目 / 分數, ascending by score.
 - **演習覆蓋率 (`#coverage`)** — coverage radar plus a `radarTable()` in the 覆蓋率指標摘要 card.
-- **統計方法 (`#method`)** — static prose, not data-driven; update by hand if the stats
-  computation changes.
+- **統計方法 (`#method`)** — static prose, except item 4's r<sub>wg</sub> value: two spans
+  (`#methodRwg`, `#methodRwgNote`) filled by `renderMethod()` from `rwgStat()`, the same
+  value the report summary shows. Everything else is hand-written; update it by hand if
+  the stats computation changes.
 
 ### Panels with no tab button
 
