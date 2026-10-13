@@ -1146,7 +1146,8 @@ function buildAnalysis_(t) {
   // 吐出來，不算進 stats。
   var learningRows = rows.filter(function (r) { return r.potential === '學習'; });
 
-  // 一致性統計（ICC / within1）沿用業主參考 Demo 的範圍：三項潛能 + 覆蓋率
+  // 一致性統計（r_wg / within1，以及仍在算但已不顯示的 ICC）沿用業主參考
+  // Demo 的範圍：三項潛能 + 覆蓋率
   // 一起算，反映評核官整體評分習慣，不只侷限在三項潛能題目。
   var consistencyRows = analysisRows.concat(coverageRows);
   var stats = {
@@ -1155,6 +1156,10 @@ function buildAnalysis_(t) {
     s4: {},
     coverage: summarize_(flattenScores_(coverageRows)),
     icc2k: icc2k_(consistencyRows),
+    // icc2k 仍然算、仍然回傳，但前台已經不再顯示它（2026-10-13 業主要求改用
+    // r_wg）。留著是因為拔掉它會讓尚未重貼的 Report.gs 當場少一個欄位，而它
+    // 的成本只有幾個 CPU 週期。要真的移除請連同 Report.gs 的 verifyIcc_ 一起。
+    rwg: rwg_(consistencyRows),
     within1: within1_(consistencyRows),
   };
   ['反應', '監測', '預期'].forEach(function (p) {
@@ -1369,6 +1374,53 @@ function within1_(rows) {
     }
   });
   return total ? agree / total : null;
+}
+
+// r_wg（within-group agreement index；James, Demaree & Wolf 1984）。
+//   r_wg = 1 - S_x² / σ_E²
+// S_x² 是**那一題**實際評分的樣本變異數（分母 n-1，與業主給的算例一致：
+// 4,4,5,4,3 的 S_x² = 2/4 = 0.5，不是母體變異數 0.4）；σ_E² 是「完全沒有共識」
+// 時的期望變異數，在 A 點量表且無共識時各選項等機率（uniform）的假設下是
+// (A²-1)/12，5 點量表即 (25-1)/12 = 2。所以上面那題 r_wg = 1 - 0.5/2 = 0.75。
+//
+// ⚠️ 與 ICC(2,k) 的差別不只是換個公式，而是換掉它的失效模式：ICC 需要一個完整
+// 矩陣，所以要先取「所有題目都有評分的評核官」交集，**只要有一題只有一個人評
+// 過，整份資料就變成 null**。r_wg 是逐題獨立算完再平均，一題只有一人評就只跳過
+// 那一題。這正是這份資料需要的 —— 覆蓋不均是常態，不該讓整個指標消失。
+//
+// 回傳物件而不是單一數字，是因為平均值本身會說謊：被跳過幾題、有幾題負值被
+// 截到 0，都會把平均往上拉。不附這兩個數字，讀者沒有辦法判斷這個平均可不可信。
+var RWG_SCALE_POINTS_ = 5;
+function rwgExpectedVar_(points) {
+  return (points * points - 1) / 12;
+}
+function rwg_(rows) {
+  var sigmaE = rwgExpectedVar_(RWG_SCALE_POINTS_);
+  if (!sigmaE) return null;
+  var vals = [], skipped = 0, clamped = 0;
+  rows.forEach(function (r) {
+    var scores = r.scores.map(function (s) { return s.score; });
+    // 一個人評的題目沒有「群組內一致性」可言（樣本變異數的分母會是 0），
+    // 跳過而不是當成完全一致 —— 當成 1.0 會把平均推高，而且推得毫無根據。
+    if (scores.length < 2) { skipped++; return; }
+    var m = mean_(scores), ss = 0;
+    scores.forEach(function (v) { ss += (v - m) * (v - m); });
+    var sx2 = ss / (scores.length - 1);
+    var v = 1 - sx2 / sigmaE;
+    // 實際變異數大於「亂評」的期望變異數時 r_wg 會是負的。文獻慣例是截到 0
+    // （負的一致性沒有意義），但截掉這件事本身要報出來，見上面的註解。
+    if (v < 0) { v = 0; clamped++; }
+    vals.push(v);
+  });
+  if (!vals.length) return null;
+  return {
+    mean: mean_(vals),
+    items: vals.length,
+    skipped: skipped,
+    clamped: clamped,
+    scalePoints: RWG_SCALE_POINTS_,
+    expectedVar: sigmaE
+  };
 }
 
 // 問題ID -> {stage, itemName, goal}：stage 取第一層分組名稱，itemName 取該

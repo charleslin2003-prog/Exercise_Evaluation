@@ -257,11 +257,11 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <section id="coverage" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">演習覆蓋率</div><div id="coverageRadar"></div></div><div class="card"><div class="sec">覆蓋率指標摘要</div><div id="coverageBars"></div><div class="note" style="margin-top:14px">覆蓋率評分維持原表 1–5 級尺度；此處以所有評核官平均分呈現。較低分代表該面向雖可能已被演到，但實際呈現、證據或閉環程度較不足。</div></div></div></section>
 <div class="reportHead reportChapter" id="rankingHead" data-reportonly="1">逐題強弱排序（含學習潛能）</div>
 <section id="ranking" class="panel"><div class="card"><div class="sec">依潛能分類（組內依平均分由低到高）</div><div class="table-wrap"><table id="byPotentialTable"></table></div></div><div class="card" style="margin-top:16px"><div class="sec">表現優劣排序（由高到低）</div><div class="table-wrap"><table id="rankTable"></table></div></div><div class="note" style="margin-top:14px">「學習」潛能的題目不計入總覽/雷達圖/4S 統計，但會出現在這個排序視圖裡，方便單獨檢視。</div></section>
-<section id="detail" class="panel"><div class="card"><div class="controls"><label>顯示範圍 <select id="scope"><option value="all">三項潛能 + 覆蓋率</option><option value="core">僅三項潛能</option><option value="coverage">僅覆蓋率</option></select></label><label>評核官 <select id="evaluator"><option value="mean">全部平均</option></select></label><button id="csvBtn">匯出目前表格 CSV</button><span class="badge" id="iccBadge" style="margin-left:auto"></span></div><div class="table-wrap"><table id="detailTable"></table></div></div></section>
+<section id="detail" class="panel"><div class="card"><div class="controls"><label>顯示範圍 <select id="scope"><option value="all">三項潛能 + 覆蓋率</option><option value="core">僅三項潛能</option><option value="coverage">僅覆蓋率</option></select></label><label>評核官 <select id="evaluator"><option value="mean">全部平均</option></select></label><button id="csvBtn">匯出目前表格 CSV</button><span class="badge" id="agreeBadge" style="margin-left:auto"></span></div><div class="table-wrap"><table id="detailTable"></table></div></div></section>
 <div id="reportComments" class="card reportSection" data-reportonly="1"></div>
 <div id="reportQuality" class="card reportSection" data-reportonly="1" style="margin-top:16px"></div>
 <div class="reportHead reportChapter" data-reportonly="1">評核方法與評分尺度</div>
-<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均。</li><li>評核官一致性使用 ICC(2,k)：雙向隨機效果、平均量測的一致性指標，僅取「所有題目都有評分的評核官」交集計算，範圍涵蓋三項潛能與覆蓋率題目（不含學習）；另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 ICC 相同。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
+<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均。</li><li>評核官一致性使用 <b>r<sub>wg</sub></b>（within-group agreement index）：逐題計算 r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，再將各題平均。S<sub>x</sub><sup>2</sup> 是該題實際評分的樣本變異數（分母 n−1）；σ<sub>E</sub><sup>2</sup> 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率（uniform）時為 (A<sup>2</sup>−1)∕12，本表為 5 點量表所以 σ<sub>E</sub><sup>2</sup> = (25−1)∕12 = 2。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。只有一位評核官評過的題目無法計算群組內一致性，會被跳過；r<sub>wg</sub> 為負時依慣例截為 0。兩者都會把平均往上拉，所以發生時會在數字旁註明題數。<br><span class="small">粗略解讀：≥ 0.90 一致性很高、0.70–0.90 可接受、&lt; 0.70 偏低。</span></li><li>另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 r<sub>wg</sub> 相同。它與 r<sub>wg</sub> 回答的是不同問題：r<sub>wg</sub> 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
 <div id="reportAppendixC" class="card reportSection" data-reportonly="1"></div>
 <div class="foot">單一檔案 HTML｜資料即時讀取自後台試算表｜此連結請勿公開分享</div>
 </div>
@@ -272,7 +272,9 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 // ⚠️ 測試分支（dev）：f2c1c47 之前那個舊 record 部署，讀的是測試紀錄表
 // 1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM（101 列測試資料）。
 // 2026-10-06 實測正常：analysisRows=16 / coverageRows=7 / learningRows=0、
-// 評核官 5 人、icc2k=0.5503、within1=0.75。兩個檔案必須填同一個值。
+// 評核官 5 人、within1=0.75。兩個檔案必須填同一個值。
+// （當時還記了 icc2k=0.5503；2026-10-13 改用 r_wg 後前台不再顯示 ICC，
+//   同一批資料的 r_wg = 0.7315】23 題全數納入、無跳過、無截斷。）
 // master 上的正式值（讀業主的 11HeRK…，不要在測試分支用）：
 //   'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
 const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec';
@@ -698,7 +700,7 @@ function renderRanking(){
   document.getElementById('rankTable').innerHTML = '<thead><tr><th>排序</th><th>潛能</th><th>場景</th><th>項目</th><th>題目</th><th>平均</th><th>SD</th></tr></thead><tbody>' +
     ranked.map((r,i) => `<tr><td>${i+1}</td><td>${esc(r.potential)}</td><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(2)}</td><td>${r.sd.toFixed(2)}</td></tr>`).join('') + '</tbody>';
 }
-function renderDetail(){let icc=DATA.stats.icc2k;document.getElementById('iccBadge').textContent=icc==null?'ICC(2,k)：資料不足':`ICC(2,k) = ${icc.toFixed(2)}`;let scope=document.getElementById('scope').value,ev=document.getElementById('evaluator').value;let arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];document.getElementById('detailTable').innerHTML=`<thead><tr><th>階段</th><th>項目</th><th>潛能</th><th>4S</th><th>指標</th><th>${ev==='mean'?'平均分':'評分'}</th><th>各評核官分數</th><th>評核題目</th></tr></thead><tbody>${arr.map(r=>{let v=scoreOf(r,ev);return `<tr><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.potential)}</td><td>${esc(r.s4)}</td><td>${esc(r.indicator)}</td><td class="score ${cls(v)}">${v==null?'—':Number(v).toFixed(ev==='mean'?2:0)}</td><td>${r.scores.map(s=>`${esc(s.code)}:${s.score}`).join(' / ')}</td><td>${esc(r.question)}</td></tr>`}).join('')}</tbody>`}
+function renderDetail(){const g=rwgStat();document.getElementById('agreeBadge').textContent=g==null?'r_wg：資料不足':`r_wg = ${g.mean.toFixed(2)}`;let scope=document.getElementById('scope').value,ev=document.getElementById('evaluator').value;let arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];document.getElementById('detailTable').innerHTML=`<thead><tr><th>階段</th><th>項目</th><th>潛能</th><th>4S</th><th>指標</th><th>${ev==='mean'?'平均分':'評分'}</th><th>各評核官分數</th><th>評核題目</th></tr></thead><tbody>${arr.map(r=>{let v=scoreOf(r,ev);return `<tr><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.potential)}</td><td>${esc(r.s4)}</td><td>${esc(r.indicator)}</td><td class="score ${cls(v)}">${v==null?'—':Number(v).toFixed(ev==='mean'?2:0)}</td><td>${r.scores.map(s=>`${esc(s.code)}:${s.score}`).join(' / ')}</td><td>${esc(r.question)}</td></tr>`}).join('')}</tbody>`}
 function exportCSV(){let scope=document.getElementById('scope').value,arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];let codes=[...new Set(arr.flatMap(r=>r.scores.map(s=>s.code)))].sort();let rows=[['階段','項目','潛能','4S','指標',...codes.map(c=>'評核官 '+c),'平均','SD','評核題目']];arr.forEach(r=>{let byCode={};r.scores.forEach(s=>byCode[s.code]=s.score);rows.push([r.stage,r.itemName,r.potential,r.s4,r.indicator,...codes.map(c=>byCode[c]??''),r.mean.toFixed(2),r.sd.toFixed(2),r.question]);});let csv='﻿'+rows.map(rr=>rr.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\n');let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=displayName()+'_評核明細.csv';a.click();URL.revokeObjectURL(a.href)}
 
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active')});
@@ -718,6 +720,48 @@ document.getElementById('csvBtn').onclick=exportCSV;
    ============================================================================ */
 
 function pctText(x){return x==null?'—':(Number(x)*100).toFixed(1)+'%'}
+
+// r_wg（within-group agreement index）。2026-10-13 取代 ICC(2,k) 成為這一頁
+// 顯示的評核官一致性指標。
+//
+// ⚠️ 這裡**刻意保留一份前端實作**，而不是只讀 stats.rwg。理由跟
+// normalisePotentials() 完全一樣：後端是手動重新部署的，這一頁卻一推上 Vercel
+// 就生效，所以「前端已更新、後端還沒」是必然會出現的中間狀態。沒有這個退路時，
+// 那段期間統計方法會寫著 r_wg、畫面上卻是一片「資料不足」。
+// 後端有算就用後端的（它才是報告與 Report.gs 的權威來源），沒有才自己算；
+// 兩邊是同一條公式、同一個分母慣例，所以切換時數字不會跳動。
+const RWG_SCALE_POINTS = 5;
+const RWG_EXPECTED_VAR = (RWG_SCALE_POINTS*RWG_SCALE_POINTS-1)/12;   // 5 點量表 -> 2
+function rwgLocal(rows){
+  let vals=[],skipped=0,clamped=0;
+  for(const r of rows){
+    const sc=(r.scores||[]).map(s=>s.score);
+    if(sc.length<2){skipped++;continue}            // 單人評的題目沒有群組一致性可言
+    const m=sc.reduce((a,v)=>a+v,0)/sc.length;
+    const sx2=sc.reduce((a,v)=>a+(v-m)*(v-m),0)/(sc.length-1);   // 樣本變異數，分母 n-1
+    let v=1-sx2/RWG_EXPECTED_VAR;
+    if(v<0){v=0;clamped++}                          // 文獻慣例：負值截到 0
+    vals.push(v);
+  }
+  if(!vals.length) return null;
+  return {mean:vals.reduce((a,v)=>a+v,0)/vals.length,items:vals.length,skipped,clamped,
+          scalePoints:RWG_SCALE_POINTS,expectedVar:RWG_EXPECTED_VAR};
+}
+// 一致性統計的範圍與後端一致：三項潛能 + 覆蓋率，不含學習。
+function consistencyRows(){return [...(DATA.analysisRows||[]),...(DATA.coverageRows||[])]}
+function rwgStat(){
+  const fromServer=(DATA.stats||{}).rwg;
+  if(fromServer&&typeof fromServer.mean==='number') return fromServer;
+  return rwgLocal(consistencyRows());
+}
+// 跳過或截斷的題數會把平均往上拉，所以只要發生過就一定要說出來。
+function rwgNote(g){
+  if(!g) return '';
+  const bits=[];
+  if(g.skipped) bits.push(`${g.skipped} 題只有一位評核官評分，未納入`);
+  if(g.clamped) bits.push(`${g.clamped} 題實際變異數大於無共識期望值、r_wg 為負並依慣例截為 0`);
+  return bits.length?`（納入 ${g.items} 題；${bits.join('；')}）`:`（納入 ${g.items} 題）`;
+}
 // 三項潛能 + 覆蓋率（不含學習），跟 stats 的 consistencyRows 範圍一致。
 function coreRows(){return [...DATA.analysisRows,...DATA.coverageRows]}
 
@@ -882,13 +926,14 @@ function abilityTable(list, caption){
 
 function renderReportSummary(){
   const st=DATA.stats||{},pot=st.potentials||{};
+  const agree=rwgStat();
   const cells=[
     ['總平均',fmt((st.overall||{}).mean)],
     ['反應',fmt((pot['反應']||{}).mean)],
     ['監測',fmt((pot['監測']||{}).mean)],
     ['預期',fmt((pot['預期']||{}).mean)],
     ['演習覆蓋率',fmt((st.coverage||{}).mean)],
-    ['ICC(2,k)',st.icc2k==null?'資料不足':Number(st.icc2k).toFixed(2)],
+    ['r_wg（評核官一致性）',agree==null?'資料不足':agree.mean.toFixed(2)],
     ['相差不超過 1 分比例',pctText(st.within1)],
     ['未觸發率（1 分占比）',st.untriggered?pctText(st.untriggered.rate):'—'],
   ];
@@ -899,7 +944,7 @@ function renderReportSummary(){
     `<div class="sumGrid">${cells.map(c=>`<div class="sumCell"><div class="k">${esc(c[0])}</div><div class="v">${esc(c[1])}</div></div>`).join('')}</div>`+
     `<div style="margin-top:18px">${abilityTable(top,'優勢前三項')}</div>`+
     `<div style="margin-top:16px">${abilityTable(bottom,'待改善前三項')}</div>`+
-    `<div class="note" style="margin-top:16px">ICC(2,k) 只取「所有題目都有評分的評核官」交集計算，因此<b>只要有一題只被一位評核官評過，整份資料就會顯示「資料不足」</b>——那是覆蓋不均的訊號，不代表一致性差。「相差不超過 1 分比例」則逐題採該題實際評分人數配對，不需要完整矩陣。</div>`;
+    `<div class="note" style="margin-top:16px">r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，逐題計算再平均（5 點量表，σ<sub>E</sub><sup>2</sup> = 2）；≥ 0.90 很高、0.70–0.90 可接受、&lt; 0.70 偏低。${esc(rwgNote(agree))}它是逐題獨立計算的，<b>不需要「所有題目都有評分的評核官」完整矩陣</b>，所以單一題目覆蓋不足不會讓整項指標消失，只會讓那一題被跳過。「相差不超過 1 分比例」同樣逐題採實際評分人數配對。</div>`;
 }
 
 // R8 觀察紀錄彙整。後端若還沒有「觀察紀錄」欄，這一節會印出明確的空狀態——

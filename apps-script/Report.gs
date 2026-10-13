@@ -28,8 +28,8 @@
 // 它與後端的關係只有一條：用 UrlFetchApp 打 ConfigWithSubmit.gs 的
 // `action=analysis`，然後把回傳的數字排版進一份 Google 文件。
 // **報告裡的統計數字一律原樣取自該 payload，絕不另算**，否則儀表板與紙本報告
-// 會互相打架，而業主沒有任何辦法判斷哪一個才對。唯一的例外是 ICC(2,k) 的
-// 「本機驗算」（見 verifyIcc_）：stats.icc2k 是一個裸數字，而且只要有一題
+// 會互相打架，而業主沒有任何辦法判斷哪一個才對。唯一的例外是 r_wg 的
+// 「本機驗算」（見 verifyRwg_）：stats.rwg.mean 是一個裸數字，而且只要有一題
 // 只被一位評核官評過，整個資料集就會變 null（plan §4.4），報告必須能具名說出
 // 是哪幾題造成的，不然封面印一個「—」沒人知道為什麼。
 //
@@ -836,7 +836,7 @@ function serializeRunState_(st) {
 
   copy.warnings = [];
   copy.plannedIds = [];
-  copy.iccNote = '';
+  copy.rwgNote = '';
   return JSON.stringify(copy);
 }
 
@@ -1204,102 +1204,96 @@ function loadPayloadForStep_(st, cfg) {
 }
 
 // ===================================================================
-// ICC(2,k) 本機驗算（規則「數字一律取自後端」的唯一例外）
+// r_wg 本機驗算（規則「數字一律取自後端」的唯一例外）
 // ===================================================================
 
-// 為什麼要重算一次：stats.icc2k 是一個裸數字，而且交集是跨**每一列**取的
-// —— 只要有一題只被一位評核官評過，commonCodes 就對整個資料集崩潰，26 列
-// 全部拿到 null（plan §4.4）。封面印一個「—」而不說是哪幾題造成的，讀者
-// 無從判斷「信度不足」還是「資料結構問題」。這裡用與後端 icc2k_ 逐行相同的
-// Shrout–Fleiss 公式重算，並回報納入的評核官數／題數，以及讓交集崩潰的題號。
-function verifyIcc_(payload) {
+// 2026-10-13：本節原本驗算 ICC(2,k)，改成驗算 r_wg。不是換個公式而已，
+// 連「為什麼要重算」的理由都變了：
+//   舊理由：ICC 要取「所有題目都有評分的評核官」交集，只要一題只有一人
+//           評過，整個資料集就崩成 null，所以必須指出是哪幾題弄垄的。
+//   新理由：r_wg 是逐題獨立計算再平均，沒有交集崩潰這種故障模式。
+//           但它有另兩種：單人評的題被跳過、r_wg 為負被截到 0。
+//           這兩者都會把平均往上拉，而且在一個裸數字裡完全看不出來。
+// 所以這裡仍然重算一次，並且回報納入題數、跳過題數、截斷題數，以及
+// 一致性最低的幾題（reasons）—— 後者取代了舊版「讓交集崩潰的題」清單，
+// 因為讀者真正要的從來不是「哪題弄垄了統計量」，而是「哪題評核官意見最分歧」。
+//
+// 分母慣例必須跟 ConfigWithSubmit.gs 的 rwg_() 與 Analysis.html 的 rwgLocal()
+// 逐字相同：樣本變異數（n-1）、σ_E²=(A²-1)/12、5 點量表。三份實作一旦漂移，
+// 報告與儀表板就會各說各話，而業主沒有任何辦法判斷哪一個才對。
+var RWG_SCALE_POINTS_ = 5;
+function rwgExpectedVar_(points) {
+  return (points * points - 1) / 12;
+}
+function verifyRwg_(payload) {
   var rows = chartRows_(payload);
+  var remote = (payload.stats || {}).rwg;
   var out = {
-    remote: (payload.stats || {}).icc2k,
+    remote: (remote && typeof remote.mean === 'number') ? remote.mean : null,
     local: null,
     match: false,
-    raters: 0,
+    items: 0,
+    skipped: 0,
+    clamped: 0,
     questions: rows.length,
     reasons: [],
     note: ''
   };
   if (!rows.length) {
     out.note = '沒有可用的評分列，無法計算。';
-    out.match = (out.remote === null || out.remote === undefined);
+    out.match = (out.remote === null);
     return out;
   }
-  var common = null;
+  var sigmaE = rwgExpectedVar_(RWG_SCALE_POINTS_);
+  var vals = [], low = [];
   for (var i = 0; i < rows.length; i++) {
-    var codes = [];
     var sc = rows[i].scores || [];
-    for (var j = 0; j < sc.length; j++) codes.push(sc[j].code);
-    if (codes.length < 2) {
-      out.reasons.push('題號 ' + txt_(rows[i].questionId) + '：只有 ' + codes.length + ' 位評核官評過');
+    var xs = [];
+    for (var j = 0; j < sc.length; j++) xs.push(Number(sc[j].score));
+    if (xs.length < 2) {
+      out.skipped++;
+      out.reasons.push('題號 ' + txt_(rows[i].questionId) + '：只有 ' + xs.length +
+        ' 位評核官評過，無群組內一致性可言，未納入');
+      continue;
     }
-    if (common === null) {
-      common = codes.slice();
-    } else {
-      var before = common.length;
-      var next = [];
-      for (var k = 0; k < common.length; k++) {
-        if (codes.indexOf(common[k]) !== -1) next.push(common[k]);
-      }
-      if (next.length < before && next.length < 2) {
-        out.reasons.push('題號 ' + txt_(rows[i].questionId) + '：評核官交集在此題降到 ' + next.length + ' 人');
-      }
-      common = next;
+    var m = avg_(xs), ss = 0;
+    for (var k = 0; k < xs.length; k++) ss += (xs[k] - m) * (xs[k] - m);
+    var sx2 = ss / (xs.length - 1);
+    var v = 1 - sx2 / sigmaE;
+    if (v < 0) {
+      v = 0;
+      out.clamped++;
+      out.reasons.push('題號 ' + txt_(rows[i].questionId) + '：實際變異數 ' + num_(sx2, 2) +
+        ' 大於無共識期望值 ' + num_(sigmaE, 2) + '，r_wg 為負、依慣例截為 0');
     }
+    vals.push(v);
+    low.push({ id: txt_(rows[i].questionId), v: v });
   }
-  out.raters = common ? common.length : 0;
-  if (!common || common.length < 2) {
-    out.note = '所有題目共同的評核官不足 2 人，依定義無法計算（後端也會回 null）。';
-    out.match = (out.remote === null || out.remote === undefined);
+  if (!vals.length) {
+    out.note = '所有題目都只有一位評核官評過，依定義無法計算（後端也會回 null）。';
+    out.match = (out.remote === null);
     return out;
   }
-  var matrix = [];
-  for (var r = 0; r < rows.length; r++) {
-    var byCode = {};
-    var s2 = rows[r].scores || [];
-    for (var m2 = 0; m2 < s2.length; m2++) byCode[s2[m2].code] = s2[m2].score;
-    var line = [];
-    for (var c = 0; c < common.length; c++) line.push(byCode[common[c]]);
-    matrix.push(line);
-  }
-  var n = matrix.length, kk = common.length;
-  if (n < 2) {
-    out.note = '題目不足 2 題，依定義無法計算。';
-    out.match = (out.remote === null || out.remote === undefined);
-    return out;
-  }
-  var flat = [];
-  for (var a = 0; a < matrix.length; a++) flat = flat.concat(matrix[a]);
-  var grand = avg_(flat);
-  var ssRow = 0, ssCol = 0, ssTotal = 0;
-  for (var b = 0; b < matrix.length; b++) {
-    var rm = avg_(matrix[b]);
-    ssRow += kk * (rm - grand) * (rm - grand);
-    for (var d = 0; d < matrix[b].length; d++) ssTotal += (matrix[b][d] - grand) * (matrix[b][d] - grand);
-  }
-  for (var col = 0; col < kk; col++) {
-    var colVals = [];
-    for (var e = 0; e < matrix.length; e++) colVals.push(matrix[e][col]);
-    var cm = avg_(colVals);
-    ssCol += n * (cm - grand) * (cm - grand);
-  }
-  var msr = ssRow / (n - 1);
-  var msc = ssCol / (kk - 1);
-  var mse = (ssTotal - ssRow - ssCol) / ((n - 1) * (kk - 1));
-  var denom = msr + (msc - mse) / n;
-  out.local = denom ? (msr - mse) / denom : null;
-  if (out.local === null || out.remote === null || out.remote === undefined) {
-    out.match = (out.local === null && (out.remote === null || out.remote === undefined));
+  out.items = vals.length;
+  out.local = avg_(vals);
+  if (out.local === null || out.remote === null) {
+    out.match = (out.local === null && out.remote === null);
   } else {
     out.match = Math.abs(Number(out.local) - Number(out.remote)) <= 1e-6;
   }
+  // 一致性最低的幾題：這是讀者看到一個偏低的平均值之後唯一會問的問題。
+  low.sort(function (a, b) { return a.v - b.v; });
+  for (var q = 0; q < Math.min(low.length, 5); q++) {
+    if (low[q].v >= 0.7) break;
+    out.reasons.push('題號 ' + low[q].id + '：r_wg = ' + num_(low[q].v, 2) + '（評核官意見分歧）');
+  }
+  var tail = '（納入 ' + out.items + ' 題';
+  if (out.skipped) tail += '；' + out.skipped + ' 題只有一位評核官評分、未納入';
+  if (out.clamped) tail += '；' + out.clamped + ' 題 r_wg 為負並依慣例截為 0';
+  tail += '）。';
   out.note = out.match
-    ? '已驗算一致（納入 ' + out.raters + ' 位評核官 × ' + n + ' 題）。'
-    : '⚠ 驗算不一致：後端 ' + num_(out.remote, 4) + '，本機 ' + num_(out.local, 4) +
-      '（納入 ' + out.raters + ' 位評核官 × ' + n + ' 題）。';
+    ? '已驗算一致' + tail
+    : '⚠ 驗算不一致：後端 ' + num_(out.remote, 4) + '，本機 ' + num_(out.local, 4) + tail;
   return out;
 }
 
@@ -2657,11 +2651,11 @@ function reportValidateOnly(target) {
         : '共 ' + total + ' 題，在正常範圍內。'
     });
 
-    var icc = verifyIcc_(payload);
+    var rwg = verifyRwg_(payload);
     checks.push({
-      label: 'ICC(2,k) 本機驗算', ok: true,
-      detail: icc.note + (icc.reasons.length ? '　造成交集縮小的題目：' + icc.reasons.slice(0, 8).join('；') +
-        (icc.reasons.length > 8 ? ' …等 ' + icc.reasons.length + ' 題' : '') : '')
+      label: 'r_wg 本機驗算', ok: true,
+      detail: rwg.note + (rwg.reasons.length ? '　值得注意的題目：' + rwg.reasons.slice(0, 8).join('；') +
+        (rwg.reasons.length > 8 ? ' …等 ' + rwg.reasons.length + ' 題' : '') : '')
     });
 
     // 填入式才印：業主正在手工擺標記，先知道哪一張表會長成幾列，比產生完再
@@ -2986,7 +2980,7 @@ function reportStart(opts) {
       snapCount: 0,
       snapStatusCol: 0,
       cap: null,
-      iccNote: ''
+      rwgNote: ''
     };
 
     // ⚠️ 在附錄C 會印出來的警告裡**不要寫出完整的 {{…}}**，用 plainToken_ 去掉大括號。
@@ -3016,9 +3010,13 @@ function reportStart(opts) {
         '本報告的資料與輸出位置都來自指令碼屬性設定的那一場。');
     }
 
-    var icc = verifyIcc_(payload);
-    st.iccNote = icc.note;
-    if (!icc.match) addWarning_(st, 'ICC(2,k) 本機驗算與後端數值不一致，兩個數字都會印在第四章與附錄C。');
+    var rwg = verifyRwg_(payload);
+    st.rwgNote = rwg.note;
+    // 指路要指到這個模式真的有的那一節。填入式沒有第四章、也沒有附錄C，
+    // 而這則警告會被印進文件最後的「報告產生紀錄」—— 叫讀者去翻一個不存在的
+    // 章節，就是這個檔案一再付代價的「給錯提示比不給提示更糟」。
+    if (!rwg.match) addWarning_(st, 'r_wg 本機驗算與後端數值不一致，兩個數字都會印在' +
+      (fillMode ? '文件最後的「' + FILL_RECORD_TITLE_ + '」' : '第四章與附錄C') + '。');
 
     st.cap = chartCapability_(ss);
     if (!st.cap.column) addWarning_(st, '本環境無法產生內嵌圖表，所有圖表將改以數值表呈現。');
@@ -3281,7 +3279,7 @@ function buildContext_(st, payload, cfg) {
     anonMap: buildAnonMap_(meta.evaluatorCodes),
     cap: st.cap || { column: false, radar: false, detail: [] },
     prefix: meta.scenePrefix || 'SCENE',
-    icc: verifyIcc_(payload),
+    rwg: verifyRwg_(payload),
     deadline: Date.now() + cfg.budgetMs,
     tempSheet: null
   };
@@ -3645,7 +3643,7 @@ function sectionSummary_(cursor, ctx) {
   }
   var cov = st.coverage || {};
   rows.push(['演習覆蓋率', num_(cov.mean, 2), 'n=' + (cov.n || 0) + '，SD ' + num_(cov.sd, 2)]);
-  rows.push(['ICC(2,k)', num_(st.icc2k, 4), ctx.icc.note]);
+  rows.push(['r_wg（評核官一致性）', num_(ctx.rwg.local, 4), ctx.rwg.note]);
   // within1 在 Analysis.html 之外，這是第二個真的把它印出來的地方。
   rows.push(['評分相差不超過 1 分的比例', pct_(st.within1),
     '同一題任兩位評核官配對計算，範圍為三項潛能＋覆蓋率題目']);
@@ -3727,11 +3725,11 @@ function sectionMethod_(cursor, ctx) {
   bullet_(cursor, '資料來源：評核官透過評核單實際送出的分數。同一題、同一位評核官若送出多次，以最後一次送出為準（重送視為更正）。');
   bullet_(cursor, '三項潛能分析只納入「反應、監測、預期」三類題目；「學習」類題目排除在統計之外，另列於學習潛能觀察一章。');
   bullet_(cursor, '各指標分數為所有評核官對該題評分的算術平均；4S 類別平均為該類別內所有題目 × 所有評核官評分的平均。');
-  bullet_(cursor, 'ICC(2,k)：Shrout–Fleiss 雙向隨機效果、平均量測的一致性指標。只取「所有題目都有評分的評核官」交集計算，交集不足 2 人或題目不足 2 題時無法計算。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。');
-  bullet_(cursor, '「相差不超過 1 分」比例：逐題取該題所有已評分的評核官兩兩配對，計算分數差 ≤ 1 的配對占全部配對的比例。不要求各題的評核官一致，範圍與 ICC 相同。');
-  bullet_(cursor, '未觸發率：評分等於 1 分的個數占該範圍內全部評分的比例。範圍與 ICC 相同（三項潛能＋覆蓋率題目，不含學習），因此它的分母小於本報告的評分總數。1 分的定義是「劇本未走到此條件」，與 2–5 分的表現評價不同質。');
+  bullet_(cursor, 'r_wg（within-group agreement index）：逐題計算 r_wg = 1 − S² ∕ σ_E² 再將各題平均。S² 是該題實際評分的樣本變異數（分母 n−1）；σ_E² 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率時為 (A²−1)∕12，本表為 5 點量表所以 σ_E² = 2。只有一位評核官評過的題目會被跳過，r_wg 為負時依慣例截為 0；兩者都會把平均往上拉，所以發生時會在數字旁註明題數。粗略解讀：≥ 0.90 很高、0.70–0.90 可接受、< 0.70 偏低。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。');
+  bullet_(cursor, '「相差不超過 1 分」比例：逐題取該題所有已評分的評核官兩兩配對，計算分數差 ≤ 1 的配對占全部配對的比例。不要求各題的評核官一致，範圍與 r_wg 相同。它與 r_wg 回答的是不同問題：r_wg 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。');
+  bullet_(cursor, '未觸發率：評分等於 1 分的個數占該範圍內全部評分的比例。範圍與 r_wg 相同（三項潛能＋覆蓋率題目，不含學習），因此它的分母小於本報告的評分總數。1 分的定義是「劇本未走到此條件」，與 2–5 分的表現評價不同質。');
   bullet_(cursor, '等權聲明：所有題目、所有評核官在各項平均中權重相同。本系統沒有題目權重欄位，也沒有關鍵題標記，因此無法產生加權總分。');
-  para_(cursor, '本章除評分尺度取自本試算表的「評分標準」工作表外，所有統計數值均直接取自後端 action=analysis 的回傳值，報告端不另行計算，以確保與分析儀表板完全一致。唯一的例外是 ICC(2,k) 的本機驗算，結果列於第四章與附錄C。');
+  para_(cursor, '本章除評分尺度取自本試算表的「評分標準」工作表外，所有統計數值均直接取自後端 action=analysis 的回傳值，報告端不另行計算，以確保與分析儀表板完全一致。唯一的例外是 r_wg 的本機驗算，結果列於第四章與附錄C。');
 }
 
 // ===================================================================
@@ -3760,7 +3758,7 @@ function sectionQuality_(cursor, ctx) {
   heading_(cursor, '未觸發（1 分）情形', 2);
   var un = st.untriggered || {};
   para_(cursor, '三項潛能與覆蓋率題目合計 ' + (un.total || 0) + ' 個評分中有 ' + (un.n || 0) +
-    ' 個是 1 分，占 ' + pct_(un.rate) + '（本項不含「學習」潛能題目，範圍與 ICC 相同，' +
+    ' 個是 1 分，占 ' + pct_(un.rate) + '（本項不含「學習」潛能題目，範圍與 r_wg 相同，' +
     '所以這個分母會小於本報告的評分總數）。1 分的定義是「劇本未走到此條件」，與「表現不佳」不同質；' +
     '未觸發率偏高時，平均分的下降應解讀為劇本覆蓋不足，而不是能力不足。');
 
@@ -3785,14 +3783,14 @@ function sectionQuality_(cursor, ctx) {
     '若設定表在本次演習之後被修改過，這些標籤會跟著改變。自本份報告起，' +
     '「' + SNAPSHOT_SHEET_NAME_ + '」工作表已把本次的標籤與數字凍結留存。');
 
-  heading_(cursor, 'ICC(2,k) 本機驗算', 2);
-  var icc = ctx.icc;
-  para_(cursor, '後端回傳值：' + num_(icc.remote, 4) + '；本機以相同的 Shrout–Fleiss 公式重算：' +
-    num_(icc.local, 4) + '。' + icc.note);
-  if (icc.reasons.length) {
-    para_(cursor, '以下題目使「所有題目共同的評核官」交集縮小，是 ICC 無法計算或偏低的直接原因：');
-    for (var r = 0; r < Math.min(icc.reasons.length, 20); r++) bullet_(cursor, icc.reasons[r]);
-    if (icc.reasons.length > 20) para_(cursor, '（其餘 ' + (icc.reasons.length - 20) + ' 題略）');
+  heading_(cursor, 'r_wg 本機驗算', 2);
+  var rwg = ctx.rwg;
+  para_(cursor, '後端回傳值：' + num_(rwg.remote, 4) + '；本機以相同公式重算：' +
+    num_(rwg.local, 4) + '。' + rwg.note);
+  if (rwg.reasons.length) {
+    para_(cursor, '以下題目是平均 r_wg 偏低的直接原因，或因覆蓋不足未被納入：');
+    for (var r = 0; r < Math.min(rwg.reasons.length, 20); r++) bullet_(cursor, rwg.reasons[r]);
+    if (rwg.reasons.length > 20) para_(cursor, '（其餘 ' + (rwg.reasons.length - 20) + ' 題略）');
   }
 
   heading_(cursor, '本報告無法提供的品質資訊', 2);
@@ -4424,7 +4422,7 @@ function sectionAppendixC_(cursor, ctx) {
   // 業主第一次產生報告後，請回報「圖表能力探測結果」這一行 —— 這是開發端
   // 無法執行這段程式碼時，唯一的實機驗證替代手段。
   para_(cursor, '本報告的所有統計數值均取自後端 action=analysis 的回傳值，報告端未另行計算；' +
-    '唯一的例外是 ICC(2,k) 的本機驗算（結果如上）。資料指紋用於確保報告的各章節都來自同一次資料快照；' +
+    '唯一的例外是 r_wg 的本機驗算（結果如上）。資料指紋用於確保報告的各章節都來自同一次資料快照；' +
     '此處只列出它的雜湊值，不列出指紋原文，以免間接揭露評核官代號。');
   para_(cursor, '本附錄刻意不列印任何分析金鑰、試算表 ID、Web App 網址或人員代號對照表。');
 
@@ -5253,7 +5251,7 @@ function appendixCRows_(ctx) {
   rows.push(['租戶解析來源', txt_(m.tenantSource)]);
   rows.push(['資料指紋（SHA-256 前 16 碼）', fingerprintDigest_(st.fingerprint)]);
   rows.push(['匿名模式', st.identified ? '⚠ 含可識別評核官代號' : '已匿名（評核官 1…N）']);
-  rows.push(['ICC 驗算結論', ctx.icc.note]);
+  rows.push(['r_wg 驗算結論', ctx.rwg.note]);
   rows.push(['圖表能力探測結果', (st.cap && st.cap.detail && st.cap.detail.length)
     ? st.cap.detail.join('；') : '未探測']);
   rows.push(['報告快照工作表', SNAPSHOT_SHEET_NAME_ + '（第 ' + st.snapStartRow + ' 列起共 ' +
@@ -5278,7 +5276,7 @@ function fillModeCoverage_(ctx) {
     '所以若不特別說明，缺漏是隱形的）。');
   out.push('評核官差異：本模式一律匿名，且不輸出任何逐評核官資料。');
   out.push('標準差：填入式的分數欄只有一位小數的平均值，沒有欄位放 SD。');
-  out.push('ICC(2,k)＝' + num_(st.icc2k, 4) + '、相差不超過 1 分比例＝' + pct_(st.within1) +
+  out.push('r_wg＝' + num_((st.rwg && st.rwg.mean), 4) + '、相差不超過 1 分比例＝' + pct_(st.within1) +
     '、未觸發率＝' + pct_((st.untriggered || {}).rate) + '：本模式沒有輸出位置，數值記於此處。');
   out.push('附錄A（評核題目與指標對應表）與附錄B（逐題 × 逐評核官原始評分）：本模式不產生。');
   out.push('以上完整數字都在設定試算表的「' + SNAPSHOT_SHEET_NAME_ + '」工作表（報告編號 ' +
@@ -5301,7 +5299,7 @@ function writeFillRecord_(doc, ctx) {
 
   table_(tail, appendixCRows_(ctx));
   para_(tail, '本報告的所有統計數值均取自後端 action=analysis 的回傳值，報告端未另行計算；' +
-    '唯一的例外是 ICC(2,k) 的本機驗算（結果如上）。' +
+    '唯一的例外是 r_wg 的本機驗算（結果如上）。' +
     '本節刻意不列印任何分析金鑰、試算表 ID、Web App 網址或人員代號對照表。');
 
   var warnings = ctx.st.warnings || [];
