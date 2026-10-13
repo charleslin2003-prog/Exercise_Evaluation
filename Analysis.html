@@ -1178,7 +1178,9 @@ function openDocOptions(){
     // 列，若留在卡片最底下，按了上面的按鈕卻要捲到底才看得到回應。
     `<div class="docRow">`+
       `<button type="button" id="docCheckBtn">先檢查設定</button>`+
-      `<button type="button" id="docStartBtn" class="primary">開始產生</button>`+
+      // 2026-10-13 依要求改稱「下載」，行為沒有變：仍是在系統管理者的雲端硬碟
+      // 產生文件與 PDF，完成後給連結，並不會直接把檔案存到使用者電腦。
+      `<button type="button" id="docStartBtn" class="primary">下載</button>`+
     `</div>`+
     `<div id="docCheckOut"></div>`+
     `<div class="docOpts" style="margin-top:10px">`+
