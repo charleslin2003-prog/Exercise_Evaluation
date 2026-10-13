@@ -173,8 +173,10 @@ function showSetupPropertyHelp() {
       + '<td style="padding:6px;border-bottom:1px solid #eee">' + escapeHtml_(rows[i][2]) + '</td>'
       + '<td style="padding:6px;border-bottom:1px solid #eee"><code>' + escapeHtml_(cur) + '</code></td></tr>';
   }
-  html += '</table><p style="margin-top:14px;color:#666">這支腳本不需要、也不會讀取 ADMIN_KEY 或任何分析金鑰；'
-    + '分析金鑰是它<b>產生</b>並寫進註冊表的，不會顯示在這裡。</p></div>';
+  html += '</table><p style="margin-top:14px;color:#666">這支腳本不需要、也不會讀取 ADMIN_KEY，'
+    + '分析金鑰也不存在指令碼屬性裡；它是精靈<b>寫進註冊表</b>的 —— 新醫院的第一場現生一把，'
+    + '同一家醫院之後的場次一律<b>沿用該院既有那把</b>（分析平台只內嵌得了一把金鑰，'
+    + '每場一把會讓場次下拉切不過去）。金鑰本身不會顯示在這裡。</p></div>';
   SpreadsheetApp.getUi().showModalDialog(
     HtmlService.createHtmlOutput(html).setWidth(680).setHeight(460), '設定說明');
 }
@@ -343,6 +345,64 @@ function setupCreateSession(payload) {
     }
     if (out.messages.length) return out;
 
+    // 規則 2b：分析金鑰逐「院」沿用，不逐「場」現生。
+    //
+    // 這條是精靈自己的規則，**不在**後端那五條健全性檢查裡。後端的規則 3 只擋
+    // 「同一把金鑰出現在不同醫院代號」，同一家醫院的多場共用一把是**明文允許**的
+    // （assertRegistrySane_ 與本檔 setupCheckRegistry 比的都是 o.hid !== grp[g].hid）。
+    //
+    // 為什麼要改成沿用：Analysis.html 只內嵌得了一把金鑰
+    // （KEY = Q.get('key') || ANALYSIS_KEY），而 action=analysis 比對的是**解析出來
+    // 那一列**的金鑰。每場現生一把的時候，標頭的場次下拉列得出所有場次
+    // （action=exercises 只要金鑰符合該院任一有效列就授權），但切過去會拿到
+    // {"error":"unauthorized"} —— 清單載得到、個別場次讀不到。這個不對稱會讓症狀
+    // 看起來像後端壞了，實際上就是這裡每建一列就 randomKey_(32) 造成的。
+    //
+    // 代價要講明白，這是刻意接受的交換：一把金鑰外洩等於該院**所有**場次外洩，
+    // 而輪替金鑰從「改一格」變成「改該院每一列」。「一個分析平台、一把內嵌金鑰、
+    // 下拉切得動」這三件事合起來就蘊含了這個代價，不是這裡多付的。
+    //
+    // 位置也是刻意的：這一段必須留在第 2 步，不能挪到第 4 步真正要用金鑰的地方。
+    // 第 4 步已經在 makeCopy／ensureRecordSheet_／clearOtherDefaults_ 之後，在那裡
+    // 拒絕會留下一份複製好的設定檔、一張新建的紀錄分頁、以及一列被清掉的預設演習
+    // 旗標，卻沒有對應的註冊表列 —— 正是第 4 步的順序註解要避免的殘留狀態。
+    var analysisKey = '';
+    var keyReused = false;
+    var keyRowNumbers = [];
+    var keyGroups = [];   // [{ key, rows:[列號] }]。只拿來報告列號，金鑰本身絕不輸出。
+    for (var ki = 0; ki < sameHidRows.length; ki++) {
+      var existingKey = sameHidRows[ki].key;
+      if (!existingKey) continue;
+      var slot = -1;
+      for (var kg = 0; kg < keyGroups.length; kg++) {
+        if (keyGroups[kg].key === existingKey) { slot = kg; break; }
+      }
+      if (slot === -1) { keyGroups.push({ key: existingKey, rows: [] }); slot = keyGroups.length - 1; }
+      keyGroups[slot].rows.push(sameHidRows[ki].rowNumber);
+    }
+
+    if (keyGroups.length > 1) {
+      // 不替業主挑一把。這裡沒有任何資訊能判斷哪一把才是現在真的在用的那把
+      // （註冊表不記「誰發過哪條連結」），挑錯會讓既有的分析連結在某幾場失效。
+      // 態度與 resolveTenant_ 對 AMBIGUOUS_DEFAULT 一樣：身分不可以取決於列的順序。
+      var groupText = [];
+      for (var gi = 0; gi < keyGroups.length; gi++) {
+        groupText.push('第 ' + keyGroups[gi].rows.join('、') + ' 列');
+      }
+      out.messages.push('「' + hid + '」底下既有的 ' + sameHidRows.length + ' 列用了 '
+        + keyGroups.length + ' 把不同的分析金鑰（' + groupText.join('；') + '）。'
+        + '精靈不會替你挑一把——挑錯會讓既有的分析連結在某幾場失效。'
+        + '請先把同一家醫院所有列的分析金鑰統一成同一把'
+        + '（複製其中一格貼到其餘幾格即可；後端是逐列比對的，改完 120 秒內生效），'
+        + '再回來新增場次。');
+      return out;
+    }
+    if (keyGroups.length === 1) {
+      analysisKey = keyGroups[0].key;
+      keyReused = true;
+      keyRowNumbers = keyGroups[0].rows;
+    }
+
     // ---- 3. 設定試算表的五個分頁檢查（沿用既有設定檔時才需要；複製範本的情形
     //         等複製完再檢查，見第 4 步末尾）----
     if (payload.configMode !== 'copy') {
@@ -406,9 +466,24 @@ function setupCreateSession(payload) {
     // 「改成這一場」，報錯只會逼他自己去翻另一列。改了什麼一定寫進 notes。
     if (payload.isDefault) clearOtherDefaults_(table, hid, notes);
 
-    // 分析金鑰。用 Utilities.getUuid() 當亂數來源，不是 Math.random()：這是一把
-    // 真的憑證，而 Apps Script 沒有 crypto.getRandomValues。
-    var analysisKey = randomKey_(32);
+    // 分析金鑰。要沿用哪一把（或是要不要現生）在第 2 步就決定完了（見「規則 2b」），
+    // 這裡只負責消費結果與把決定講出來。現生的情形用 Utilities.getUuid() 當亂數來源、
+    // 不用 Math.random()：這是一把真的憑證，而 Apps Script 沒有 crypto.getRandomValues。
+    if (keyReused) {
+      notes.push('沿用「' + hid + '」既有的分析金鑰（與第 ' + keyRowNumbers.join('、')
+        + ' 列同一把）。下面那條分析平台網址裡的金鑰不是新發的憑證，不要當成新金鑰'
+        + '另外發給別人；分析平台的場次下拉切到這一場時也不必換網址。');
+    } else {
+      analysisKey = randomKey_(32);
+      if (isNewHospital) {
+        notes.push('「' + hid + '」是註冊表裡的新醫院，已為它產生一把新的分析金鑰。'
+          + '同一家醫院之後新增的場次會沿用這一把，不會再生新的。');
+      } else {
+        notes.push('「' + hid + '」既有的列都沒有填分析金鑰，已產生一把新的。'
+          + '⚠️ 那幾列在後端是無效列（分析金鑰空白，評核單與分析平台都打不開），'
+          + '請一併把這把金鑰補進去。');
+      }
+    }
 
     appendRegistryRow_(table, {
       hid: hid, exid: exid, name: name,
@@ -437,6 +512,11 @@ function setupCreateSession(payload) {
       sessionUrl: siteBase + '/Start.dc.html?t=' + encodeURIComponent(hid) + '&ex=' + encodeURIComponent(exid),
       // 分析平台。金鑰在網址裡，所以這條連結本身就是憑證，不要外流。
       analysisUrl: siteBase + '/Analysis.html?t=' + encodeURIComponent(hid) + '&ex=' + encodeURIComponent(exid) + '&key=' + encodeURIComponent(analysisKey),
+      // 這把金鑰是沿用的還是現生的。SetupDialog.html 目前沒有讀這個欄位，完成畫面
+      // 上那行「分析平台（內含金鑰，勿外流）」兩種情形都成立（沿用的也還是憑證），
+      // 所以沒有錯誤訊息，只是少講了一句；要補的話讀這個布林值就夠，不必改 Setup.gs。
+      // 在那之前，沿用／現生這件事是靠上面 notes 裡那一行講出來的。
+      keyReused: keyReused,
       recordSheet: recordSheet,
       window: from.text + ' ~ ' + to.text,
       notes: notes
@@ -532,6 +612,41 @@ function setupCheckRegistry() {
     }
   }
   if (!dupDefault) lines.push({ ok: true, text: '每家醫院的預設演習都只有一列。' });
+
+  // 同一家醫院底下出現多把分析金鑰。這**不是**無效列 —— 後端規則 3 只擋跨醫院共用，
+  // 同院多場共用一把是明文允許的，所以這些列照樣路由得到、分數照樣寫得進去，
+  // setupCheckRegistry 上面那五條也會全綠。但 Analysis.html 只內嵌得了一把金鑰，
+  // 所以下拉切到金鑰不同的那一場會回 unauthorized：清單載得到、個別場次讀不到。
+  // 那個症狀看起來像後端壞了，而註冊表檢查全綠只會加深誤判，所以即使它不構成無效列，
+  // 也一定要在這裡講出來。（新增場次時精靈會直接擋下來，見 setupCreateSession 規則 2b。）
+  var keysByHid = {};
+  for (var kh = 0; kh < table.rows.length; kh++) {
+    var kr = table.rows[kh];
+    if (!kr.hid || !kr.key) continue;
+    if (!keysByHid[kr.hid]) keysByHid[kr.hid] = {};
+    if (!keysByHid[kr.hid][kr.key]) keysByHid[kr.hid][kr.key] = [];
+    keysByHid[kr.hid][kr.key].push(kr.rowNumber);
+  }
+  var mixedKey = false;
+  for (var mh in keysByHid) {
+    if (!keysByHid.hasOwnProperty(mh)) continue;
+    var keyGroupTexts = [];
+    for (var mk in keysByHid[mh]) {
+      if (!keysByHid[mh].hasOwnProperty(mk)) continue;
+      keyGroupTexts.push('第 ' + keysByHid[mh][mk].join('、') + ' 列');
+    }
+    if (keyGroupTexts.length > 1) {
+      mixedKey = true;
+      lines.push({ ok: false, text: '醫院「' + mh + '」底下用了 ' + keyGroupTexts.length
+        + ' 把不同的分析金鑰（' + keyGroupTexts.join('；') + '）。這不會讓任何一列變成無效列，'
+        + '但分析平台只內嵌得了一把，切到金鑰不同的那一場會回 unauthorized'
+        + '（場次清單列得出來、資料讀不到）。請把同一家醫院所有列統一成同一把'
+        + '（複製其中一格貼到其餘幾格，120 秒後生效）；統一之前，精靈不會讓你在這家醫院新增場次。' });
+    }
+  }
+  if (!mixedKey) {
+    lines.push({ ok: true, text: '沒有任何一家醫院底下出現兩把以上的分析金鑰（分析平台的場次下拉切得過去）。' });
+  }
 
   // 時間窗提醒。不是錯誤，但多場次同時進行時它幾乎一定是問題。
   var noWindow = table.rows.filter(function (r) { return r.enabled && !r.from && !r.to; });
