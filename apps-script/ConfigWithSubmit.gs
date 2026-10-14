@@ -90,12 +90,15 @@ var ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
 // 「legacy／第一場」租戶（見 fallbackTenant_）。還沒建註冊表時
 // REGISTRY_SPREADSHEET_ID 就留空字串——空字串的意思是「整個註冊表機制關閉，
 // 一律走 fallback」，連 openById 都不會打一次。
-// 正式分支（master）：維持 ''。正式環境還沒有租戶註冊表，所以每一個請求（含帶
-// ?t= 的）都走上面那對寫死的試算表，行為與多租戶上線前完全相同。
-// 後果：沒有場次下拉、沒有「產生 Google 文件」、action=sessions 一律回 REGISTRY_OFF
-// （也因此這次上線不會產生 action=sessions 的無金鑰曝光）。
-// 正式註冊表建好那天再填，並在同一天重新回答那個曝光的姿態問題。
-var REGISTRY_SPREADSHEET_ID = '';
+// 正式分支（master）：業主的正式租戶註冊表（2026-10-14 建立）。
+// ⚠️ 填了它＝多場次正式開啟，連帶 action=sessions 這條**完全沒有金鑰**的分支開始
+// 對外服務。那個姿態問題（持有 ?t= 的人可以列舉同一家醫院的所有 演習代號）在
+// CLAUDE.md「The action=sessions exposure」有完整記錄，建註冊表這天就是要重新
+// 回答它的那天。
+// ⚠️ 絕對不要填成沙箱註冊表 1oab1W2U…。2026-10-14 實測發現業主新部署誤用了沙箱
+// 的三個 ID，沙箱醫院代號 wanfang-7f3a2c 在正式端點解得開——正式站整個讀到開發者
+// 的沙箱，畫面上完全看不出來。
+var REGISTRY_SPREADSHEET_ID = '1ZiluDuw7m6LP4tN0xz4oKGm_zBT2A_24tMispQOyE9k';
 var REGISTRY_SHEET_NAME = '租戶註冊表';
 var DEFAULT_RECORD_SHEET_NAME = '評核紀錄';
 // 註冊表快取：設定表「改一格、手機重整就生效」是對業主的承諾，所以設定表
