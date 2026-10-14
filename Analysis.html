@@ -575,7 +575,8 @@ function init(){
   renderCoverageGauge();
   renderAbilityRank();
 
-  let overviewS4Items=Object.entries(DATA.stats.s4).map(([k,v])=>({label:k,value:v.mean,n:v.n}));
+  // 由高到低排列，與 Report.gs 的 specS4Means_ 同一個順序；同分保留後端原順序（sort 是穩定的）。
+  let overviewS4Items=Object.entries(DATA.stats.s4).map(([k,v])=>({label:k,value:v.mean,n:v.n})).sort((a,b)=>b.value-a.value);
   document.getElementById('overviewS4Chart').innerHTML=barsSVG(overviewS4Items);
   renderRadars();renderCoverage();renderS4();renderDetail();renderRanking();renderMethod();
 
