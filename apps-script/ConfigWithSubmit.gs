@@ -13,15 +13,13 @@
 // 沒有。CONFIG_URL 還指著 Config.gs 的部署，所以「沒帶 ?t=/?ex= 的設定載入」
 // 行為不變（它本來就不認識租戶註冊表）。
 
-// ⚠️ 測試分支（dev）：這兩個 ID 是個人帳號 charleslin2003@gmail.com 底下的
-// 測試用試算表，不是業主正式的那一對。master 分支上的正式值是：
-//   CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ'
-//   RECORD_SPREADSHEET_ID = '11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8'
-// 合併回 master 前務必確認這兩行沒有被帶過去。
-var CONFIG_SPREADSHEET_ID = '1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk';  // 演習評核_設定（測試）
+// 正式分支（master）：下面兩個 ID 是業主正式的那一對。註冊表關閉時（見下方
+// REGISTRY_SPREADSHEET_ID = ''）它們就是唯一的 fallback 租戶，每一個請求都走它們。
+// 沙箱那一對只存在 dev 分支，不在這裡重述。
+var CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ';  // 演習評核_設定
 
 // 紀錄表是另一個試算表，把這裡改成該檔案的 ID。
-var RECORD_SPREADSHEET_ID = '1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM';  // 演習評核_紀錄（測試，已有 101 列測試資料）
+var RECORD_SPREADSHEET_ID = '11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8';  // 演習評核_紀錄
 var RECORD_SHEET_NAME = '評核紀錄';
 // 評核紀錄 的欄位分成「必要」跟「選填」兩類。必要欄（問題ID/分數/人員代號/
 // 送出時間）一定要存在，缺了就丟錯；選填欄視實際表格有沒有那一欄決定要不要
@@ -92,9 +90,12 @@ var ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
 // 「legacy／第一場」租戶（見 fallbackTenant_）。還沒建註冊表時
 // REGISTRY_SPREADSHEET_ID 就留空字串——空字串的意思是「整個註冊表機制關閉，
 // 一律走 fallback」，連 openById 都不會打一次。
-// dev：沙箱註冊表。master（正式）沒有這個常數（早於註冊表）；合併時改回 ''，
-// 等正式註冊表建好再填。
-var REGISTRY_SPREADSHEET_ID = '1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk';
+// 正式分支（master）：維持 ''。正式環境還沒有租戶註冊表，所以每一個請求（含帶
+// ?t= 的）都走上面那對寫死的試算表，行為與多租戶上線前完全相同。
+// 後果：沒有場次下拉、沒有「產生 Google 文件」、action=sessions 一律回 REGISTRY_OFF
+// （也因此這次上線不會產生 action=sessions 的無金鑰曝光）。
+// 正式註冊表建好那天再填，並在同一天重新回答那個曝光的姿態問題。
+var REGISTRY_SPREADSHEET_ID = '';
 var REGISTRY_SHEET_NAME = '租戶註冊表';
 var DEFAULT_RECORD_SHEET_NAME = '評核紀錄';
 // 註冊表快取：設定表「改一格、手機重整就生效」是對業主的承諾，所以設定表

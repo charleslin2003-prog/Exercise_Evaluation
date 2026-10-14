@@ -2,9 +2,10 @@
 // Deploy as a Web App (Extensions > Apps Script > Deploy > New deployment > Web app,
 // execute as "Me", access "Anyone"). Start.dc.html fetches the deployed /exec URL.
 
-// ⚠️ 測試分支（dev）：測試用設定表，master 上的正式值是
-// '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ'。
-var CONFIG_SPREADSHEET_ID = '1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk';  // 演習評核_設定（測試）
+// 正式分支（master）：業主正式的設定表。必須跟 ConfigWithSubmit.gs 的
+// CONFIG_SPREADSHEET_ID 同值——兩支後端讀同一份設定表，不同值會讓「有沒有帶
+// ?t=」的連結看到不同的題目。沙箱值只存在 dev 分支。
+var CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ';  // 演習評核_設定
 
 function doGet(e) {
   var ss = SpreadsheetApp.openById(CONFIG_SPREADSHEET_ID);

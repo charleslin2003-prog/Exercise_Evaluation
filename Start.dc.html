@@ -264,24 +264,17 @@ button{font-family:inherit;cursor:pointer}
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#161512","options":["#161512","#7a4e0f","#1f7a4d","#2b5fd9"]},"$preview":{"width":390,"height":844}}'>
-// ⚠️ 測試分支（dev）：指向個人帳號底下的測試試算表，不是業主正式的那一對。
-// master 上的正式值（合併前務必確認沒有把下面這兩行帶過去）：
-//   CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec'
-//   RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
+// 正式分支（master）：下面兩個 /exec 是業主公司帳號底下的正式部署，分數會寫進
+// 業主的正式紀錄表。測試用的沙箱值只存在 dev 分支，不在這裡重述——這段註解會
+// 隨 HTML 一起送到正式站。
 //
-// CONFIG_URL（沙箱 Config 專案，2026-10-08 由業主重新部署後提供的網址）：讀的是
-// 測試設定表 1yiZ…（回傳 8 個代號 A01-A07+TEST-USER，與該表 人員代號 分頁一致）。
-// 與前一個沙箱網址 AKfycbwIoR80… 實測回傳位元組完全相同（9 欄、同一份設定表），
-// 換成這個只是對齊業主手上現行的部署，不影響行為。
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxuIddvtDOkaqDw7Hua07VnekLO85W6_u47UZzVVfl0ngSen_ps4-V4rHVVLX1jddwP8A/exec';
-// RECORD_URL（f2c1c47 之前那個舊 record 部署，ConfigWithSubmit 專案第 14 版）：
-// 2026-10-06 實測三條路都正常 —— 設定分支回 8 個代號、doPost 可寫、
-// action=analysis 讀得到 1jD6… 的 101 列測試資料（icc2k=0.5503、within1=0.75）。
-// 這之前它一直回「你沒有存取所要求文件的權限。(第 66 行)」，原因是該專案以個人
-// 帳號執行、程式裡卻還留著 f2c1c47 的公司帳號 ID（1j3UCb… 從個人帳號根本看不
-// 到）。單純重新部署不會修好，要改的是專案裡的那兩個 ID。
-// 刻意不填正式的 /exec：那一個會把分數寫進業主的 11HeRK… 正式紀錄表。
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec';
+// CONFIG_URL：正式 Config 專案（apps-script/Config.gs，只有 doGet）。頁面網址沒有
+// 帶 ?t= / ?ex= 時走它，行為與多租戶上線前一字不差。
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec';
+// RECORD_URL：正式 ConfigWithSubmit 專案（設定分支＋doPost＋action=analysis）。
+// 改這支後端要用業主帳號在 Apps Script 編輯器「編輯現有部署」重新部署，選
+// 「新增部署」會產生另一個 /exec，這一行就會對不上。
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec';
 
 // 多醫院／多演習路由：連結上的 ?t=（醫院代號）與 ?ex=（演習代號）。兩者都是
 // 註冊表裡不可猜的 slug，後端只用它們查註冊表那一列，代號本身永遠不會被當成

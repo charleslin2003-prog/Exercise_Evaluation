@@ -21,21 +21,35 @@ picking an assessor code, picking an evaluation item from an accordion, answerin
 item's questions on a 1–5 scale (with an optional per-question free-text 觀察紀錄), and
 submitting.
 
-### Branch state (dev)
+### Branch state — **this branch is the production release (2026-10-14)**
 
-`dev` points at a **test sandbox** owned by `charleslin2003@gmail.com`, not the client's
-production files. The constants that differ from `master` are commented inline in each
-file with the production value next to them — check those comments before merging.
-Not every pre-merge decision is a constant. See **"The `action=sessions` exposure"** below —
-accepted on `dev`, and a posture question that has to be re-answered before `master` serves
-a real hospital.
+This is the `dev` → `master` promotion described in
+`docs/build-from-scratch-從零建置.md` §4. Every constant on this branch is the
+**production** value; the sandbox values live only on `dev` and are deliberately no longer
+restated in the inline comments, because those comments ship to the production site with
+the HTML. The rollback point is the branch **`一版`** (and `origin/master` before this push),
+at `a7d1871`.
 
-| | dev (test sandbox) | master (production) |
+| constant | value on this branch | note |
 |---|---|---|
-| `CONFIG_SPREADSHEET_ID` | `1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` |
-| `RECORD_SPREADSHEET_ID` | `1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` |
-| `CONFIG_URL` / `RECORD_URL` | the two `AKfycbxuIddv…` / `AKfycbzQLAJCv3…` deployments | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments |
-| `REGISTRY_SPREADSHEET_ID` | `1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk` (sandbox registry) | **absent** — `master` predates the registry. Merge it as `''` (registry off, every request takes the fallback tenant) until a production registry exists |
+| `CONFIG_SPREADSHEET_ID` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` | in **both** `ConfigWithSubmit.gs` and `Config.gs` — they must stay equal |
+| `RECORD_SPREADSHEET_ID` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` | |
+| `CONFIG_URL` / `RECORD_URL` | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments | `Config` was **not** retired, so the two stay different values |
+| `REGISTRY_SPREADSHEET_ID` | `''` | registry **off** — every request, including one carrying `?t=`, takes the fallback tenant. No session dropdown, and `action=sessions` answers `REGISTRY_OFF`, so this release introduces **no** unauthenticated-`sessions` exposure. Re-answer that posture question on the day a production registry is created |
+| `REPORT_URL` (`Analysis.html`) | `''` | 產生 Google 文件 permanently disabled; the report is the print view (方案A) only. Never paste the dev deployment here — `docEndpoint` appends `&key=`, which would send the production analysis key to a personal deployment |
+| `ADMIN_KEY` | `''` | `action=selftest` / `action=flush` disabled |
+| `ANALYSIS_KEY` | **unchanged** | see the warning below — still byte-identical to `dev`'s |
+
+> ⚠️ **Pushing this branch deploys the frontend, but the two production Apps Script
+> projects are NOT updated by it.** Apps Script has no deploy hook; `ConfigWithSubmit.gs`
+> and `Config.gs` have to be pasted in by an account with edit rights on the owner's
+> company projects, then redeployed via **edit the existing deployment** (picking 「新增部署」
+> mints a different `/exec` and silently breaks the two URLs above). Until that paste
+> happens the site runs **new frontend + old backend**, which `docs/build-from-scratch-從零建置.md`
+> §4-2 identifies as the one intermediate state that loses data: evaluators see the
+> 觀察紀錄 box (the old backend returns no `commentEnabled`, so the client shows it) and
+> **anything typed into it is silently dropped**, because the old backend never writes that
+> column. Close that window fast, and do it outside a live drill.
 
 Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
 (A01–A07 + TEST-USER); `doPost` writes; `action=analysis` returns
@@ -155,11 +169,13 @@ why the owner judged it non-urgent.
 honoured on Git-connected deployments, so no `vercel.json` and no build step. The site
 needs only `Start.dc.html`, `Analysis.html`, `support.js`, `vendor/`, `assets/`.
 
-**The owner decided on 2026-10-08 to fix `dev` only and leave production as-is** (`master`
-is frozen; see the branch policy below). So the exposure is still live. Carry
-`.vercelignore` across in whatever release eventually touches `master` — it is additive,
-one new file, and changes no code. **Adding any new backend file, internal doc or scratch
-file means adding it to `.vercelignore` too.**
+**The owner decided on 2026-10-08 to fix `dev` only and leave production as-is**, so the
+exposure stayed live on production until the **2026-10-14 release carried `.vercelignore`
+across to `master`** — it is additive, one file, and changes no code. The three URLs above
+should 404 on the production site once that release deploys; **verify them, because this is
+the kind of claim that rots.** The pre-release commit (branch `一版`) still has no
+`.vercelignore`, so rolling back re-opens the exposure. **Adding any new backend file,
+internal doc or scratch file means adding it to `.vercelignore` too.**
 
 > ⚠️ **But `.vercelignore` is NOT "the entire public/non-public boundary" — this file said
 > that, and it was wrong.** It governs only whether *the website* serves a file. The repo is
@@ -179,8 +195,11 @@ file means adding it to `.vercelignore` too.**
 
 ### Branch policy
 
-`master` **is** the production version and is not touched. Every change lands on `dev`;
-"更新" always means `dev`. A second Vercel project (`exercise_evaluation_test` →
+`master` **is** the production version. It was frozen at `a7d1871` until the 2026-10-14
+release promoted `dev` onto it (see the Branch state section above); the pre-release commit
+is preserved as the branch **`一版`**, which is the rollback target. Outside a release,
+every change still lands on `dev` and "更新" still means `dev` — do not develop on `master`.
+A second Vercel project (`exercise_evaluation_test` →
 `exerciseevaluationtest.vercel.app`, same GitHub repo) has its Production Branch set to
 `dev`, so pushing `dev` deploys the test site and pushing `master` deploys the hospital's.
 That setting lives under **Settings → Environments → Production → Branch Tracking**, not

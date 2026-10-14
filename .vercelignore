@@ -28,6 +28,7 @@ docs
 scripts
 
 # 暫存／草稿檔。
+# （prototype-dynamic-layers.html 已在 2026-10-14 的正式版發行中從 repo 刪除，
+#   所以這裡不再需要為它留規則。新增任何暫存檔時記得補回來。）
 *.tsv
-prototype-dynamic-layers.html
 .idea

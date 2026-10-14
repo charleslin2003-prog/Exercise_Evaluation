@@ -272,15 +272,10 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <script>
 // 跟 apps-script/ConfigWithSubmit.gs 部署後的 RECORD_URL 一致（跟 Start.dc.html
 // 用同一個 /exec 網址，用 action=analysis 參數走分析用的 doGet 分支）。
-// ⚠️ 測試分支（dev）：f2c1c47 之前那個舊 record 部署，讀的是測試紀錄表
-// 1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM（101 列測試資料）。
-// 2026-10-06 實測正常：analysisRows=16 / coverageRows=7 / learningRows=0、
-// 評核官 5 人、within1=0.75。兩個檔案必須填同一個值。
-// （當時還記了 icc2k=0.5503；2026-10-13 改用 r_wg 後前台不再顯示 ICC，
-//   同一批資料的 r_wg = 0.7315】23 題全數納入、無跳過、無截斷。）
-// master 上的正式值（讀業主的 11HeRK…，不要在測試分支用）：
-//   'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec'
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec';
+// 正式分支（master）：正式 ConfigWithSubmit 部署，讀業主的正式紀錄表。
+// 這一行必須跟 Start.dc.html 的 RECORD_URL 完全相同，否則儀表板與評核官表單
+// 會讀到不同的後端。沙箱值只存在 dev 分支，不在這裡重述。
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec';
 // 必須跟 ConfigWithSubmit.gs 裡的 ANALYSIS_KEY 完全一致，兩邊都要換成同一組
 // 自訂的隨機字串再部署 —— 這把金鑰只存在於這個檔案，不會出現在 Start.dc.html。
 const ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
@@ -318,11 +313,14 @@ const WANT_REPORT = Q.get('view') === 'report';
 //
 // ⚠️ 空字串 = 這個部署還沒有報告產生器，「產生 Google 文件」會維持停用並說明原因。
 //    部署好之後只要把 /exec 網址貼進這一行，其他程式都不用動。
-//    合併到 master 時同樣以 '' 合併（按鈕永久停用），跟 REGISTRY_SPREADSHEET_ID
-//    以 '' 合併是同一個道理：寧可按鈕是死的，也不要按下去才發現後端不存在。
-// dev 沙箱的報告部署（獨立專案「演習評核報告 Web」，2026-10-13 建立）。
-// master 合併時改回 ''。
-const REPORT_URL = 'https://script.google.com/macros/s/AKfycbwEeMUSu5W1rXKTpD-9K9bklv3oXkN-Sz6N8vbUuq2l6rq70rmZfDbRtoxMzbI34z_jrg/exec';
+//
+// 正式分支（master）：維持 ''。正式環境沒有報告 Web 部署，報告只剩「列印檢視」
+// （方案A）。跟 REGISTRY_SPREADSHEET_ID 以 '' 合併是同一個道理：寧可按鈕是死的，
+// 也不要按下去才發現後端不存在。
+// ⚠️ 絕對不要在這裡填 dev 沙箱那個部署——docEndpoint 會帶 &key=（見下方
+//    「產生 Google 文件」的組網址處），填了就等於把正式分析金鑰送到開發者
+//    個人帳號的部署上。
+const REPORT_URL = '';
 
 let DATA = null;
 const fmt=x=>x==null?'—':Number(x).toFixed(2); const cls=x=>x==null?'':x<3.3?'low':x<4?'mid':'high';

@@ -542,7 +542,8 @@ RECORD_URL  →  "exerciseDate":"2026/10/03"          （同一張表、同一�
   `docs/multi-tenant-and-report-plan.md` 在 `master` 上已經存在，合併是**修改**它。
 - `scripts/smoke.sh`
 - `.vercelignore`、`.gitignore`
-- `prototype-dynamic-layers.html`
+- ~~`prototype-dynamic-layers.html`~~ —— 2026-10-14 的正式版發行已把它從 repo 刪除
+  （純草稿檔，沒有任何程式引用它），`.vercelignore` 裡對應的規則也一併移除。
 
 照這份清單核對 `.vercelignore` 的覆蓋面時，上面每一項都要在裡面找得到對應規則。
 
