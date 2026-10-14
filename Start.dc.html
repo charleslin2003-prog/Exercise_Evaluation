@@ -270,11 +270,12 @@ button{font-family:inherit;cursor:pointer}
 //
 // CONFIG_URL：正式 Config 專案（apps-script/Config.gs，只有 doGet）。頁面網址沒有
 // 帶 ?t= / ?ex= 時走它，行為與多租戶上線前一字不差。
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbyIEReG4M76YErbcMbtoTZygMDQO-8MVxegyC3hKtunlswQtdnJ1Ykb_iFNE7RjG-58/exec';
-// RECORD_URL：正式 ConfigWithSubmit 專案（設定分支＋doPost＋action=analysis）。
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxtcCix2GTCQ0kh4nC32ONWPqpYibnC_fJKbTZzJMAoYmHuPlOtMCotH5bVySkq9AIbfg/exec';
+// RECORD_URL：正式 ConfigWithSubmit 專案（設定分支＋doPost＋action=analysis＋
+// action=sessions）。2026-10-14 起接上正式租戶註冊表，所以帶 ?t= 的連結會走場次路由。
 // 改這支後端要用業主帳號在 Apps Script 編輯器「編輯現有部署」重新部署，選
 // 「新增部署」會產生另一個 /exec，這一行就會對不上。
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzBiivE_78KbXrAJtYjLCUdl_WrUuQUnF1-8acUx7CrTlkwB9ZHWB7Ozhx_Wq0fFfOv/exec';
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzA5pE8JrbB4qCsdDvQMEEQMiQsIVytILbv-gDqd4apZ8C1p5kb-Rj7cLZYtRAS42Q-/exec';
 
 // 多醫院／多演習路由：連結上的 ?t=（醫院代號）與 ?ex=（演習代號）。兩者都是
 // 註冊表裡不可猜的 slug，後端只用它們查註冊表那一列，代號本身永遠不會被當成
