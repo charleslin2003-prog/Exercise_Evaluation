@@ -1499,11 +1499,13 @@ function loadExercises(){
       if(json.error||!(json.exercises||[]).length) return;
       exListLoaded=true;
       sel.innerHTML=json.exercises.map(x=>{
-        // 標籤順序＝使用者掃視的順序：名字在前，狀態註記在後。已結束的場次
-        // 照樣可選，報告本來就是演習結束後才做的。
-        const tags=[x.exercise?'代號 '+x.exercise:'',x.exerciseDate?fmtExerciseDate(x.exerciseDate):'',x.enabled?'':'已結束',x.isDefault?'預設':''].filter(Boolean).join('｜');
+        // 只顯示「場次名稱｜日期」。代號與「預設」是內部路由概念，對著報表挑
+        // 場次的人用不到，掃視時反而蓋掉真正要辨識的名字。代號仍在標頭徽章與
+        // 附錄C 裡，需要時查得到。已結束的場次照樣可選，報告本來就是演習結束
+        // 後才做的。
+        const date=x.exerciseDate?fmtExerciseDate(x.exerciseDate):'';
         const name=x.displayName||x.exerciseName||x.exercise||'（未命名）';
-        return '<option value="'+esc(x.exercise||'')+'">'+esc(name)+(tags?'（'+esc(tags)+'）':'')+'</option>';
+        return '<option value="'+esc(x.exercise||'')+'">'+esc(name)+(date?'｜'+esc(date):'')+'</option>';
       }).join('');
       sel.style.display='';
       syncPickerSelection();
