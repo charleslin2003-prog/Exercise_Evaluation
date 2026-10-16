@@ -34,7 +34,8 @@ var RECORD_CODE_ALIASES_ = ['人員代號'];
 var RECORD_TIME_ALIASES_ = ['送出時間'];
 var RECORD_EXERCISE_ALIASES_ = ['演習名稱'];
 var RECORD_ITEM_ALIASES_ = ['項目名稱'];
-var RECORD_STAGE_ALIASES_ = ['場景階段', '情境階段'];
+// 2026-10-16 業主把「情境階段」改名「地點」；舊紀錄表的欄名照收。
+var RECORD_STAGE_ALIASES_ = ['地點', '場景階段', '情境階段'];
 var RECORD_SCENE_ALIASES_ = ['演練單元'];
 var RECORD_INDICATOR_ALIASES_ = ['指標代號'];
 // 以下七欄全部是「新增的選填欄」：業主現在那張 6 欄表一欄都沒有，findHeaderCol_
@@ -48,7 +49,7 @@ var RECORD_TENANT_ALIASES_ = ['醫院代號', '機構代號'];
 // 注意：這個別名陣列跟設定表那邊的 GOAL_HEADER_ALIASES_（在 readItems_ 上方）刻意分開
 // 宣告、不共用變數——一邊是「設定表的來源欄」，一邊是「紀錄表的快照欄」，
 // 兩邊將來很可能被業主改成不同欄名。
-var RECORD_GOAL_ALIASES_ = ['測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
+var RECORD_GOAL_ALIASES_ = ['場景說明', '測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
 var RECORD_POTENTIAL_ALIASES_ = ['評核潛能', '潛能'];
 var RECORD_S4_ALIASES_ = ['4S 元素', '4S元素', '單一 4S 元素'];
 // 「評核題目」跟 RECORD_ID_ALIASES_ 的「評核題號」只差一個字，但不會互相誤中：
@@ -1105,6 +1106,15 @@ function buildAnalysis_(t) {
   var items = readItems_(configSs);
   var stageIndex = indexQuestionsByStage_(items);
   var indicatorFull = readIndicatorFull_(configSs);
+  // 本場的評分量尺，跟 Start.dc.html 的分數按鈕同一個來源（見 scaleOf_）。評分標準
+  // 那張表壞了不能讓整個儀表板跟著壞：退回 1–5，也就是改版前的行為。
+  var scale;
+  try {
+    scale = scaleOf_(readCriteria_(configSs));
+  } catch (errScale) {
+    scale = scaleOf_([]);
+    scale.source = 'error';
+  }
 
   var record = tenantSheetRecord_(t);
   var sheet = record.sheet;
@@ -1138,7 +1148,12 @@ function buildAnalysis_(t) {
     var row = values[i];
     var id = String(row[idCol] || '');
     var code = String(row[codeCol] || '');
-    var score = Number(row[scoreCol]);
+    // 空白格不是 0 分。Number('') 是 0，以前這裡只擋 NaN，所以一格被清空的分數會
+    // 被當成 0 分讀進來（還會蓋掉同一人同一題較早的真分數）。0 分現在有意義（不予
+    // 評分），不能再讓空白冒充它。
+    var rawScore = row[scoreCol];
+    if (rawScore === '' || rawScore == null || String(rawScore).trim() === '') continue;
+    var score = Number(rawScore);
     if (!id || !code || isNaN(score)) continue;
     var rowHid = rowTenantCol !== -1 ? String(row[rowTenantCol] || '') : '';
     var rowExid = rowExerciseIdCol !== -1 ? String(row[rowExerciseIdCol] || '') : '';
@@ -1214,8 +1229,10 @@ function buildAnalysis_(t) {
     var codes = Object.keys(b.byCode).sort();
     var scores = codes.map(function (c) { return { code: c, score: b.byCode[c] }; });
     var vals = scores.map(function (s) { return s.score; });
+    // 平均、標準差只算有評的分數（0 分＝不予評分不算）。整題都是 0 分時 mean 是 null。
+    var rated = ratedOnly_(vals);
     var untriggered = 0;
-    vals.forEach(function (v) { if (v === 1) untriggered++; });
+    vals.forEach(function (v) { if (v === scale.lowValue) untriggered++; });
     return {
       questionId: qid,
       stage: stageInfo.stage,
@@ -1230,8 +1247,10 @@ function buildAnalysis_(t) {
       indicator: indicator,
       question: question,
       scores: scores,
-      mean: mean_(vals),
-      sd: sd_(vals),
+      mean: mean_(rated),
+      sd: sd_(rated),
+      // 有評（非 0）的分數個數。scores.length 仍是「評過這題的人數」，含不予評分。
+      ratedCount: rated.length,
       exerciseId: b.exid || t.exid || '',
       comments: Object.keys(b.commentByCode).sort().map(function (c) {
         return { code: c, comment: b.commentByCode[c] };
@@ -1261,7 +1280,7 @@ function buildAnalysis_(t) {
     // icc2k 仍然算、仍然回傳，但前台已經不再顯示它（2026-10-13 業主要求改用
     // r_wg）。留著是因為拔掉它會讓尚未重貼的 Report.gs 當場少一個欄位，而它
     // 的成本只有幾個 CPU 週期。要真的移除請連同 Report.gs 的 verifyIcc_ 一起。
-    rwg: rwg_(consistencyRows),
+    rwg: rwg_(consistencyRows, scale),
     within1: within1_(consistencyRows),
   };
   ['反應', '監測', '預期'].forEach(function (p) {
@@ -1296,26 +1315,40 @@ function buildAnalysis_(t) {
   // 的計算方式在這三組加入時一個字都沒改。之後的改動：2026-10-12 potentials／
   // potentialByS4 的鍵由「回應」改名「反應」（數字不變，見 normPotential_）；
   // 2026-10-16 s4／potentialByS4 改用 s4List 分組（上面）。
-  // 1 分的定義是「劇本未走到此條件」（見 評分標準 工作表），跟 2-5 分放在一起
-  // 平均會讓「沒演到」和「表現差」分不出來，所以單獨算一個未觸發率。
+  // 量尺最低一級的占比。舊的 1–5 量尺最低是 1＝「劇本未走到此條件」，它跟 2–5 分
+  // 一起平均，所以要另外報比率才分得出「沒演到」和「表現差」。2026-10-16 起的 0–4
+  // 量尺最低是 0＝「不予評分」，它根本不進平均（見 ratedOnly_），這個比率就是唯一
+  // 看得到它的地方。數的是哪個分數、叫什麼名字都跟著本場評分標準走（scale.lowValue
+  // ／lowLabel），鍵名 untriggered 不改，舊的報告端才不會少欄位。
   var untriggeredN = 0;
   var untriggeredTotal = 0;
   consistencyRows.forEach(function (r) {
     r.scores.forEach(function (s) {
       untriggeredTotal++;
-      if (s.score === 1) untriggeredN++;
+      if (s.score === scale.lowValue) untriggeredN++;
     });
   });
   stats.untriggered = {
     n: untriggeredN,
     total: untriggeredTotal,
     rate: untriggeredTotal ? untriggeredN / untriggeredTotal : null,
+    value: scale.lowValue,
+    label: scale.lowLabel,
+    excluded: scale.lowExcluded,
   };
 
   // 缺漏清單：項目與問題 裡有、但一分都沒收到的題目。業主看到的「評核官人數」
   // 是實際出現過的代號聯集，所以「哪一題根本沒人評」今天是隱形的。
   var scoredIds = {};
   rows.forEach(function (r) { if (r.scores.length) scoredIds[r.questionId] = true; });
+  // 有人評、但每一個分數都是 0（不予評分）的題目。它不算「沒人評」（不在
+  // missingQuestions），平均卻是 null、從每一張圖消失 —— 不另外列出來的話，報告上
+  // 兩邊都找不到它。
+  stats.unratedQuestions = rows.filter(function (r) {
+    return r.scores.length > 0 && r.ratedCount === 0;
+  }).map(function (r) {
+    return { questionId: r.questionId, stage: r.stage || '', itemName: r.itemName || '', goal: r.goal || '' };
+  });
   stats.missingQuestions = [];
   Object.keys(stageIndex).forEach(function (qid) {
     // 項目與問題 裡「有分組名稱、但 評核題號 那一格空白」的列（業主常拿來放
@@ -1340,6 +1373,9 @@ function buildAnalysis_(t) {
   var byEvaluator = {};
   consistencyRows.forEach(function (r) {
     r.scores.forEach(function (s) {
+      // 不予評分不是寬或嚴；這一題他沒評，自己的分數和基準都不收（兩個 push 成對
+      // 跳過）。他評了分的題目至少有一個非 0 分，r.mean 不會是 null。
+      if (s.score === NOT_RATED_SCORE_) return;
       if (!byEvaluator[s.code]) byEvaluator[s.code] = { scores: [], rowMeans: [] };
       byEvaluator[s.code].scores.push(s.score);
       byEvaluator[s.code].rowMeans.push(r.mean);
@@ -1398,6 +1434,13 @@ function buildAnalysis_(t) {
       recordRowCount: recordRowCount,
       commentCount: commentCount,
       labelSourceSummary: labelSourceSummary,
+      // 本場評分量尺（見 scaleOf_）。Analysis.html 與 Report.gs 的圖表滿分、顏色門檻、
+      // 量尺說明都讀它，不再寫死 5。評分標準的文字在無金鑰的設定分支本來就公開。
+      scale: scale,
+      // 第一層分組（地點，舊名情境階段）在「項目與問題」裡的出現順序。Analysis.html 的
+      // 「不予評分項目」依地點排序時照這個順序排：業主排好的順序本身就是答案，而用字串
+      // 排序的話，結果會隨瀏覽器語系變（繁中語系把「綜合」排在「A 點」前面）。
+      stageOrder: items.map(function (n) { return String(n.name || ''); }),
     },
     analysisRows: analysisRows,
     coverageRows: coverageRows,
@@ -1406,10 +1449,76 @@ function buildAnalysis_(t) {
   };
 }
 
+// 0 分＝「不予評分」（業主 2026-10-16 的評分標準：未觸發、證據不足、不適用）。它
+// 不是表現的高低，所以不進任何平均、標準差、一致性統計，只在 stats.untriggered
+// 與 stats.unratedQuestions 裡被數到。一律排除、不看本場量尺有沒有 0：舊的 1–5
+// 紀錄裡本來就沒有 0（空白格已在讀取時擋掉），所以舊場次的數字一個位元都不變。
+var NOT_RATED_SCORE_ = 0;
+function ratedOnly_(vals) {
+  return vals.filter(function (v) { return v !== NOT_RATED_SCORE_; });
+}
+
 function flattenScores_(rows) {
   var out = [];
-  rows.forEach(function (r) { r.scores.forEach(function (s) { out.push(s.score); }); });
+  rows.forEach(function (r) {
+    r.scores.forEach(function (s) { if (s.score !== NOT_RATED_SCORE_) out.push(s.score); });
+  });
   return out;
+}
+
+// 本場評分量尺，取自設定表「評分標準」的「分數」欄（readCriteria_）——跟評核單的
+// 分數按鈕同一個來源，所以按鈕有哪些分數，分析就用哪個量尺。每場演習有自己的
+// 設定試算表，舊的 1–5 場次與新的 0–4 場次各自正確。讀不到任何分數時退回 1–5，
+// 也就是改版前寫死的值（Start.dc.html scoreScale() 的退回值相同）。
+//   values      全部分數（含 0），由小到大
+//   rated       去掉 0 的分數 —— 平均與一致性統計的值域
+//   min / max   rated 的最小／最大（圖表座標軸與顏色門檻用）
+//   lowValue    stats.untriggered 數的分數：量尺有 0 就是 0，否則是最低分
+//   lowLabel    那一級在評分標準上的「標籤」（例如「不予評分」「未觸發」）
+//   lowExcluded lowValue 是否不進平均（＝它是 0）
+//   expectedVar r_wg 的 σ_E²：rated 上「各級等機率」的母體變異數。連續整數時就是
+//               (A²−1)/12（1–5 是 2、1–4 是 1.25），不連續的量尺也算得對。
+//   levels      評分標準原樣（分數、標籤、說明），統計方法的量尺表用
+//   source      'criteria' | 'default'（buildAnalysis_ 讀表失敗時改成 'error'）
+var DEFAULT_SCORE_VALUES_ = [1, 2, 3, 4, 5];
+function scaleOf_(criteria) {
+  var list = criteria || [];
+  var seen = {};
+  var values = [];
+  var labelOf = {};
+  for (var i = 0; i < list.length; i++) {
+    var c = list[i];
+    var v = c ? c.score : null;
+    if (typeof v !== 'number' || !isFinite(v) || seen[v]) continue;
+    seen[v] = true;
+    values.push(v);
+    labelOf[v] = String(c.label || '');
+  }
+  var source = values.length ? 'criteria' : 'default';
+  if (!values.length) values = DEFAULT_SCORE_VALUES_.slice();
+  values.sort(function (a, b) { return a - b; });
+  var rated = ratedOnly_(values);
+  var lowValue = values.indexOf(NOT_RATED_SCORE_) !== -1 ? NOT_RATED_SCORE_ : values[0];
+  var expectedVar = 0;
+  if (rated.length) {
+    var m = mean_(rated);
+    rated.forEach(function (x) { expectedVar += (x - m) * (x - m); });
+    expectedVar = expectedVar / rated.length;
+  }
+  return {
+    values: values,
+    rated: rated,
+    min: rated.length ? rated[0] : null,
+    max: rated.length ? rated[rated.length - 1] : null,
+    lowValue: lowValue,
+    lowLabel: labelOf[lowValue] || '',
+    lowExcluded: lowValue === NOT_RATED_SCORE_,
+    expectedVar: expectedVar,
+    levels: list.map(function (c) {
+      return { score: c.score, label: String(c.label || ''), desc: String(c.desc || '') };
+    }),
+    source: source,
+  };
 }
 
 function mean_(arr) {
@@ -1438,8 +1547,10 @@ function summarize_(arr) {
 function icc2k_(rows) {
   if (!rows.length) return null;
   var commonCodes = null;
+  // 0 分（不予評分）當成「沒評」：不進矩陣，也就不算在交集裡。
   rows.forEach(function (r) {
-    var codes = r.scores.map(function (s) { return s.code; });
+    var codes = r.scores.filter(function (s) { return s.score !== NOT_RATED_SCORE_; })
+      .map(function (s) { return s.code; });
     commonCodes = commonCodes === null ? codes.slice() : commonCodes.filter(function (c) { return codes.indexOf(c) !== -1; });
   });
   if (!commonCodes || commonCodes.length < 2) return null;
@@ -1471,11 +1582,12 @@ function icc2k_(rows) {
 }
 
 // 任兩位評核官對同一題評分「相差不超過 1 分」的比例：逐題取該題所有已
-// 評分的評核官兩兩配對計算，不要求所有題目的評核官交集一致。
+// 評分的評核官兩兩配對計算，不要求所有題目的評核官交集一致。0 分（不予評分）
+// 不參與配對：它不是一個評分，「0 和 1 差 1 分」不代表兩人看法接近。
 function within1_(rows) {
   var agree = 0, total = 0;
   rows.forEach(function (r) {
-    var scores = r.scores.map(function (s) { return s.score; });
+    var scores = ratedOnly_(r.scores.map(function (s) { return s.score; }));
     for (var a = 0; a < scores.length; a++) {
       for (var b = a + 1; b < scores.length; b++) {
         total++;
@@ -1492,6 +1604,9 @@ function within1_(rows) {
 // 4,4,5,4,3 的 S_x² = 2/4 = 0.5，不是母體變異數 0.4）；σ_E² 是「完全沒有共識」
 // 時的期望變異數，在 A 點量表且無共識時各選項等機率（uniform）的假設下是
 // (A²-1)/12，5 點量表即 (25-1)/12 = 2。所以上面那題 r_wg = 1 - 0.5/2 = 0.75。
+// 2026-10-16 起 A 不再寫死：σ_E² 取 scale.expectedVar，也就是本場評分標準去掉 0 分
+// 之後那幾級的等機率變異數。舊 1–5 場次仍是 2；0–4 場次去掉 0 後是 1–4 四級，
+// σ_E² = 1.25。0 分（不予評分）不進 S_x²。
 //
 // ⚠️ 與 ICC(2,k) 的差別不只是換個公式，而是換掉它的失效模式：ICC 需要一個完整
 // 矩陣，所以要先取「所有題目都有評分的評核官」交集，**只要有一題只有一個人評
@@ -1500,18 +1615,15 @@ function within1_(rows) {
 //
 // 回傳物件而不是單一數字，是因為平均值本身會說謊：被跳過幾題、有幾題負值被
 // 截到 0，都會把平均往上拉。不附這兩個數字，讀者沒有辦法判斷這個平均可不可信。
-var RWG_SCALE_POINTS_ = 5;
-function rwgExpectedVar_(points) {
-  return (points * points - 1) / 12;
-}
-function rwg_(rows) {
-  var sigmaE = rwgExpectedVar_(RWG_SCALE_POINTS_);
-  if (!sigmaE) return null;
+function rwg_(rows, scale) {
+  var sigmaE = scale.expectedVar;
+  if (!(sigmaE > 0)) return null;
   var vals = [], skipped = 0, clamped = 0;
   rows.forEach(function (r) {
-    var scores = r.scores.map(function (s) { return s.score; });
-    // 一個人評的題目沒有「群組內一致性」可言（樣本變異數的分母會是 0），
+    var scores = ratedOnly_(r.scores.map(function (s) { return s.score; }));
+    // 只有一個有效評分的題目沒有「群組內一致性」可言（樣本變異數的分母會是 0），
     // 跳過而不是當成完全一致 —— 當成 1.0 會把平均推高，而且推得毫無根據。
+    // 「有效」不含 0 分：三人評、兩人給不予評分的題目也算在這裡。
     if (scores.length < 2) { skipped++; return; }
     var m = mean_(scores), ss = 0;
     scores.forEach(function (v) { ss += (v - m) * (v - m); });
@@ -1528,7 +1640,7 @@ function rwg_(rows) {
     items: vals.length,
     skipped: skipped,
     clamped: clamped,
-    scalePoints: RWG_SCALE_POINTS_,
+    scalePoints: scale.rated.length,
     expectedVar: sigmaE
   };
 }
@@ -1710,10 +1822,10 @@ function doSelfTest_(t, registryInfo) {
       messages.push('⚠️ 紀錄檔缺少必要欄位：' + recordReport.missingRequired.join('／'));
     }
     [[RECORD_EXERCISE_ALIASES_, '演習名稱'], [RECORD_ITEM_ALIASES_, '項目名稱'],
-      [RECORD_STAGE_ALIASES_, '情境階段'], [RECORD_SCENE_ALIASES_, '演練單元'],
+      [RECORD_STAGE_ALIASES_, '地點'], [RECORD_SCENE_ALIASES_, '演練單元'],
       [RECORD_INDICATOR_ALIASES_, '指標代號'], [RECORD_COMMENT_ALIASES_, '觀察紀錄'],
       [RECORD_EXERCISEID_ALIASES_, '演習代號'], [RECORD_TENANT_ALIASES_, '醫院代號'],
-      [RECORD_GOAL_ALIASES_, '測試情境'], [RECORD_POTENTIAL_ALIASES_, '評核潛能'],
+      [RECORD_GOAL_ALIASES_, '場景說明'], [RECORD_POTENTIAL_ALIASES_, '評核潛能'],
       [RECORD_S4_ALIASES_, '4S 元素'], [RECORD_QUESTION_ALIASES_, '評核題目']].forEach(function (pair) {
       if (findHeaderCol_(header, pair[0]) !== -1) recordReport.presentOptional.push(pair[1]);
       else recordReport.absentOptional.push(pair[1]);
@@ -2117,7 +2229,9 @@ function readCriteria_(ss) {
   var out = [];
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    if (row[scoreCol] === '' || row[scoreCol] == null) continue;
+    // 只有空白字元的格子也當空白：Number(' ') 是 0，不擋的話會多出一個假的 0 分等級
+    // （評核單多一顆 0 按鈕，舊 1–5 場次的「最低一級」也會被誤判成 0）。
+    if (row[scoreCol] === '' || row[scoreCol] == null || String(row[scoreCol]).trim() === '') continue;
     out.push({
       score: Number(row[scoreCol]),
       label: String(row[labelCol] || ''),
@@ -2130,19 +2244,21 @@ function readCriteria_(ss) {
 // 項目與問題表支援任意層數分組：標頭裡有幾欄「層1」「層2」...就分幾層
 // （例如 階段->情境 兩層），沒有「層N」欄位時退回舊版單層行為，直接用
 // 「項目名稱」當唯一分組欄，回傳格式與舊版 { name, questions }[] 完全相同。
-// 前兩層另外接受具名欄位當別名：「層1」也可以叫「情境階段」、「層2」也可以
+// 前兩層另外接受具名欄位當別名：「層1」也可以叫「地點」（2026-10-16 業主改名，
+// 舊名「場景階段」「情境階段」照收）、「層2」也可以
 // 叫「演練單元」（比對順序：先找「層N」，找不到才找別名）；深度 3 層以上
 // 只認「層N」，沒有具名別名。問題ID/問題內容兩欄同理，也接受「評核題號」
 // 「評核題目」這種別名。
 // 有分組的節點回傳 { name, children }，最底層（葉節點）回傳 { name, questions }。
-var GROUP_HEADER_ALIASES_ = [['場景階段', '情境階段'], ['演練單元']];
+var GROUP_HEADER_ALIASES_ = [['地點', '場景階段', '情境階段'], ['演練單元']];
 var ID_HEADER_ALIASES_ = ['問題ID', '評核題號'];
 var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'];
 // 選填欄：每個葉節點（最底層分組，例如 SCENE）的簡要說明，取自這一欄的第一
 // 筆值，掛在葉節點的 goal 上，給 Start.dc.html 選擇畫面當作該情境的列表文字
 // 用（配合數字徽章顯示）。沒有這欄就是空字串，前端會退回原本只顯示編號。
 // 這是「真的選填」，所以刻意不用 safeHeaderCol_，-1 由 readItems_ 裡 goalCol !== -1 的判斷吸收。
-var GOAL_HEADER_ALIASES_ = ['測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
+// 2026-10-16 業主把「測試情境」改名「場景說明」：新名放第一個，舊名全部照收。
+var GOAL_HEADER_ALIASES_ = ['場景說明', '測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
 // 找標頭列裡符合任一別名的欄位：先找「完全相等」，全部欄位都找過一輪都沒
 // 命中，才退而求其次找「開頭比對」。一定要先做完整的完全相等再做開頭比對
 // （不能同一欄位內兩種比對一起做），不然像「問題」這個別名會在完全相等版
@@ -2196,7 +2312,7 @@ function readItems_(ss) {
   }
   if (!groupCols.length) {
     var nameCol = findHeaderCol_(header, ['項目名稱']);
-    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1/情境階段');
+    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1/地點');
     groupCols = [nameCol];
   }
   var idCol = safeHeaderCol_(header, ID_HEADER_ALIASES_, '項目與問題');

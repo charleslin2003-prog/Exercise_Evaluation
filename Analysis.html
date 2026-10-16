@@ -4,7 +4,7 @@
      （Chrome 的「列印成 PDF」檔名直接取 document.title，所以不能寫死某一家醫院）。 -->
 <title>演習評核分析平台</title>
 <style>
-:root{--bg:#f3f7f8;--card:#fff;--ink:#18323a;--muted:#67808a;--line:#d8e4e7;--teal:#147d83;--teal2:#1f9da0;--navy:#274c67;--amber:#b97816;--red:#a84646;--green:#2f7d5b;--shadow:0 10px 28px rgba(20,55,65,.08)}*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink)}header{background:linear-gradient(125deg,#0e6870,#1c8a8c 58%,#4c9aa0);color:#fff;padding:28px 32px 22px}.head{max-width:1440px;margin:auto;display:flex;flex-direction:column;gap:10px}.headTop{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.headActions{display:flex;flex-direction:column;align-items:flex-end;align-self:flex-start;margin-left:auto;gap:6px}.eyebrow{font-size:12px;letter-spacing:.12em;opacity:.82;text-transform:uppercase}.title{font-size:30px;font-weight:800;margin:5px 0 7px}.sub{font-size:14px;opacity:.9}.notice{margin-top:15px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:10px 13px;border-radius:10px;font-size:13px}.refreshBtn{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;padding:9px 14px;border-radius:9px;cursor:pointer;font:inherit;font-weight:700}.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.pill{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:999px;font-size:12px}.viewTabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center}.genAt{font-size:11px;opacity:.75}.wrap{max-width:1440px;margin:auto;padding:22px 28px 40px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.tab{border:1px solid var(--line);background:#fff;padding:9px 14px;border-radius:999px;cursor:pointer;font-weight:700;color:#45616a}.tab.active{background:var(--teal);border-color:var(--teal);color:#fff}.panel{display:none}.panel.active{display:block}.grid{display:grid;gap:16px}.kpis{grid-template-columns:2fr 2fr 1fr 1fr}.card{background:var(--card);border:1px solid #e3ecee;border-radius:15px;box-shadow:var(--shadow);padding:18px}.kpi .lbl{font-size:12px;color:var(--muted);font-weight:700}.kpi .val{font-size:29px;font-weight:800;margin-top:5px}.kpi .hint{font-size:12px;color:var(--muted);margin-top:2px}.sec{font-size:18px;font-weight:800;margin:4px 0 12px}.cols2{grid-template-columns:1.1fr .9fr}.cols3{grid-template-columns:repeat(3,1fr)}.badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#e7f4f4;color:#176e73;font-size:11px;font-weight:800}.metric-row{display:grid;grid-template-columns:96px 1fr 70px;align-items:center;gap:10px;margin:10px 0}.bar{height:10px;background:#e8eff1;border-radius:99px;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--teal2));border-radius:99px}.small{font-size:12px;color:var(--muted)}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}.chartbox{min-height:360px}.chartbox svg{width:100%;height:100%;min-height:340px;overflow:visible}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}table{border-collapse:collapse;width:100%;font-size:12px;background:#fff}th{position:sticky;top:0;background:#eaf3f4;text-align:left;padding:9px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:9px;border-bottom:1px solid #edf2f3;vertical-align:top}tr:hover td{background:#f9fbfb}.score{font-weight:800;text-align:center}.low{color:var(--red)}.mid{color:var(--amber)}.high{color:var(--green)}select,button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 10px;color:var(--ink)}button{cursor:pointer}.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}.note{padding:12px 14px;border-left:4px solid var(--teal);background:#edf7f7;border-radius:8px;font-size:13px;line-height:1.7}.insights{display:grid;gap:10px}.insight{padding:12px;border:1px solid var(--line);border-radius:10px;background:#fbfdfd}.insight b{display:block;margin-bottom:3px}.method li{margin:7px 0;line-height:1.6}.foot{margin-top:20px;color:var(--muted);font-size:11px;text-align:center}.state{max-width:640px;margin:60px auto;text-align:center;padding:30px;background:#fff;border-radius:15px;box-shadow:var(--shadow)}.state.err{color:var(--red)}@media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.cols2,.cols3{grid-template-columns:1fr}}@media(max-width:600px){header{padding:22px 18px}.wrap{padding:16px 12px}.title{font-size:24px}.kpis{grid-template-columns:1fr}.card{padding:14px}}
+:root{--bg:#f3f7f8;--card:#fff;--ink:#18323a;--muted:#67808a;--line:#d8e4e7;--teal:#147d83;--teal2:#1f9da0;--navy:#274c67;--amber:#b97816;--red:#a84646;--green:#2f7d5b;--shadow:0 10px 28px rgba(20,55,65,.08)}*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink)}header{background:linear-gradient(125deg,#0e6870,#1c8a8c 58%,#4c9aa0);color:#fff;padding:28px 32px 22px}.head{max-width:1440px;margin:auto;display:flex;flex-direction:column;gap:10px}.headTop{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.headActions{display:flex;flex-direction:column;align-items:flex-end;align-self:flex-start;margin-left:auto;gap:6px}.eyebrow{font-size:12px;letter-spacing:.12em;opacity:.82;text-transform:uppercase}.title{font-size:30px;font-weight:800;margin:5px 0 7px}.sub{font-size:14px;opacity:.9}.notice{margin-top:15px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:10px 13px;border-radius:10px;font-size:13px}.refreshBtn{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;padding:9px 14px;border-radius:9px;cursor:pointer;font:inherit;font-weight:700}.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.pill{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:6px 12px;border-radius:999px;font-size:12px}.viewTabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center}.genAt{font-size:11px;opacity:.75}.wrap{max-width:1440px;margin:auto;padding:22px 28px 40px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.tab{border:1px solid var(--line);background:#fff;padding:9px 14px;border-radius:999px;cursor:pointer;font-weight:700;color:#45616a}.tab.active{background:var(--teal);border-color:var(--teal);color:#fff}.panel{display:none}.panel.active{display:block}.grid{display:grid;gap:16px}.kpis{grid-template-columns:2fr 2fr 1fr 1fr}.card{background:var(--card);border:1px solid #e3ecee;border-radius:15px;box-shadow:var(--shadow);padding:18px}.kpi .lbl{font-size:12px;color:var(--muted);font-weight:700}.kpi .val{font-size:29px;font-weight:800;margin-top:5px}.kpi .hint{font-size:12px;color:var(--muted);margin-top:2px}.sec{font-size:18px;font-weight:800;margin:4px 0 12px}.cols2{grid-template-columns:1.1fr .9fr}.cols3{grid-template-columns:repeat(3,1fr)}.halves{grid-template-columns:1fr 1fr}.badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#e7f4f4;color:#176e73;font-size:11px;font-weight:800}.metric-row{display:grid;grid-template-columns:96px 1fr 70px;align-items:center;gap:10px;margin:10px 0}.bar{height:10px;background:#e8eff1;border-radius:99px;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--teal2));border-radius:99px}.small{font-size:12px;color:var(--muted)}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}.chartbox{min-height:360px}.chartbox svg{width:100%;height:100%;min-height:340px;overflow:visible}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}table{border-collapse:collapse;width:100%;font-size:12px;background:#fff}th{position:sticky;top:0;background:#eaf3f4;text-align:left;padding:9px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:9px;border-bottom:1px solid #edf2f3;vertical-align:top}tr:hover td{background:#f9fbfb}.score{font-weight:800;text-align:center}.low{color:var(--red)}.mid{color:var(--amber)}.high{color:var(--green)}select,button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 10px;color:var(--ink)}button{cursor:pointer}.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}.note{padding:12px 14px;border-left:4px solid var(--teal);background:#edf7f7;border-radius:8px;font-size:13px;line-height:1.7}.insights{display:grid;gap:10px}.insight{padding:12px;border:1px solid var(--line);border-radius:10px;background:#fbfdfd}.insight b{display:block;margin-bottom:3px}.method li{margin:7px 0;line-height:1.6}.foot{margin-top:20px;color:var(--muted);font-size:11px;text-align:center}.state{max-width:640px;margin:60px auto;text-align:center;padding:30px;background:#fff;border-radius:15px;box-shadow:var(--shadow)}.state.err{color:var(--red)}@media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.cols2,.cols3,.halves{grid-template-columns:1fr}}@media(max-width:600px){header{padding:22px 18px}.wrap{padding:16px 12px}.title{font-size:24px}.kpis{grid-template-columns:1fr}.card{padding:14px}}
 
 /* ===== 列印報告模式（docs/multi-tenant-and-report-plan.md §3.1 方案 A）=====
    刻意「只用 CSS 改可見度」而不複製節點：covGrad / covClip 這兩個 SVG 漸層與
@@ -131,6 +131,10 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 .sceneBtn{border:0;background:transparent;padding:0;font:inherit;font-weight:800;color:var(--teal);
   text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
 .sceneBtn:hover{color:var(--teal2)}
+/* 0 分＝不予評分（業主 2026-10-16 的 0–4 評分標準）。它不是低分，不能套 .low 的
+   紅字；一律灰字，滑鼠移上去的 title 說明原因。整題都是 0 分、沒有平均的那一格
+   （印成「—」）也用這個。 */
+.na{color:var(--muted)}
 
 /* ===== 列印樣式 =====
    這個檔案原本「完全沒有任何 @media print」，所以每一條都在修一個現成的破
@@ -166,7 +170,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
   /* 場景編號在紙上點不了，拿掉會誤導人去點的虛線。 */
   .sceneBtn{color:inherit!important;text-decoration:none!important}
   /* 三張雷達圖並排在 A4 寬度下字會小到看不清，列印一律改單欄。 */
-  .cols2,.cols3{grid-template-columns:1fr!important}
+  .cols2,.cols3,.halves{grid-template-columns:1fr!important}
   /* renderRadars() 是「三張圖接三張表」一次寫進 #radarGrid 的（charts+tables），
      在三欄網格裡剛好排成「圖圖圖／表表表」兩列，圖與表上下對齊；但上面那條
      規則把它壓成單欄後，順序會變成三張圖連著三張表，表格跟對應的雷達圖隔了
@@ -251,20 +255,20 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <div id="reportHint" class="card" data-reportonly="1" style="margin-top:16px"></div>
 <div id="reportSummary" class="card reportSection" data-reportonly="1" style="margin-top:16px"></div>
 <div class="reportHead reportChapter" data-reportonly="1">綜合結果</div>
-<section id="overview" class="panel active"><div class="card"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec" style="text-align:center">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec" style="text-align:center">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div><div class="card" id="abilityRankCard" style="margin-top:16px"></div></section>
+<section id="overview" class="panel active"><div class="card"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec" style="text-align:center">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec" style="text-align:center">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div><div class="grid halves" style="margin-top:16px;align-items:start"><div class="card" id="abilityRankCard"></div><div class="card" id="notRatedCard"></div></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">4S 整備分析</div>
-<section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S整備表現直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（1–5）；橫條內依場景編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該場景占所有場景平均分的比重，段內文字為編號與該場景平均分。場景編號對照表見右方。一題若標了多個 4S 元素（例如 Staff / System），它的分數會全額計入每一個元素，這時各類別的評分數加總可能大於三項潛能題目的評分數。4S 分析僅納入反應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div><div class="card"><div class="sec">場景編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
+<section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S整備表現直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（<span id="s4ScaleRange">1–5</span>）；橫條內依場景編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該場景占所有場景平均分的比重，段內文字為編號與該場景平均分。場景編號對照表見右方。一題若標了多個 4S 元素（例如 Staff / System），它的分數會全額計入每一個元素，這時各類別的評分數加總可能大於三項潛能題目的評分數。4S 分析僅納入反應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。<span id="s4NotRated"></span></div></div><div class="card"><div class="sec">場景編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">三項潛能分項分析</div>
 <section id="radars" class="panel"><div class="grid cols3" id="radarGrid"></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">演習覆蓋率分析</div>
-<section id="coverage" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">演習覆蓋率</div><div id="coverageRadar"></div></div><div class="card"><div class="sec">覆蓋率指標摘要</div><div id="coverageBars"></div><div class="note" style="margin-top:14px">覆蓋率評分維持原表 1–5 級尺度；此處以所有評核官平均分呈現。較低分代表該面向雖可能已被演到，但實際呈現、證據或閉環程度較不足。</div></div></div></section>
+<section id="coverage" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">演習覆蓋率</div><div id="coverageRadar"></div></div><div class="card"><div class="sec">覆蓋率指標摘要</div><div id="coverageBars"></div><div class="note" style="margin-top:14px">覆蓋率評分維持原表 <span id="covScaleRange">1–5</span> 級尺度；此處以所有評核官平均分呈現<span id="covNotRated"></span>。較低分代表該面向雖可能已被演到，但實際呈現、證據或閉環程度較不足。</div></div></div></section>
 <div class="reportHead reportChapter" id="rankingHead" data-reportonly="1">逐題強弱排序（含學習潛能）</div>
 <section id="ranking" class="panel"><div class="card"><div class="sec">依潛能分類（組內依平均分由低到高）</div><div class="table-wrap"><table id="byPotentialTable"></table></div></div><div class="card" style="margin-top:16px"><div class="sec">表現優劣排序（由高到低）</div><div class="table-wrap"><table id="rankTable"></table></div></div><div class="note" style="margin-top:14px">「學習」潛能的題目不計入總覽/雷達圖/4S 統計，但會出現在這個排序視圖裡，方便單獨檢視。</div></section>
 <section id="detail" class="panel"><div class="card"><div class="controls"><label>顯示範圍 <select id="scope"><option value="all">三項潛能 + 覆蓋率</option><option value="core">僅三項潛能</option><option value="coverage">僅覆蓋率</option></select></label><label>評核官 <select id="evaluator"><option value="mean">全部平均</option></select></label><button id="csvBtn">匯出目前表格 CSV</button><span class="badge" id="agreeBadge" style="margin-left:auto"></span></div><div class="table-wrap"><table id="detailTable"></table></div></div></section>
 <div id="reportComments" class="card reportSection" data-reportonly="1"></div>
 <div id="reportQuality" class="card reportSection" data-reportonly="1" style="margin-top:16px"></div>
 <div class="reportHead reportChapter" data-reportonly="1">評核方法與評分尺度</div>
-<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均；一題標了多個 4S 元素時（例如 Staff / System），它的分數全額計入每一個元素。</li><li>評核官一致性使用 <b>r<sub>wg</sub><span id="methodRwg"></span></b><span id="methodRwgNote"></span>（within-group agreement index）：逐題計算 r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，再將各題平均。S<sub>x</sub><sup>2</sup> 是該題實際評分的樣本變異數（分母 n−1）；σ<sub>E</sub><sup>2</sup> 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率（uniform）時為 (A<sup>2</sup>−1)∕12，本表為 5 點量表所以 σ<sub>E</sub><sup>2</sup> = (25−1)∕12 = 2。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。只有一位評核官評過的題目無法計算群組內一致性，會被跳過；r<sub>wg</sub> 為負時依慣例截為 0。兩者都會把平均往上拉，所以發生時會在數字旁註明題數。<br><span class="small">粗略解讀：≥ 0.90 一致性很高、0.70–0.90 可接受、&lt; 0.70 偏低。</span></li><li>另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 r<sub>wg</sub> 相同。它與 r<sub>wg</sub> 回答的是不同問題：r<sub>wg</sub> 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
+<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均；一題標了多個 4S 元素時（例如 Staff / System），它的分數全額計入每一個元素。<span id="methodNotRated"></span></li><li>評核官一致性使用 <b>r<sub>wg</sub><span id="methodRwg"></span></b><span id="methodRwgNote"></span>（within-group agreement index）：逐題計算 r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，再將各題平均。S<sub>x</sub><sup>2</sup> 是該題實際評分的樣本變異數（分母 n−1）；σ<sub>E</sub><sup>2</sup> 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率（uniform）時為 (A<sup>2</sup>−1)∕12，<span id="methodSigmaE">本表為 5 點量表所以 σ<sub>E</sub><sup>2</sup> = (25−1)∕12 = 2</span>。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。只有一位評核官評過的題目無法計算群組內一致性，會被跳過；r<sub>wg</sub> 為負時依慣例截為 0。兩者都會把平均往上拉，所以發生時會在數字旁註明題數。<br><span class="small">粗略解讀：≥ 0.90 一致性很高、0.70–0.90 可接受、&lt; 0.70 偏低。</span></li><li>另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 r<sub>wg</sub> 相同。它與 r<sub>wg</sub> 回答的是不同問題：r<sub>wg</sub> 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。</li></ol></div><div class="card method"><div class="sec" id="methodScaleTitle">1–5 級評分尺度</div><ul id="methodScaleList"><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
 <div id="reportAppendixC" class="card reportSection" data-reportonly="1"></div>
 <div class="foot">單一檔案 HTML｜資料即時讀取自後台試算表｜此連結請勿公開分享</div>
 </div>
@@ -323,27 +327,68 @@ const WANT_REPORT = Q.get('view') === 'report';
 const REPORT_URL = 'https://script.google.com/macros/s/AKfycby3amN8X_38wanYHBEydhhT5WpalvsAcHrJPgUwQeifRnBpdpE5_SbqqzNtqm5aF8yLbA/exec';
 
 let DATA = null;
-const fmt=x=>x==null?'—':Number(x).toFixed(2); const cls=x=>x==null?'':x<3.3?'low':x<4?'mid':'high';
+const fmt=x=>x==null?'—':Number(x).toFixed(2);
+
+// 本場評分量尺（後端 meta.scale，見 ConfigWithSubmit.gs 的 scaleOf_）。圖表滿分、
+// 格線、顏色門檻、量尺說明都讀這裡，不再寫死 5——業主 2026-10-16 把評分標準由
+// 1–5 改成 0–4，而量尺是跟著每一場自己的評分標準走的，舊場次仍是 1–5。
+// 舊版後端沒有 meta.scale：退回改版前寫死的 1–5。前端推上去就生效、後端要手動
+// 重貼，「前端新、後端舊」是必然會出現的中間狀態，那段期間畫面必須跟改版前一個
+// 字都不差。量尺本身壞掉（沒有任何可評分的等級）時也退回 1–5，寧可用舊量尺畫，
+// 也不要拿 null 去當分母。
+const LEGACY_SCALE=Object.freeze({values:[1,2,3,4,5],rated:[1,2,3,4,5],min:1,max:5,lowValue:1,lowLabel:'',lowExcluded:false,expectedVar:2,levels:[]});
+function scaleInfo(){
+  const s=DATA&&DATA.meta&&DATA.meta.scale;
+  if(!s||!Array.isArray(s.rated)||!s.rated.length||typeof s.min!=='number'||typeof s.max!=='number'||!(s.max>0)) return LEGACY_SCALE;
+  return s;
+}
+// 0 分＝「不予評分」。跟後端 NOT_RATED_SCORE_ 同一個值、同一條規則：不看本場量尺
+// 有沒有 0，一律不進任何平均（舊 1–5 紀錄裡本來就沒有 0，所以舊場次不受影響）。
+const NOT_RATED_SCORE=0;
+function notRatedLabel(){const s=scaleInfo();return (s.lowExcluded&&s.lowLabel)||'不予評分'}
+function notRatedTitle(){return NOT_RATED_SCORE+' 分＝'+notRatedLabel()+'，不計入平均'}
+function allUnratedTitle(){return '分數全部為 '+NOT_RATED_SCORE+' 分（'+notRatedLabel()+'），沒有平均分'}
+// 顏色門檻跟著量尺走。原本寫死在 1–5 上的 3.3／4，換算成「量尺全距的比例」
+// (3.3−1)/4 與 (4−1)/4。在 1–5 上算回來就是 3.3 與 4（浮點數也是同一個值，所以
+// 舊場次每一格的紅黃綠都不變）；在 1–4（0–4 去掉不予評分）上是 2.725 與 3.25。
+const CLS_LOW_FRAC=(3.3-1)/4, CLS_MID_FRAC=(4-1)/4;
+const cls=x=>{if(x==null) return '';const s=scaleInfo(),span=s.max-s.min;return x<s.min+CLS_LOW_FRAC*span?'low':x<s.min+CLS_MID_FRAC*span?'mid':'high'};
+// 排序用。null 是「這一題（這一格）的分數全部是不予評分、沒有平均」，不論升降冪
+// 一律排最後——它不能被當成 0 分排進最弱的那一端。兩邊都有值時就是原本的 a−b／b−a。
+function cmpNullLast(x,y,desc){if(x==null||y==null) return (x==null)-(y==null);return desc?y-x:x-y}
+// 平均分那一格。mean 是 null 時印「—」、不上紅黃綠；有值時跟改版前的字串完全相同。
+function meanCell(m,digits){return m==null?`<td class="score na" title="${esc(allUnratedTitle())}">—</td>`:`<td class="score ${cls(m)}">${m.toFixed(digits)}</td>`}
+// σE² 這種數字的顯示：2 印「2」、1.25 印「1.25」，不補尾零。
+function numText(x){return String(Math.round(Number(x)*1000)/1000)}
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 
-function svgRadar(items,title){items=[...items].sort((a,b)=>a.value-b.value);const W=420,H=340,cx=210,cy=176,R=120,n=items.length; if(!n) return '<div class="small">尚無資料</div>'; const pts=(rad)=>items.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+rad*Math.cos(a),cy+rad*Math.sin(a)]}); let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
-for(let level=1;level<=5;level++){let p=pts(R*level/5).map(x=>x.join(',')).join(' ');s+=`<polygon points="${p}" fill="none" stroke="#d8e4e7" stroke-width="1"/>`;}
+// 滿分與同心環跟著本場量尺（scaleInfo）：外圈＝scale.max，每一個可評分等級一圈。
+// 1–5 上就是原本的五圈、半徑 R*level/5。沒有平均的軸（整題都是不予評分）由呼叫端
+// 先濾掉；這裡再濾一次只是保險——null 一旦進 sort 或 toFixed 就會排錯或直接丟例外。
+function svgRadar(items,title){items=[...items].filter(it=>typeof it.value==='number'&&isFinite(it.value)).sort((a,b)=>a.value-b.value);const sc=scaleInfo(),max=sc.max;const W=420,H=340,cx=210,cy=176,R=120,n=items.length; if(!n) return '<div class="small">尚無資料</div>'; const pts=(rad)=>items.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+rad*Math.cos(a),cy+rad*Math.sin(a)]}); let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
+for(const level of sc.rated){let p=pts(R*level/max).map(x=>x.join(',')).join(' ');s+=`<polygon points="${p}" fill="none" stroke="#d8e4e7" stroke-width="1"/>`;}
 pts(R).forEach((p,i)=>s+=`<line x1="${cx}" y1="${cy}" x2="${p[0]}" y2="${p[1]}" stroke="#d8e4e7"/>`);
-let dp=items.map((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let rr=R*it.value/5;return [cx+rr*Math.cos(a),cy+rr*Math.sin(a)]});s+=`<polygon points="${dp.map(x=>x.join(',')).join(' ')}" fill="rgba(20,125,131,.20)" stroke="#147d83" stroke-width="2.4"/>`;
+let dp=items.map((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let rr=R*it.value/max;return [cx+rr*Math.cos(a),cy+rr*Math.sin(a)]});s+=`<polygon points="${dp.map(x=>x.join(',')).join(' ')}" fill="rgba(20,125,131,.20)" stroke="#147d83" stroke-width="2.4"/>`;
 dp.forEach(p=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.8" fill="#147d83"/>`);
 items.forEach((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let lr=R+31,x=cx+lr*Math.cos(a),y=cy+lr*Math.sin(a),anchor=Math.cos(a)>.25?'start':Math.cos(a)<-.25?'end':'middle';let label=it.label.replace(/^.*?\s*\(/,'('); if(it.label.length>15) label=it.label.replace(/^反應\d+\s*|^監測\d+\s*|^預期\d+\s*/,''); s+=`<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" fill="#48636c">${esc(label)}</text><text x="${x}" y="${y+13}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" font-weight="700" fill="#18323a">${it.value.toFixed(1)}</text>`});return s+'</svg>'}
 
-function barsSVG(items){if(!items.length) return '<div class="small">尚無資料</div>'; let W=560,H=330,padL=95,padR=35,padT=20,padB=45, cw=(W-padL-padR)/items.length,max=5,s=`<svg viewBox="0 0 ${W} ${H}">`;for(let v=1;v<=5;v++){let y=padT+(H-padT-padB)*(1-v/max);s+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e0eaec"/><text x="${padL-10}" y="${y+4}" text-anchor="end" font-size="10" fill="#67808a">${v}</text>`}items.forEach((it,i)=>{let x=padL+i*cw+cw*.19,bw=cw*.62,h=(H-padT-padB)*it.value/max,y=H-padB-h;s+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="6" fill="#147d83"/><text x="${x+bw/2}" y="${y-7}" text-anchor="middle" font-size="13" font-weight="800" fill="#18323a">${it.value.toFixed(2)}</text><text x="${x+bw/2}" y="${H-padB+18}" text-anchor="middle" font-size="11" fill="#48636c">${esc(it.label)}</text><text x="${x+bw/2}" y="${H-padB+32}" text-anchor="middle" font-size="9" fill="#7b9198">n=${it.n}</text>`});return s+'</svg>'}
+// 縱軸滿分＝scale.max，每個可評分等級一條格線（1–5 上就是原本的 1～5）。value 是
+// null 的類別（它的題目全部是不予評分）不畫柱子，只在底線上標「—」與名稱，不能
+// 畫成一根 0 分的柱子。
+function barsSVG(items){if(!items.length) return '<div class="small">尚無資料</div>'; const sc=scaleInfo(); let W=560,H=330,padL=95,padR=35,padT=20,padB=45, cw=(W-padL-padR)/items.length,max=sc.max,s=`<svg viewBox="0 0 ${W} ${H}">`;for(const v of sc.rated){let y=padT+(H-padT-padB)*(1-v/max);s+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e0eaec"/><text x="${padL-10}" y="${y+4}" text-anchor="end" font-size="10" fill="#67808a">${v}</text>`}items.forEach((it,i)=>{if(it.value==null){let x=padL+i*cw+cw*.19,bw=cw*.62;s+=`<text x="${x+bw/2}" y="${H-padB-7}" text-anchor="middle" font-size="13" font-weight="800" fill="#67808a">—<title>${esc(allUnratedTitle())}</title></text><text x="${x+bw/2}" y="${H-padB+18}" text-anchor="middle" font-size="11" fill="#48636c">${esc(it.label)}</text><text x="${x+bw/2}" y="${H-padB+32}" text-anchor="middle" font-size="9" fill="#7b9198">n=${it.n}</text>`;return}let x=padL+i*cw+cw*.19,bw=cw*.62,h=(H-padT-padB)*it.value/max,y=H-padB-h;s+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="6" fill="#147d83"/><text x="${x+bw/2}" y="${y-7}" text-anchor="middle" font-size="13" font-weight="800" fill="#18323a">${it.value.toFixed(2)}</text><text x="${x+bw/2}" y="${H-padB+18}" text-anchor="middle" font-size="11" fill="#48636c">${esc(it.label)}</text><text x="${x+bw/2}" y="${H-padB+32}" text-anchor="middle" font-size="9" fill="#7b9198">n=${it.n}</text>`});return s+'</svg>'}
 
 const S4_COLORS={'Space (空間)':'#147d83','Staff (人員)':'#b97816','Stuff (物資)':'#2f7d5b','System (系統)':'#274c67'};
 // 每根橫條是一個 4S 類別，橫條總長＝該類別的真實平均分（跟 4S 統計摘要同一
-// 個數字），所以固定落在 1–5 附近，不是分數加總。橫條內依場景編號堆疊分段
+// 個數字），所以落在本場量尺的可評分範圍內（舊場次 1–5、0–4 量尺是 1–4），不是
+// 分數加總。橫條內依場景編號堆疊分段
 // （segment.key 是場景編號、segment.pct 是該場景佔所有場景平均分總和的占
 // 比，segment.mean=pct*該橫條總長，也就是這段實際畫出來的寬度；顏色由呼叫
 // 端的 colorOf 決定，這裡不管配色邏輯）。段內文字顯示「編號＋該場景原始平均
 // 分」（segment.raw），不是占比；寬度仍然是依占比分配，只有文字改回分數。
-function stackedHBarsSVG(rows,colorOf){if(!rows.length) return '<div class="small">尚無資料</div>'; let padL=90,padR=50,padT=16,padB=30,rowH=30,gap=10; let H=padT+rows.length*(rowH+gap)-gap+padB,W=640; let maxTotal=Math.max(1,...rows.map(r=>r.total)); let plotW=W-padL-padR,ticks=5,s=`<svg viewBox="0 0 ${W} ${H}">`;for(let t=0;t<=ticks;t++){let v=maxTotal*t/ticks,x=padL+plotW*t/ticks;s+=`<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${H-padB}" stroke="#e0eaec"/><text x="${x.toFixed(1)}" y="${H-padB+16}" text-anchor="middle" font-size="9" fill="#67808a">${v.toFixed(1)}</text>`}rows.forEach((r,i)=>{let y=padT+i*(rowH+gap),xCursor=padL;r.segments.forEach(seg=>{let w=plotW*seg.mean/maxTotal;s+=`<rect x="${xCursor.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${rowH}" fill="${colorOf(seg.key)}" stroke="#fff" stroke-width="1"/>`;if(w>26) s+=`<text x="${(xCursor+w/2).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fff">${esc(seg.key)} ${seg.raw.toFixed(1)}</text>`;xCursor+=w});s+=`<text x="${(padL-8).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#48636c">${esc(r.label)}</text><text x="${(xCursor+6).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="start" font-size="11" font-weight="800" fill="#18323a">${r.total.toFixed(1)}</text>`});return s+'</svg>'}
+// total 是 null 的類別（題目全部是不予評分，沒有平均）只印名稱與「—」、不畫橫條，
+// 也不參與橫軸刻度的最大值。
+function stackedHBarsSVG(rows,colorOf){if(!rows.length) return '<div class="small">尚無資料</div>'; let padL=90,padR=50,padT=16,padB=30,rowH=30,gap=10; let H=padT+rows.length*(rowH+gap)-gap+padB,W=640; let maxTotal=Math.max(1,...rows.filter(r=>r.total!=null).map(r=>r.total)); let plotW=W-padL-padR,ticks=5,s=`<svg viewBox="0 0 ${W} ${H}">`;for(let t=0;t<=ticks;t++){let v=maxTotal*t/ticks,x=padL+plotW*t/ticks;s+=`<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${H-padB}" stroke="#e0eaec"/><text x="${x.toFixed(1)}" y="${H-padB+16}" text-anchor="middle" font-size="9" fill="#67808a">${v.toFixed(1)}</text>`}rows.forEach((r,i)=>{let y=padT+i*(rowH+gap),xCursor=padL;r.segments.forEach(seg=>{let w=plotW*seg.mean/maxTotal;s+=`<rect x="${xCursor.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${rowH}" fill="${colorOf(seg.key)}" stroke="#fff" stroke-width="1"/>`;if(w>26) s+=`<text x="${(xCursor+w/2).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fff">${esc(seg.key)} ${seg.raw.toFixed(1)}</text>`;xCursor+=w});s+=`<text x="${(padL-8).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#48636c">${esc(r.label)}</text><text x="${(xCursor+6).toFixed(1)}" y="${(y+rowH/2+4).toFixed(1)}" text-anchor="start" font-size="11" font-weight="800" fill="#18323a">${r.total==null?'—':r.total.toFixed(1)}</text>`});return s+'</svg>'}
 
 const POTENTIAL_COLORS = { '反應': '#147d83', '監測': '#274c67', '預期': '#2f7d5b' };
 const S4_PREFERRED_ORDER = ['Space (空間)', 'Staff (人員)', 'Stuff (物資)', 'System (系統)'];
@@ -365,7 +410,8 @@ function estTextW(str, size) {
 }
 
 // 等角投影手繪立體長條圖：X 軸=三項潛能，Y 軸=實際出現過的 4S 類別，柱高=
-// 平均分。座標軸標籤標在最前排兩條底邊上（不是黏在每根柱子正上方）：左邊
+// 平均分（滿格＝本場量尺的 scale.max，1–5 上就是原本的 5）。座標軸標籤標在
+// 最前排兩條底邊上（不是黏在每根柱子正上方）：左邊
 // 那條（j 固定在最後一排、i 變化）標潛能類別，右邊那條（i 固定在最後一類、
 // j 變化）標 4S，兩條線在圖形最前方（螢幕最下方）的頂點交會。每個潛能
 // （每一列）裡分數最低的那一格改用較淡色調＋紅框凸顯，不用 ▼ 符號。
@@ -380,13 +426,13 @@ function svgIso3D(byPS, s4Keys) {
   }));
   const cosA=Math.cos(Math.PI/6),sinA=.5;
   const xDir=[cosA,sinA],yDir=[-cosA,sinA];
-  const cellW=90,cellD=90,barW=54,maxH=180,hb=barW/2;
+  const cellW=90,cellD=90,barW=54,maxH=180,hb=barW/2,scaleMax=scaleInfo().max;
   const boxes=[],pts=[];
   for(let i=0;i<nCat;i++){
     for(let j=0;j<nGroup;j++){
       const v=matrix[i][j];
       const bx=i*cellW*xDir[0]+j*cellD*yDir[0], by=i*cellW*xDir[1]+j*cellD*yDir[1];
-      const h=v==null?0:v/5*maxH;
+      const h=v==null?0:v/scaleMax*maxH;
       const A=[bx-hb*xDir[0]-hb*yDir[0], by-hb*xDir[1]-hb*yDir[1]];
       const B=[bx+hb*xDir[0]-hb*yDir[0], by+hb*xDir[1]-hb*yDir[1]];
       const C=[bx+hb*xDir[0]+hb*yDir[0], by+hb*xDir[1]+hb*yDir[1]];
@@ -470,9 +516,10 @@ function svgIso3D(byPS, s4Keys) {
   return s+'</svg>';
 }
 
+// 滿格＝本場量尺的 scale.max（1–5 上就是原本的 5）。
 function svgCoverageGauge(value) {
   const W = 48, H = 140, r = W / 2;
-  const pct = Math.max(0, Math.min(1, (value || 0) / 5));
+  const pct = Math.max(0, Math.min(1, (value || 0) / scaleInfo().max));
   const fillH = pct * H;
   return `<svg viewBox="0 0 ${W} ${H}" style="width:48px;height:140px">
     <defs><linearGradient id="covGrad" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#b97816"/><stop offset="100%" stop-color="#e8b55a"/></linearGradient>
@@ -579,13 +626,15 @@ function init(){
   renderIso3D();
   renderCoverageGauge();
   renderAbilityRank();
+  renderNotRated();
 
   // 由高到低排列，與 Report.gs 的 specS4Means_ 同一個順序。同分時依 S4_PREFERRED_ORDER
   // （其餘依字碼）排，也就是 Report.gs s4Keys_ 的規則 —— 不這樣做的話同分會照後端的出現
   // 順序排，螢幕跟紙本就會不一樣；一題標兩個 4S 元素時，兩類同分並不少見。
   const s4PrefRank=k=>{const i=S4_PREFERRED_ORDER.indexOf(k);return i===-1?S4_PREFERRED_ORDER.length:i};
+  // value 是 null 的類別（題目全部是不予評分）排最後，barsSVG 只標「—」不畫柱子。
   let overviewS4Items=Object.entries(DATA.stats.s4).map(([k,v])=>({label:k,value:v.mean,n:v.n}))
-    .sort((a,b)=>(b.value-a.value)||(s4PrefRank(a.label)-s4PrefRank(b.label))||(a.label<b.label?-1:(a.label>b.label?1:0)));
+    .sort((a,b)=>cmpNullLast(a.value,b.value,true)||(s4PrefRank(a.label)-s4PrefRank(b.label))||(a.label<b.label?-1:(a.label>b.label?1:0)));
   document.getElementById('overviewS4Chart').innerHTML=barsSVG(overviewS4Items);
   renderRadars();renderCoverage();renderS4();renderDetail();renderRanking();renderMethod();
 
@@ -666,9 +715,20 @@ document.addEventListener('click', function(e){
 });
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeScenePop(); });
 
-function radarTable(rows){if(!rows.length) return ''; const sorted=[...rows].sort((a,b)=>a.mean-b.mean); return `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>場景編號</th><th>指標</th><th>具體評核題目</th><th>分數</th></tr></thead><tbody>${sorted.map(r=>`<tr><td>${sceneCell(r)}</td><td>${esc(cleanIndicator(r.indicator))}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`;}
-function renderRadars(){let charts='',tables='';for(const p of ['反應','監測','預期']){let rows=DATA.analysisRows.filter(r=>r.potential===p);let arr=rows.map(r=>({label:r.indicator,value:r.mean}));charts+=`<div class="card chartbox"><div class="sec">${p}潛能</div>${svgRadar(arr,p)}</div>`;tables+=`<div class="card">${radarTable(rows)}</div>`}document.getElementById('radarGrid').innerHTML=charts+tables}
-function renderCoverage(){let rows=DATA.coverageRows;let arr=rows.map(r=>({label:r.indicator,value:r.mean}));document.getElementById('coverageRadar').innerHTML=svgRadar(arr,'覆蓋率');document.getElementById('coverageBars').innerHTML=rows.length?radarTable(rows):'<div class="small">尚無資料</div>'}
+// 依平均分由低到高。平均是 null 的題目（分數全部是不予評分）排在最後、分數印「—」。
+function radarTable(rows){if(!rows.length) return ''; const sorted=[...rows].sort((a,b)=>cmpNullLast(a.mean,b.mean)); return `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>場景編號</th><th>指標</th><th>具體評核題目</th><th>分數</th></tr></thead><tbody>${sorted.map(r=>`<tr><td>${sceneCell(r)}</td><td>${esc(cleanIndicator(r.indicator))}</td><td>${esc(r.question)}</td>${meanCell(r.mean,1)}</tr>`).join('')}</tbody></table></div>`;}
+// 雷達圖底下的一行註記：幾題因為分數全部是不予評分、沒有平均而沒畫進圖裡。沒有
+// 這種題目時回空字串（舊 1–5 場次永遠如此，畫面不變）；有的話一定要講——圖上少
+// 一根軸卻沒有任何說明，讀者會以為那一題不存在。
+function unratedRadarNote(rows){const k=rows.filter(r=>r.mean==null).length;return k?`<div class="small" style="margin-top:6px">另有 ${k} 題的分數全部為 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}），沒有平均分，未畫入雷達圖；這些題目列在表格最後。</div>`:''}
+// 量尺的完整範圍（含不予評分），例如「1–5」「0–4」。
+function scaleRangeText(){const sc=scaleInfo(),vs=Array.isArray(sc.values)&&sc.values.length?sc.values:sc.rated;return vs[0]+'–'+vs[vs.length-1]}
+function renderRadars(){let charts='',tables='';for(const p of ['反應','監測','預期']){let rows=DATA.analysisRows.filter(r=>r.potential===p);let arr=rows.filter(r=>r.mean!=null).map(r=>({label:r.indicator,value:r.mean}));charts+=`<div class="card chartbox"><div class="sec">${p}潛能</div>${svgRadar(arr,p)}${unratedRadarNote(rows)}</div>`;tables+=`<div class="card">${radarTable(rows)}</div>`}document.getElementById('radarGrid').innerHTML=charts+tables}
+function renderCoverage(){let rows=DATA.coverageRows;let arr=rows.filter(r=>r.mean!=null).map(r=>({label:r.indicator,value:r.mean}));document.getElementById('coverageRadar').innerHTML=svgRadar(arr,'覆蓋率')+unratedRadarNote(rows);document.getElementById('coverageBars').innerHTML=rows.length?radarTable(rows):'<div class="small">尚無資料</div>';
+  // 摘要卡底下那段說明的量尺範圍（原本寫死「1–5 級」）。舊場次算出來仍是 1–5、
+  // 不予評分那句是空字串，所以文字跟改版前相同。
+  const sc=scaleInfo();document.getElementById('covScaleRange').textContent=scaleRangeText();
+  document.getElementById('covNotRated').textContent=sc.lowExcluded?`（${NOT_RATED_SCORE} 分「${notRatedLabel()}」不計入平均）`:'';}
 function renderS4(){
   const s4Keys=Object.keys(DATA.stats.s4).sort((a,b)=>{const ia=S4_PREFERRED_ORDER.indexOf(a),ib=S4_PREFERRED_ORDER.indexOf(b);if(ia!==-1&&ib!==-1) return ia-ib;if(ia!==-1) return -1;if(ib!==-1) return 1;return a.localeCompare(b)});
   // 場景編號 -> 完整測試場景文字（優先用 goal，沒有就用演練單元原始名稱），
@@ -683,37 +743,60 @@ function renderS4(){
   const colorOf=code=>{const i=scenarioCodes.indexOf(code);return n<=1?'#147d83':`hsl(${Math.round(i/(n-1)*300)},55%,45%)`};
   const rows=s4Keys.map(s4=>{
     const bucket={};
-    DATA.analysisRows.filter(r=>s4ListOf(r).includes(s4)).forEach(r=>{const code=shortScene(r.itemName);(bucket[code]=bucket[code]||[]).push(...r.scores.map(s=>s.score))});
+    // 0 分（不予評分）不進場景平均，跟後端 stats.s4 同一條規則，否則段的比例會跟
+    // 橫條總長（stats.s4）算的不是同一批分數。一個場景在這個類別裡若一個有效分數
+    // 都沒有，就不建這一段——不能畫成一段 0 分。
+    DATA.analysisRows.filter(r=>s4ListOf(r).includes(s4)).forEach(r=>{const code=shortScene(r.itemName);const rated=r.scores.map(s=>s.score).filter(v=>v!==NOT_RATED_SCORE);if(!rated.length) return;(bucket[code]=bucket[code]||[]).push(...rated)});
     const sceneMeans=scenarioCodes.filter(c=>bucket[c]).map(c=>{const arr=bucket[c];return{key:c,mean:arr.reduce((a,v)=>a+v,0)/arr.length}});
     // 橫條總長＝該 4S 類別的真實平均分（跟 4S 統計摘要同一個數字，
     // DATA.stats.s4 已經用該類別所有評分算好），不是場景分數加總；橫條內
     // 每個場景色塊的寬度則依「該場景平均分 / 所有場景平均分加總」的占比去
     // 分這段平均分的寬度，而不是場景自己的原始分數——這樣橫條長度才有固定
-    // 的 1–5 意義，色塊寬度則呈現「這個場景佔了多少比重」。
-    const avg=(DATA.stats.s4[s4]||{}).mean||0;
+    // 的量尺意義（本場量尺的可評分範圍，舊場次是 1–5），色塊寬度則呈現「這個場景
+    // 佔了多少比重」。stats.s4 的 mean 可以是 null（這個類別的題目全部是不予評分）：
+    // 保持 null、不分段，由 stackedHBarsSVG 印「—」並排在最後，不能退回 0 畫成最短的一條。
+    const st4=DATA.stats.s4[s4]||{};
+    const avg=st4.mean==null?null:st4.mean;
     const sumMeans=sceneMeans.reduce((a,sg)=>a+sg.mean,0);
-    const segments=sceneMeans.map(sg=>{const pct=sumMeans?sg.mean/sumMeans:0;return{key:sg.key,pct,raw:sg.mean,mean:pct*avg}});
+    const segments=avg==null?[]:sceneMeans.map(sg=>{const pct=sumMeans?sg.mean/sumMeans:0;return{key:sg.key,pct,raw:sg.mean,mean:pct*avg}});
     return{label:s4,segments,total:avg};
-  }).sort((a,b)=>b.total-a.total);
+  }).sort((a,b)=>cmpNullLast(a.total,b.total,true));
   document.getElementById('s4BarsChart').innerHTML=stackedHBarsSVG(rows,colorOf);
-  document.getElementById('s4ScenarioTable').innerHTML=`<thead><tr><th></th><th>場景編號</th><th>測試場景</th></tr></thead><tbody>${scenarioCodes.map(c=>`<tr><td><span class="dot" style="background:${colorOf(c)}"></span></td><td>${esc(c)}</td><td>${esc(scenarioText[c])}</td></tr>`).join('')}</tbody>`;
+  document.getElementById('s4ScenarioTable').innerHTML=`<thead><tr><th></th><th>場景編號</th><th>場景說明</th></tr></thead><tbody>${scenarioCodes.map(c=>`<tr><td><span class="dot" style="background:${colorOf(c)}"></span></td><td>${esc(c)}</td><td>${esc(scenarioText[c])}</td></tr>`).join('')}</tbody>`;
+  // 圖說裡的平均分範圍（原本寫死「（1–5）」）＝可評分等級的範圍，0–4 量尺上是 1–4。
+  const sc=scaleInfo();
+  document.getElementById('s4ScaleRange').textContent=sc.min+'–'+sc.max;
+  document.getElementById('s4NotRated').textContent=sc.lowExcluded?`${NOT_RATED_SCORE} 分（${notRatedLabel()}）不計入任何平均；一個 4S 類別的題目若全部是 ${NOT_RATED_SCORE} 分，只列名稱、不畫橫條。`:'';
 }
+// 標準差那一格。題目沒有平均（分數全部是不予評分）時後端給的 sd 是 0，印成「0.00」
+// 會讀成「大家意見完全一致」，所以跟平均一起印「—」。
+function sdText(r){return r.mean==null||r.sd==null?'—':r.sd.toFixed(2)}
 function renderRanking(){
   const learning = DATA.learningRows || [];
   const order = ['反應','監測','預期','學習'];
   const byPotential = order.flatMap(p => {
     const pool = p === '學習' ? learning : DATA.analysisRows.filter(r => r.potential === p);
-    return [...pool].sort((a,b) => a.mean - b.mean).map((r, i) => ({ r, showLabel: i === 0 ? p : '' }));
+    // 平均是 null（整題都是不予評分）的排在組內最後，不能被當成 0 分排在最前面。
+    return [...pool].sort((a,b) => cmpNullLast(a.mean, b.mean)).map((r, i) => ({ r, showLabel: i === 0 ? p : '' }));
   });
   document.getElementById('byPotentialTable').innerHTML = '<thead><tr><th>潛能</th><th>場景</th><th>項目</th><th>指標</th><th>題目</th><th>平均</th><th>SD</th></tr></thead><tbody>' +
-    byPotential.map(({r, showLabel}) => `<tr><td>${esc(showLabel)}</td><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.indicator)}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(2)}</td><td>${r.sd.toFixed(2)}</td></tr>`).join('') + '</tbody>';
+    byPotential.map(({r, showLabel}) => `<tr><td>${esc(showLabel)}</td><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.indicator)}</td><td>${esc(r.question)}</td>${meanCell(r.mean,2)}<td>${sdText(r)}</td></tr>`).join('') + '</tbody>';
 
-  const ranked = [...DATA.analysisRows, ...DATA.coverageRows, ...learning].sort((a,b) => b.mean - a.mean);
+  // 沒有平均的題目排在最後、不給名次：它不是「最後一名」，是沒有可比的分數。
+  const ranked = [...DATA.analysisRows, ...DATA.coverageRows, ...learning].sort((a,b) => cmpNullLast(a.mean, b.mean, true));
   document.getElementById('rankTable').innerHTML = '<thead><tr><th>排序</th><th>潛能</th><th>場景</th><th>項目</th><th>題目</th><th>平均</th><th>SD</th></tr></thead><tbody>' +
-    ranked.map((r,i) => `<tr><td>${i+1}</td><td>${esc(r.potential)}</td><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.question)}</td><td class="score ${cls(r.mean)}">${r.mean.toFixed(2)}</td><td>${r.sd.toFixed(2)}</td></tr>`).join('') + '</tbody>';
+    ranked.map((r,i) => `<tr><td>${r.mean==null?'':i+1}</td><td>${esc(r.potential)}</td><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.question)}</td>${meanCell(r.mean,2)}<td>${sdText(r)}</td></tr>`).join('') + '</tbody>';
 }
-function renderDetail(){const g=rwgStat();document.getElementById('agreeBadge').textContent=g==null?'r_wg：資料不足':`r_wg = ${g.mean.toFixed(2)}`;let scope=document.getElementById('scope').value,ev=document.getElementById('evaluator').value;let arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];document.getElementById('detailTable').innerHTML=`<thead><tr><th>階段</th><th>項目</th><th>潛能</th><th>4S</th><th>指標</th><th>${ev==='mean'?'平均分':'評分'}</th><th>各評核官分數</th><th>評核題目</th></tr></thead><tbody>${arr.map(r=>{let v=scoreOf(r,ev);return `<tr><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.potential)}</td><td>${esc(r.s4)}</td><td>${esc(r.indicator)}</td><td class="score ${cls(v)}">${v==null?'—':Number(v).toFixed(ev==='mean'?2:0)}</td><td>${r.scores.map(s=>`${esc(s.code)}:${s.score}`).join(' / ')}</td><td>${esc(r.question)}</td></tr>`}).join('')}</tbody>`}
-function exportCSV(){let scope=document.getElementById('scope').value,arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];let codes=[...new Set(arr.flatMap(r=>r.scores.map(s=>s.code)))].sort();let rows=[['階段','項目','潛能','4S','指標',...codes.map(c=>'評核官 '+c),'平均','SD','評核題目']];arr.forEach(r=>{let byCode={};r.scores.forEach(s=>byCode[s.code]=s.score);rows.push([r.stage,r.itemName,r.potential,r.s4,r.indicator,...codes.map(c=>byCode[c]??''),r.mean.toFixed(2),r.sd.toFixed(2),r.question]);});let csv='﻿'+rows.map(rr=>rr.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\n');let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=displayName()+'_評核明細.csv';a.click();URL.revokeObjectURL(a.href)}
+// 評核官明細的分數格。單一評核官的 0 分是「不予評分」，不是最低分：灰字＋title，
+// 不套 .low 的紅字。「全部平均」那欄走 meanCell，整題都是 0 分時印「—」。其餘情況
+// （含這位評核官沒評這題的「—」）跟改版前的字串完全相同。
+function detailScoreCell(v,ev){
+  if(ev==='mean') return meanCell(v,2);
+  if(v===NOT_RATED_SCORE) return `<td class="score na" title="${esc(notRatedTitle())}">${v}</td>`;
+  return `<td class="score ${cls(v)}">${v==null?'—':Number(v).toFixed(0)}</td>`;
+}
+function renderDetail(){const g=rwgStat();document.getElementById('agreeBadge').textContent=g==null?'r_wg：資料不足':`r_wg = ${g.mean.toFixed(2)}`;let scope=document.getElementById('scope').value,ev=document.getElementById('evaluator').value;let arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];document.getElementById('detailTable').innerHTML=`<thead><tr><th>地點</th><th>項目</th><th>潛能</th><th>4S</th><th>指標</th><th>${ev==='mean'?'平均分':'評分'}</th><th>各評核官分數</th><th>評核題目</th></tr></thead><tbody>${arr.map(r=>{let v=scoreOf(r,ev);return `<tr><td>${esc(r.stage)}</td><td>${esc(r.itemName)}</td><td>${esc(r.potential)}</td><td>${esc(r.s4)}</td><td>${esc(r.indicator)}</td>${detailScoreCell(v,ev)}<td>${r.scores.map(s=>s.score===NOT_RATED_SCORE?`<span class="na" title="${esc(notRatedTitle())}">${esc(s.code)}:${s.score}</span>`:`${esc(s.code)}:${s.score}`).join(' / ')}</td><td>${esc(r.question)}</td></tr>`}).join('')}</tbody>`}
+function exportCSV(){let scope=document.getElementById('scope').value,arr=scope==='core'?DATA.analysisRows:scope==='coverage'?DATA.coverageRows:[...DATA.analysisRows,...DATA.coverageRows];let codes=[...new Set(arr.flatMap(r=>r.scores.map(s=>s.code)))].sort();let rows=[['地點','項目','潛能','4S','指標',...codes.map(c=>'評核官 '+c),'平均','SD','評核題目']];arr.forEach(r=>{let byCode={};r.scores.forEach(s=>byCode[s.code]=s.score);rows.push([r.stage,r.itemName,r.potential,r.s4,r.indicator,...codes.map(c=>byCode[c]??''),r.mean==null?'':r.mean.toFixed(2),r.mean==null||r.sd==null?'':r.sd.toFixed(2),r.question]);});let csv='﻿'+rows.map(rr=>rr.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(',')).join('\n');let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=displayName()+'_評核明細.csv';a.click();URL.revokeObjectURL(a.href)}
 
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active')});
 document.getElementById('scope').onchange=renderDetail;
@@ -742,22 +825,48 @@ function pctText(x){return x==null?'—':(Number(x)*100).toFixed(1)+'%'}
 // 那段期間統計方法會寫著 r_wg、畫面上卻是一片「資料不足」。
 // 後端有算就用後端的（它才是報告與 Report.gs 的權威來源），沒有才自己算；
 // 兩邊是同一條公式、同一個分母慣例，所以切換時數字不會跳動。
-const RWG_SCALE_POINTS = 5;
-const RWG_EXPECTED_VAR = (RWG_SCALE_POINTS*RWG_SCALE_POINTS-1)/12;   // 5 點量表 -> 2
+//
+// r_wg 的 σE² 與量表點數 A（2026-10-16 前寫死 5 點、σE² = 2）。後端 stats.rwg 有給
+// 就用後端的（它是報告與 Report.gs 的權威來源）；沒有（舊後端，或這一場一題都算
+// 不出 r_wg、stats.rwg 是 null）才從本場量尺推：σE² 取 scale.expectedVar，A 是可
+// 評分的等級數（0 分不予評分不算一級）。舊後端沒有 meta.scale 時 LEGACY_SCALE 給
+// 的就是改版前寫死的 5 點、σE² = 2。
+function rwgScale(){
+  const g=(DATA&&DATA.stats||{}).rwg;
+  if(g&&g.expectedVar>0&&g.scalePoints>0) return {points:g.scalePoints,expectedVar:g.expectedVar};
+  const sc=scaleInfo();
+  let ev=sc.expectedVar;
+  if(!(ev>0)){const m=sc.rated.reduce((a,v)=>a+v,0)/sc.rated.length;ev=sc.rated.reduce((a,v)=>a+(v-m)*(v-m),0)/sc.rated.length}
+  return {points:sc.rated.length,expectedVar:ev};
+}
 function rwgLocal(rows){
+  const E=rwgScale();
+  if(!(E.expectedVar>0)) return null;               // 只有一個可評分等級的量尺沒有 r_wg 可言
   let vals=[],skipped=0,clamped=0;
   for(const r of rows){
-    const sc=(r.scores||[]).map(s=>s.score);
-    if(sc.length<2){skipped++;continue}            // 單人評的題目沒有群組一致性可言
+    // 0 分（不予評分）不是一個評分，不進 S_x²——跟後端 rwg_ 同一條規則。
+    const sc=(r.scores||[]).map(s=>s.score).filter(v=>v!==NOT_RATED_SCORE);
+    if(sc.length<2){skipped++;continue}            // 有效評分不足兩個的題目沒有群組一致性可言
     const m=sc.reduce((a,v)=>a+v,0)/sc.length;
     const sx2=sc.reduce((a,v)=>a+(v-m)*(v-m),0)/(sc.length-1);   // 樣本變異數，分母 n-1
-    let v=1-sx2/RWG_EXPECTED_VAR;
+    let v=1-sx2/E.expectedVar;
     if(v<0){v=0;clamped++}                          // 文獻慣例：負值截到 0
     vals.push(v);
   }
   if(!vals.length) return null;
   return {mean:vals.reduce((a,v)=>a+v,0)/vals.length,items:vals.length,skipped,clamped,
-          scalePoints:RWG_SCALE_POINTS,expectedVar:RWG_EXPECTED_VAR};
+          scalePoints:E.points,expectedVar:E.expectedVar};
+}
+// 「σE² 怎麼來的」那一句（統計方法第 4 點）。A 點連續整數量表時 σE² 就是 (A²−1)/12，
+// 照原本的寫法列出算式（舊場次逐字是「本表為 5 點量表所以 σE² = (25−1)∕12 = 2」）；
+// 量尺不連續時只列數字，不硬套一條不成立的公式。
+function sigmaEHtml(){
+  const E=rwgScale(),sc=scaleInfo(),A=E.points,r=sc.rated;
+  const sig='σ<sub>E</sub><sup>2</sup>';
+  const contiguous=r.length===A&&r.every((v,i)=>i===0||v===r[i-1]+1)&&Math.abs(E.expectedVar-(A*A-1)/12)<1e-9;
+  if(!contiguous) return `本表可評分的等級為 ${esc(r.join('、'))}，各等級等機率時 ${sig} = ${numText(E.expectedVar)}`;
+  if(sc.lowExcluded) return `本表扣除 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）後為 ${sc.min}–${sc.max} 的 ${A} 點量表，所以 ${sig} = (${A*A}−1)∕12 = ${numText(E.expectedVar)}`;
+  return `本表為 ${A} 點量表所以 ${sig} = (${A*A}−1)∕12 = ${numText(E.expectedVar)}`;
 }
 // 一致性統計的範圍與後端一致：三項潛能 + 覆蓋率，不含學習。
 function consistencyRows(){return [...(DATA.analysisRows||[]),...(DATA.coverageRows||[])]}
@@ -770,19 +879,43 @@ function rwgStat(){
 function rwgNote(g){
   if(!g) return '';
   const bits=[];
-  if(g.skipped) bits.push(`${g.skipped} 題只有一位評核官評分，未納入`);
+  // 0 分不算有效評分時，被跳過的不只是「一個人評」的題目，也包括三人評、兩人給 0 分的題目。
+  if(g.skipped) bits.push(scaleInfo().lowExcluded?`${g.skipped} 題的有效評分（不含 ${NOT_RATED_SCORE} 分）不足兩個，未納入`:`${g.skipped} 題只有一位評核官評分，未納入`);
   if(g.clamped) bits.push(`${g.clamped} 題實際變異數大於無共識期望值、r_wg 為負並依慣例截為 0`);
   return bits.length?`（納入 ${g.items} 題；${bits.join('；')}）`:`（納入 ${g.items} 題）`;
 }
-// 統計方法第 4 點在 r_wg 後面直接寫出這一場的值。其餘文字仍是寫死的說明；
-// 只有這兩個 span 會隨資料變。數字一律走 rwgStat()，所以跟報告摘要、評核官
-// 明細那顆徽章是同一個值。題數註記只在真的有跳過或截斷時才出現 —— 那一點的
+// 統計方法第 4 點在 r_wg 後面直接寫出這一場的值。其餘文字大多仍是寫死的說明；
+// 會隨資料變的是這兩個 span，加上 2026-10-16 起跟著量尺走的三處（第 3 點的不予
+// 評分說明、第 4 點的 σE²、右邊的評分尺度卡）。數字一律走 rwgStat()，所以跟報告
+// 摘要、評核官明細那顆徽章是同一個值。題數註記只在真的有跳過或截斷時才出現 —— 那一點的
 // 說明文字本身就承諾「發生時會在數字旁註明題數」，沒發生時多一句「納入 23 題」
 // 只會把那一行拉長。
 function renderMethod(){
   const g=rwgStat();
   document.getElementById('methodRwg').textContent=g==null?'：資料不足':` = ${g.mean.toFixed(2)}`;
   document.getElementById('methodRwgNote').textContent=g&&(g.skipped||g.clamped)?rwgNote(g):'';
+  const sc=scaleInfo();
+  document.getElementById('methodSigmaE').innerHTML=sigmaEHtml();
+  // 舊 1–5 量尺沒有「不算分」的等級（1 分＝未觸發也一起平均），這一句只在量尺有 0 分時出現。
+  document.getElementById('methodNotRated').innerHTML=sc.lowExcluded
+    ?`${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）不計入任何平均分、標準差與一致性統計（r<sub>wg</sub>、相差不超過 1 分比例），只在報告的摘要與資料品質一節以占比呈現；一題的分數若全部是 ${NOT_RATED_SCORE} 分，這一題沒有平均分，不畫入雷達圖。`
+    :'';
+  renderMethodScale(sc);
+}
+// 右邊的「評分尺度」卡。後端有給 meta.scale.levels（本場評分標準的原文）就照它列，
+// 順序跟試算表上一樣；舊後端沒有，就還原 HTML 裡寫死的 1–5 說明。第一次進來時先
+// 存一份寫死的版本，否則從新量尺的場次切到讀不到評分標準的場次時，就還原不回去。
+let METHOD_SCALE_STATIC=null;
+function renderMethodScale(sc){
+  const title=document.getElementById('methodScaleTitle'),list=document.getElementById('methodScaleList');
+  if(!METHOD_SCALE_STATIC) METHOD_SCALE_STATIC={title:title.innerHTML,list:list.innerHTML};
+  const lv=(Array.isArray(sc.levels)?sc.levels:[]).filter(l=>l&&l.score!==''&&l.score!=null);
+  if(!lv.length){title.innerHTML=METHOD_SCALE_STATIC.title;list.innerHTML=METHOD_SCALE_STATIC.list;return}
+  title.textContent=scaleRangeText()+' 級評分尺度';
+  list.innerHTML=lv.map(l=>{
+    const excl=sc.lowExcluded&&Number(l.score)===NOT_RATED_SCORE;
+    return `<li><b>${esc(l.score)}${l.label?' '+esc(l.label):''}：</b>${esc(l.desc)}${excl?'<span class="small">（不計入任何平均）</span>':''}</li>`;
+  }).join('');
 }
 // 三項潛能 + 覆蓋率（不含學習），跟 stats 的 consistencyRows 範圍一致。
 function coreRows(){return [...DATA.analysisRows,...DATA.coverageRows]}
@@ -874,7 +1007,8 @@ function abilityCells(){
   for (const pot of Object.keys(by)){
     for (const s4 of Object.keys(by[pot] || {})){
       const c = by[pot][s4] || {};
-      // n:0 的格子代表那個組合完全沒有題目，不是「得 0 分」。放進排序會讓
+      // n:0 的格子代表那個組合沒有可平均的分數——完全沒有題目，或（0–4 量尺上）
+      // 題目的分數全部是 0 分＝不予評分——不是「得 0 分」。放進排序會讓
       // 待改善前三永遠是三個空格，什麼也沒說。
       if (!c.n || c.mean == null) continue;
       out.push({ potential: pot, s4: s4, mean: Number(c.mean), n: c.n });
@@ -942,10 +1076,15 @@ function rankedTop(cells, n, asc){
 // 前三項」的完整版：同一份 potentialByS4、同一個 rankedTop 競賽排名（同分同名次），
 // 只是不截在第三名、而且一律由分數高到低。共用同一套函式，所以這張表、報告摘要
 // 與上面的立體柱狀圖不可能對同一格給出不同的分數或名次。
-// 要求是「全部都列」，所以 n:0 的組合（這場演習根本沒有那個 潛能×4S 的題目）也
-// 列出來，但放在最後、不給名次、分數寫「—」。它們不能進排名：abilityCells() 把
-// 它們排除是對的 —— 「沒有題目」不是「得了最低分」，排進去就會把一個沒測過的
-// 能力說成最差的能力。
+// 要求是「全部都列」，所以 n:0 的組合也列出來，但放在最後、不給名次、分數寫「—」。
+// n:0 有兩種原因，說明欄要分開講：這場演習根本沒有那個 潛能×4S 的題目；或者有題目，
+// 但分數全部是 0 分（不予評分，2026-10-16 起的 0–4 量尺才會有）。後端兩種都回 n:0，
+// 只能從題目列回頭判斷是哪一種——把後者寫成「沒有這個組合的題目」是一句不實的話。
+// 兩種都不能進排名：abilityCells() 把它們排除是對的 —— 「沒有題目／沒有有效分數」
+// 不是「得了最低分」，排進去就會把一個沒測過的能力說成最差的能力。
+function abilityHasQuestions(pot, s4){
+  return (DATA.analysisRows || []).some(r => r.potential === pot && s4ListOf(r).includes(s4));
+}
 function renderAbilityRank(){
   const ranked = rankedTop(abilityCells(), Infinity, false);
   const by = (DATA.stats && DATA.stats.potentialByS4) || {};
@@ -953,7 +1092,7 @@ function renderAbilityRank(){
   for (const pot of Object.keys(by))
     for (const s4 of Object.keys(by[pot] || {})){
       const c = by[pot][s4] || {};
-      if (!c.n || c.mean == null) untested.push({ potential: pot, s4: s4 });
+      if (!c.n || c.mean == null) untested.push({ potential: pot, s4: s4, hasQuestions: abilityHasQuestions(pot, s4) });
     }
   const card = document.getElementById('abilityRankCard');
   if (!ranked.length && !untested.length){ card.innerHTML = abilityTable([], '綜合能力排序（由高到低）'); return; }
@@ -962,11 +1101,61 @@ function renderAbilityRank(){
     `<td class="score ${cls(c.mean)}">${c.mean.toFixed(1)}</td><td>${esc(abilityNote(c.potential, c.s4))}</td></tr>`).concat(
     untested.map(c =>
     `<tr><td></td><td>${esc(abilityLabel(c.potential, c.s4))}</td>` +
-    `<td class="score">—</td><td class="small">本場演習沒有這個組合的題目</td></tr>`)).join('');
+    (c.hasQuestions
+      ? `<td class="score na" title="${esc(allUnratedTitle())}">—</td><td class="small">這個組合的題目分數全部為 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}），沒有平均分</td></tr>`
+      : `<td class="score">—</td><td class="small">本場演習沒有這個組合的題目</td></tr>`))).join('');
+  const noQ = untested.filter(c => !c.hasQuestions).length, allUnrated = untested.length - noQ;
+  const why = [noQ ? `${noQ} 項本場演習沒有對應題目` : '',
+    allUnrated ? `${allUnrated} 項的題目分數全部為 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）` : ''].filter(Boolean).join('、');
   card.innerHTML = `<div class="sec">綜合能力排序（由高到低）</div><div class="table-wrap"><table>` +
     `<thead><tr><th style="width:3em"></th><th>綜合能力</th><th style="width:5em">分數</th><th>說明</th></tr></thead>` +
     `<tbody>${rows}</tbody></table></div>` +
-    (untested.length ? `<div class="small" style="margin-top:8px">共 ${ranked.length + untested.length} 項；其中 ${untested.length} 項本場演習沒有對應題目，列在最後、不排名。</div>` : '');
+    (untested.length ? `<div class="small" style="margin-top:8px">共 ${ranked.length + untested.length} 項；其中 ${why}，列在最後、不排名。</div>` : '');
+}
+
+// 「不予評分項目」（業主 2026-10-16：綜合評比最下方分一半，右側這張）。列出至少有一位
+// 評核官給 0 分（不予評分）的場景，一個場景一列，依地點、再依演練單元排序（自然排序，
+// A 點 < B 點、SCENE 02 < SCENE 10）。場景說明取該場景的 goal（設定表「場景說明」欄，
+// 舊名「測試情境」）。三組題目（三項潛能、覆蓋率、學習）都算：0 分不進任何平均，
+// 這張表是畫面上看得到「哪裡沒評到」的地方。只讀 r.scores 與 r.stage／itemName／goal，
+// 這幾個欄位舊後端也有，所以不必等後端重貼。
+function notRatedScenes(){
+  const all=[...(DATA.analysisRows||[]),...(DATA.coverageRows||[]),...(DATA.learningRows||[])];
+  const seen=new Set(), out=[];
+  for (const r of all){
+    if (!(r.scores||[]).some(s=>s.score===NOT_RATED_SCORE)) continue;
+    const key=(r.stage||'')+'\u241f'+(r.itemName||'');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({stage:r.stage||'', itemName:r.itemName||'', goal:r.goal||''});
+  }
+  // 地點照「項目與問題」裡的出現順序（後端 meta.stageOrder）；舊後端沒有這個欄位、或
+  // 地點不在清單裡時，退回自然排序。自然排序固定用 'en' 規則：不指定語系的話，繁中語系
+  // 會把「綜合 (All)」排在「A 點」前面，畫面順序就跟著每台電腦的設定變。
+  const order=(DATA.meta&&Array.isArray(DATA.meta.stageOrder))?DATA.meta.stageOrder:[];
+  const rank=s=>{const i=order.indexOf(s);return i===-1?order.length:i};
+  const nat=(a,b)=>String(a).localeCompare(String(b),'en',{numeric:true});
+  return out.sort((a,b)=>(rank(a.stage)-rank(b.stage))||nat(a.stage,b.stage)||nat(a.itemName,b.itemName));
+}
+function renderNotRated(){
+  const card=document.getElementById('notRatedCard');
+  if (!card) return;
+  const head='<div class="sec">不予評分項目</div>';
+  // 量尺裡沒有 0 這一級（舊的 1–5 場次）：這張表永遠是空的，直接說為什麼。
+  if (!scaleInfo().values.includes(NOT_RATED_SCORE)){
+    card.innerHTML=head+`<div class="small">本場評分標準沒有 ${NOT_RATED_SCORE} 分（不予評分）這一級。</div>`;
+    return;
+  }
+  const list=notRatedScenes();
+  if (!list.length){
+    card.innerHTML=head+`<div class="small">本場沒有任何場景出現 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）。</div>`;
+    return;
+  }
+  card.innerHTML=head+'<div class="table-wrap"><table>'+
+    '<thead><tr><th style="width:3em;text-align:center">項次</th><th>地點</th><th>演練單元</th><th>場景說明</th></tr></thead><tbody>'+
+    list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td>${esc(x.itemName)}</td><td>${esc(x.goal)}</td></tr>`).join('')+
+    '</tbody></table></div>'+
+    `<div class="small" style="margin-top:8px">至少一位評核官給 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）的場景，依地點排序；${NOT_RATED_SCORE} 分不計入任何平均。</div>`;
 }
 
 function abilityTable(list, caption){
@@ -979,9 +1168,14 @@ function abilityTable(list, caption){
     `<tbody>${rows}</tbody></table></div>`;
 }
 
+// stats.untriggered 數的是量尺最低的那一級：舊 1–5 是 1 分＝未觸發（跟 2–5 分一起平均），
+// 0–4 是 0 分＝不予評分（不進任何平均）。數哪一級、叫什麼、算不算平均都由後端給；
+// 舊後端沒有 value／label／excluded，退回 1／'未觸發'／false，標籤逐字跟改版前相同。
+function untriggeredInfo(un){un=un||{};return {value:un.value==null?1:un.value,label:un.label||'未觸發',excluded:!!un.excluded}}
 function renderReportSummary(){
   const st=DATA.stats||{},pot=st.potentials||{};
   const agree=rwgStat();
+  const ut=untriggeredInfo(st.untriggered),E=rwgScale(),sc=scaleInfo();
   const cells=[
     ['總平均',fmt((st.overall||{}).mean)],
     ['反應',fmt((pot['反應']||{}).mean)],
@@ -990,7 +1184,7 @@ function renderReportSummary(){
     ['演習覆蓋率',fmt((st.coverage||{}).mean)],
     ['r_wg（評核官一致性）',agree==null?'資料不足':agree.mean.toFixed(2)],
     ['相差不超過 1 分比例',pctText(st.within1)],
-    ['未觸發率（1 分占比）',st.untriggered?pctText(st.untriggered.rate):'—'],
+    [`${ut.label}率（${ut.value} 分占比）`,st.untriggered?pctText(st.untriggered.rate):'—'],
   ];
   const ability=abilityCells();
   const top=rankedTop(ability,3,false), bottom=rankedTop(ability,3,true);
@@ -999,7 +1193,7 @@ function renderReportSummary(){
     `<div class="sumGrid">${cells.map(c=>`<div class="sumCell"><div class="k">${esc(c[0])}</div><div class="v">${esc(c[1])}</div></div>`).join('')}</div>`+
     `<div style="margin-top:18px">${abilityTable(top,'優勢前三項')}</div>`+
     `<div style="margin-top:16px">${abilityTable(bottom,'待改善前三項')}</div>`+
-    `<div class="note" style="margin-top:16px">r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，逐題計算再平均（5 點量表，σ<sub>E</sub><sup>2</sup> = 2）；≥ 0.90 很高、0.70–0.90 可接受、&lt; 0.70 偏低。${esc(rwgNote(agree))}它是逐題獨立計算的，<b>不需要「所有題目都有評分的評核官」完整矩陣</b>，所以單一題目覆蓋不足不會讓整項指標消失，只會讓那一題被跳過。「相差不超過 1 分比例」同樣逐題採實際評分人數配對。</div>`;
+    `<div class="note" style="margin-top:16px">r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，逐題計算再平均（${E.points} 點量表，σ<sub>E</sub><sup>2</sup> = ${numText(E.expectedVar)}${sc.lowExcluded?`；${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）不計入`:''}）；≥ 0.90 很高、0.70–0.90 可接受、&lt; 0.70 偏低。${esc(rwgNote(agree))}它是逐題獨立計算的，<b>不需要「所有題目都有評分的評核官」完整矩陣</b>，所以單一題目覆蓋不足不會讓整項指標消失，只會讓那一題被跳過。「相差不超過 1 分比例」同樣逐題採實際評分人數配對。</div>`;
 }
 
 // R8 觀察紀錄彙整。後端若還沒有「觀察紀錄」欄，這一節會印出明確的空狀態——
@@ -1040,33 +1234,55 @@ function renderReportQuality(){
   const deduped=DATA.analysisRows.length+DATA.coverageRows.length+(DATA.learningRows||[]).length;
   const ls=m.labelSourceSummary||null;
   const un=st.untriggered||null;
+  const ut=untriggeredInfo(un);
+  // 有人評、但分數全部是 0 分（不予評分）的題目。它們不在缺漏清單裡（有人評過），
+  // 平均卻是 null、從每一張圖上消失——不在這裡列出來，報告上兩邊都找不到它們。
+  // 舊後端沒有這個欄位：當成空清單（舊 1–5 紀錄本來就沒有 0 分）。
+  const unrated=Array.isArray(st.unratedQuestions)?st.unratedQuestions:[];
+  const qTable=list=>`<div class="table-wrap"><table><thead><tr><th>問題ID</th><th>地點</th><th>項目</th><th>場景說明</th></tr></thead><tbody>${list.map(q=>`<tr><td>${esc(q.questionId)}</td><td>${esc(q.stage)}</td><td>${esc(q.itemName)}</td><td>${esc(q.goal)}</td></tr>`).join('')}</tbody></table></div>`;
   const byEv=st.byEvaluator||[];
   let s=`<div class="reportHead">資料品質與完整性</div>`;
   s+=`<div class="sumGrid">`+[
     ['紀錄表原始列數',m.recordRowCount==null?'—':String(m.recordRowCount)],
     ['去重後題目數',String(deduped)],
-    ['未觸發（1 分）比率',un?pctText(un.rate):'—'],
+    [`${ut.label}（${ut.value} 分）比率`,un?pctText(un.rate):'—'],
     ['缺漏未評核題數',miss?String(miss.length):'—'],
   ].map(c=>`<div class="sumCell"><div class="k">${esc(c[0])}</div><div class="v">${esc(c[1])}</div></div>`).join('')+`</div>`;
   s+=`<div class="sec" style="margin-top:18px">未評核缺漏清單</div>`;
   s+=!miss
     ? `<div class="small">目前的後端部署版本沒有回傳缺漏清單，本節無法判斷是否有題目完全沒人評分。</div>`
     : miss.length
-    ? `<div class="table-wrap"><table><thead><tr><th>問題ID</th><th>階段</th><th>項目</th><th>測試場景</th></tr></thead><tbody>${miss.map(q=>`<tr><td>${esc(q.questionId)}</td><td>${esc(q.stage)}</td><td>${esc(q.itemName)}</td><td>${esc(q.goal)}</td></tr>`).join('')}</tbody></table></div>`
+    ? qTable(miss)
+    // 「每一題都有人評」在有整題 0 分的題目時不能單獨成立：那些題目有人送出分數，
+    // 卻沒有任何一個有效評分。
+    : unrated.length
+    ? `<div class="small">題庫中的每一題都至少有一位評核官送出分數；但其中 ${unrated.length} 題送出的分數全部是 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}），沒有可用的平均分，見下方清單。</div>`
     : `<div class="small">題庫中的每一題都至少有一位評核官評分。</div>`;
+  if(unrated.length){
+    s+=`<div class="sec" style="margin-top:18px">分數全部為 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）的題目</div>`+qTable(unrated)+
+      `<div class="small" style="margin-top:6px">這些題目有評核官評過，所以不算缺漏；但每一個分數都是 ${NOT_RATED_SCORE} 分，不計入任何平均，也不會出現在雷達圖、4S 圖與綜合能力排序的分數裡。</div>`;
+  }
   if(byEv.length){
     s+=`<div class="sec" style="margin-top:18px">評核官寬嚴傾向</div>`;
     s+=`<div class="table-wrap"><table><thead><tr><th>評核官</th><th>評分題數</th><th>平均分</th><th>與同題平均之差</th></tr></thead><tbody>`+
       byEv.map(e=>`<tr><td>${esc(anonLabel(e.code))}</td><td>${esc(String(e.n))}</td><td>${fmt(e.mean)}</td><td>${e.deviation==null?'—':(e.deviation>0?'+':'')+Number(e.deviation).toFixed(2)}</td></tr>`).join('')+
       `</tbody></table></div>`+
-      `<div class="small" style="margin-top:6px">差值為正＝該評核官整體打得比同題其他人寬鬆；為負＝較嚴。這是一致性的輔助資訊，不是個人考核指標。</div>`;
+      `<div class="small" style="margin-top:6px">差值為正＝該評核官整體打得比同題其他人寬鬆；為負＝較嚴。這是一致性的輔助資訊，不是個人考核指標。${scaleInfo().lowExcluded?`評分題數、平均分與差值都不含 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）。`:''}</div>`;
   }
-  if(un){
-    s+=`<div class="note" style="margin-top:16px">1 分的定義是「劇本未走到此條件，該關係或場景沒有被測試」，但它和 2–5 分一起平均。本次共 ${esc(String(un.n))} 個評分為 1 分（共 ${esc(String(un.total))} 個評分，占 ${esc(pctText(un.rate))}）；解讀平均分時請一併看這個比率，否則「平均 3.0」可能是表現普通，也可能是有一半評核官根本沒看到。</div>`;
+  // 兩種量尺的說法相反，不能共用一句：舊 1–5 的 1 分（未觸發）跟其他分數一起平均，
+  // 要提醒讀者它會把平均往下拉；0–4 的 0 分（不予評分）根本不進平均，要提醒的是
+  // 「平均只代表有評分的那一部分」。
+  if(un&&ut.excluded){
+    const lv=(scaleInfo().levels||[]).find(l=>l&&Number(l.score)===ut.value);
+    s+=`<div class="note" style="margin-top:16px">${esc(String(ut.value))} 分是「${esc(ut.label)}」${lv&&lv.desc?'（'+esc(lv.desc)+'）':''}，不是表現的高低，所以不計入任何平均分、標準差與一致性統計，只以比率呈現（報告摘要與本節）。本次共 ${esc(String(un.n))} 個評分為 ${esc(String(ut.value))} 分（共 ${esc(String(un.total))} 個評分，占 ${esc(pctText(un.rate))}）；這個比率偏高時，代表有不少題目沒有被實際測試或證據不足，各項平均分只反映其餘有評分的部分，涵蓋面比數字看起來窄。</div>`;
+  }else if(un){
+    const others=scaleInfo().rated.filter(v=>v!==ut.value);
+    const othersText=others.length?others[0]+'–'+others[others.length-1]:'其他';
+    s+=`<div class="note" style="margin-top:16px">${esc(String(ut.value))} 分的定義是「劇本未走到此條件，該關係或場景沒有被測試」，但它和 ${esc(othersText)} 分一起平均。本次共 ${esc(String(un.n))} 個評分為 ${esc(String(ut.value))} 分（共 ${esc(String(un.total))} 個評分，占 ${esc(pctText(un.rate))}）；解讀平均分時請一併看這個比率，否則「平均 3.0」可能是表現普通，也可能是有一半評核官根本沒看到。</div>`;
   }
   s+=`<div class="note" style="margin-top:12px">`+
     (ls
-      ? `本報告的標籤（測試場景／潛能／4S／指標／題目）來源：送出當時快照 ${esc(String(ls.snapshot||0))} 題、讀取時對照設定表 ${esc(String(ls.join||0))} 題、無來源 ${esc(String(ls.none||0))} 題。`
+      ? `本報告的標籤（場景說明／潛能／4S／指標／題目）來源：送出當時快照 ${esc(String(ls.snapshot||0))} 題、讀取時對照設定表 ${esc(String(ls.join||0))} 題、無來源 ${esc(String(ls.none||0))} 題。`
       : `本報告的標籤來源資訊由後端提供，目前的部署版本沒有回傳這項資訊。`)+
     `「讀取時對照」的題目，其標籤會隨設定試算表被編輯而改變——若日後為下一場演習修改題庫，這份已發出報告的標籤可能與當時不一致。建議從演習開始到該場報告歸檔之間不要編輯設定試算表。</div>`;
   document.getElementById('reportQuality').innerHTML=s;

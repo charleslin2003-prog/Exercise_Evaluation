@@ -96,7 +96,9 @@ function readCriteria_(ss) {
   var out = [];
   for (var i = 1; i < values.length; i++) {
     var row = values[i];
-    if (row[scoreCol] === '' || row[scoreCol] == null) continue;
+    // 只有空白字元的格子也當空白：Number(' ') 是 0，不擋的話會多出一個假的 0 分等級
+    // （評核單多一顆 0 按鈕，舊 1–5 場次的「最低一級」也會被誤判成 0）。
+    if (row[scoreCol] === '' || row[scoreCol] == null || String(row[scoreCol]).trim() === '') continue;
     out.push({
       score: Number(row[scoreCol]),
       label: String(row[labelCol] || ''),
@@ -109,18 +111,20 @@ function readCriteria_(ss) {
 // 項目與問題表支援任意層數分組：標頭裡有幾欄「層1」「層2」...就分幾層
 // （例如 階段->情境 兩層），沒有「層N」欄位時退回舊版單層行為，直接用
 // 「項目名稱」當唯一分組欄，回傳格式與舊版 { name, questions }[] 完全相同。
-// 前兩層另外接受具名欄位當別名：「層1」也可以叫「情境階段」、「層2」也可以
+// 前兩層另外接受具名欄位當別名：「層1」也可以叫「地點」（2026-10-16 業主改名，
+// 舊名「場景階段」「情境階段」照收）、「層2」也可以
 // 叫「演練單元」（比對順序：先找「層N」，找不到才找別名）；深度 3 層以上
 // 只認「層N」，沒有具名別名。問題ID/問題內容兩欄同理，也接受「評核題號」
 // 「評核題目」這種別名。
 // 有分組的節點回傳 { name, children }，最底層（葉節點）回傳 { name, questions }。
-var GROUP_HEADER_ALIASES_ = [['場景階段', '情境階段'], ['演練單元']];
+var GROUP_HEADER_ALIASES_ = [['地點', '場景階段', '情境階段'], ['演練單元']];
 var ID_HEADER_ALIASES_ = ['問題ID', '評核題號'];
 var TEXT_HEADER_ALIASES_ = ['問題內容', '評核題目', '具體評核題目'];
 // 選填欄：每個葉節點（最底層分組，例如 SCENE）的簡要說明，取自這一欄的第一
 // 筆值，掛在葉節點的 goal 上，給 Start.dc.html 選擇畫面當作該情境的列表文字
 // 用（配合數字徽章顯示）。沒有這欄就是空字串，前端會退回原本只顯示編號。
-var GOAL_HEADER_ALIASES_ = ['測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
+// 2026-10-16 業主把「測試情境」改名「場景說明」：新名放第一個，舊名全部照收。
+var GOAL_HEADER_ALIASES_ = ['場景說明', '測試場景與目標', '測試場景', '測試情境與目標', '測試情境'];
 // 找標頭列裡符合任一別名的欄位：先找「完全相等」，全部欄位都找過一輪都沒
 // 命中，才退而求其次找「開頭比對」（因應欄名後面接不固定補充文字或換行的
 // 情況）。一定要先做完整的完全相等再做開頭比對，不然像「問題」這個別名會
@@ -150,7 +154,7 @@ function readItems_(ss) {
   }
   if (!groupCols.length) {
     var nameCol = header.indexOf('項目名稱');
-    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1/情境階段');
+    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1/地點');
     groupCols = [nameCol];
   }
   var idCol = findHeaderCol_(header, ID_HEADER_ALIASES_);

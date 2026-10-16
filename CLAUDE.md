@@ -18,8 +18,9 @@ back out. See "Backend / data architecture" below.
 
 Content is 演習評核 (drill/exercise scoring) — a mobile-sized (390×844) flow for
 picking an assessor code, picking an evaluation item from an accordion, answering that
-item's questions on a 1–5 scale (with an optional per-question free-text 觀察紀錄), and
-submitting.
+item's questions on the drill's own 評分標準 scale — 1–5 on older drills, 0–4 (0 = 不予評分)
+since 2026-10-16, see "The score scale follows 評分標準" — (with an optional per-question
+free-text 觀察紀錄), and submitting.
 
 ### Branch state — **this branch is the production release (2026-10-14)**
 
@@ -93,10 +94,22 @@ new name first in each alias array, keeping the old one behind it:
 
 | constant | value |
 |---|---|
-| `RECORD_STAGE_ALIASES_` | `['場景階段', '情境階段']` |
-| `RECORD_GOAL_ALIASES_` | `['測試場景與目標', '測試場景', '測試情境與目標', '測試情境']` |
-| `GROUP_HEADER_ALIASES_` | `[['場景階段','情境階段'], ['演練單元']]` |
-| `GOAL_HEADER_ALIASES_` | `['測試場景與目標', '測試場景', '測試情境與目標', '測試情境']` |
+| `RECORD_STAGE_ALIASES_` | `['地點', '場景階段', '情境階段']` |
+| `RECORD_GOAL_ALIASES_` | `['場景說明', '測試場景與目標', '測試場景', '測試情境與目標', '測試情境']` |
+| `GROUP_HEADER_ALIASES_` | `[['地點','場景階段','情境階段'], ['演練單元']]` |
+| `GOAL_HEADER_ALIASES_` | `['場景說明', '測試場景與目標', '測試場景', '測試情境與目標', '測試情境']` |
+
+> **Second rename, 2026-10-16: 層1 → 「地點」, the goal column → 「場景說明」.** Same pattern —
+> the new name went *in front* of each of the four arrays above (and the `Config.gs` copies of
+> `GROUP_HEADER_ALIASES_`/`GOAL_HEADER_ALIASES_`), every older name stays accepted. ⚠️ Unlike
+> 10-12, the owner **renamed the sheet first**: 萬芳醫院急救站's 項目與問題 A1 already read
+> 「地點」 when this landed, and every backend deployed before it throws 「項目與問題缺少欄位：
+> 項目名稱 或 層1/…」 on that header (verified by running the HEAD `readItems_` on it), so that
+> drill's form and dashboard stay broken until **both** `ConfigWithSubmit.gs` and `Config.gs`
+> are repasted. Display labels followed: `Analysis.html`'s 階段/測試場景 headers and
+> `Report.gs`'s 階段/測試場景與目標 table headers now say 地點/場景說明. **`SNAPSHOT_COLUMNS_`
+> (報告快照) still says 階段 / 測試場景與目標 on purpose** — renaming a snapshot header makes
+> every report run throw until someone edits the live sheet (handover §3's ⛔).
 
 **Four** arrays, not three. `RECORD_GOAL_ALIASES_` (record side) and `GOAL_HEADER_ALIASES_`
 (config side) now hold identical values but are still separate constants on purpose — this
@@ -104,19 +117,18 @@ file says elsewhere "don't share the variable", and listing only three is exactl
 that warning exists to prevent.
 
 `層2` is **not** renamed — it is still `演練單元`. Only `層1` changed. **Five** residues of
-「情境」 remain outside `Analysis.html`. The first three are deliberate and must not be
-"tidied up"; the last two are **misses, and one of them is dangerous**:
+「情境」 remained outside `Analysis.html` after 10-12; the 10-16 rename resolved three of them
+(struck through below). Of the two left, the anchor is deliberate and must not be "tidied
+up", and the registry alias is a **miss, and a dangerous one**:
 
 - `Report.gs`'s chapter-9 anchor is still **`{{SEC_情境}}`**, because an anchor must match
   the字 the owner literally typed in their template Doc. Changing it here without changing
   the template on the same day makes `scanAnchors_` miss it and chapter 9 vanishes, leaving
   one line in 附錄D. (`{{SEC_場景}}` appears in that file only inside the comment explaining
   this.)
-- `action=selftest`'s column labels (`ConfigWithSubmit.gs:1551`/`:1554`) still print the old
-  names, because they are diagnostic labels for a sheet that still uses them.
-- The `throw` naming `層1/情境階段` — in **two** files, `ConfigWithSubmit.gs:2032` **and
-  `Config.gs:152`**, byte-identical. The two are supposed to stay in sync, so listing one is
-  itself an instance of the drift this file warns about.
+- ~~`action=selftest`'s column labels~~ — since 2026-10-16 they print 地點 / 場景說明.
+- ~~The `throw` naming `層1/情境階段`~~ — since 2026-10-16 it names `層1/地點`, still
+  byte-identical in `ConfigWithSubmit.gs` and `Config.gs`.
 - ⚠️ **`REGISTRY_SCENEPREFIX_ALIASES_ = ['scenePrefix', '情境前綴']`**
   (`ConfigWithSubmit.gs:124`, duplicated at `Setup.gs:73`) — **there is no `場景前綴`
   alias.** This is a registry *column name*, so an owner who follows the new vocabulary and
@@ -124,9 +136,7 @@ that warning exists to prevent.
   falls back to `'SCENE'`, and every scene-code match for that whole hospital is wrong with
   nothing visibly broken on screen. This is the worst kind of miss: a silent, hospital-wide
   wrong answer triggered by doing what the rename told you to do.
-- `Setup.gs:82` `DEFAULT_RECORD_HEADER_ = ['情境階段', '演練單元', …]`, used at `:660` only
-  when a copied record file has no non-empty tab to inherit a header from. Rarely reached,
-  but it is a column-name constant the rename missed, not a comment.
+- ~~`Setup.gs:82` `DEFAULT_RECORD_HEADER_`~~ — since 2026-10-16 it starts with `地點`.
 
 **回應 → 反應** (potential value only — no column name). This one is *not* an alias array,
 because the value lives in spreadsheet **cells**, not headers, and the owner's sheet was not
@@ -232,8 +242,9 @@ below has an owner, documents other than the owner should cite it, not restate i
 |---|---|---|
 | Column names, aliases, accepted potential values | the `*_ALIASES_` constants in `apps-script/ConfigWithSubmit.gs` | anywhere — quote the constant name and let the reader look. `README.md` got four alias cells wrong by copying from the `RECORD_*` arrays into an `INDICATOR_*` table |
 | How a 4S cell is split, and which words map to which canonical 4S name (cell *values*, not headers — row 1 covers headers) | `S4_VALUE_ALIASES_` + `splitS4_` in `apps-script/ConfigWithSubmit.gs` | the clients — `Analysis.html` and `Report.gs` read `r.s4List` and must **never** split themselves. `README.md` restates the words for the owner, who can't read code, and names the constant as the authority |
+| The score scale — which buttons exist, chart min/max, which level is 不予評分／未觸發, r_wg's σ_E² | each drill's own 評分標準 `分數` column, derived server-side by `scaleOf_` in `apps-script/ConfigWithSubmit.gs` (→ `meta.scale`) and, for the evaluator's buttons only, by `scoreScale()` in `Start.dc.html` from the same sheet. The one fixed point is code, not data: **0 is never averaged** (`NOT_RATED_SCORE_`) | the clients — `Analysis.html` and `Report.gs` read `meta.scale` and must never hardcode `5`, `1 = 未觸發` or `σ_E² = 2` again. `README.md` explains it to the owner. The owner's current levels are live spreadsheet state (next row) |
 | Chapter count, chart-fallback layer count | `apps-script/Report.gs` (`REPORT_SECTIONS_`, `emitChart_`) | cite the line number; never repeat the number |
-| Live spreadsheet state (column counts, the literal 評核潛能 values, registry windows) | `docs/handover-筆電.md` §4 | this file and `README.md` should point at it |
+| Live spreadsheet state (column counts, the literal 評核潛能 values, the owner's 評分標準 levels, registry windows) | `docs/handover-筆電.md` §4 | this file and `README.md` should point at it |
 | Apps Script script properties | `apps-script/README.md` | — |
 | Per-branch constants and key state | the Branch state table in this file | — |
 
@@ -460,6 +471,10 @@ Each question card has its own 評分標準 accordion: `this.state.criteriaOpenI
 drives the per-question `q.showCriteria` flag and `q.toggleCriteria` handler inside the
 `questions.map(...)` in `renderVals()`. The whole-screen criteria view described in older
 versions of this file does not exist.
+
+The score buttons above it (`q.options`, laid out by `q.optionsGridStyle`) are **not** a
+hardcoded 1–5 any more: they come from the same 評分標準 rows via `scoreScale()`. The rules
+are in "The score scale follows 評分標準" — don't restate them here.
 
 ### Per-question 觀察紀錄 (free text)
 
@@ -759,8 +774,8 @@ Boundaries that do hold, and must keep holding:
 |---|---|---|
 | `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `機構名稱`/`演習名稱`/`演習主題`(or `主題`)/`演習類別`/`演習日期`/`說明`, plus the two **new** optional labels `啟用觀察紀錄` and `低分需說明門檻`, reading column B of each | `orgName`, `exerciseName`, `exerciseTopic`, `exerciseCategory`, `exerciseDate`, `exerciseDesc: string` (all optional, `''` when absent), `commentEnabled: boolean` (default `true`; only a literal `N`/`n`/`否`/`關閉`/`false` turns it off), `commentRequiredBelow: number` (default `0` = never required). `exerciseTopic` and `exerciseCategory` are **separate fields**, not aliases — the sheet has both a `主題` row (long descriptive title) and a `演習類別` row (short category) at the same time; conflating them silently drops whichever comes later. `Analysis.html`'s header pill uses `exerciseCategory`, its 主題 KPI card uses `exerciseTopic`, its 說明 card uses `exerciseDesc` |
 | `人員代號` | `代號` | `codes: { value, label }[]` (dropdown options, `value === label`) |
-| `評分標準` | `分數`, `標籤`, `說明` | `criteria: { score, label, desc }[]`, one row per score (1–5) |
-| `項目與問題` | `層1`, `層2`, … (any number, in order; `層1` also accepts `場景階段` or the older `情境階段`, `層2` accepts `演練單元`) **or** `項目名稱` as a fallback single grouping column; plus `問題ID` (or `評核題號`), `問題內容` (or `評核題目`/`具體評核題目`), and an optional `測試場景與目標` column (older `測試場景`/`測試情境與目標`/`測試情境` still accepted — see `GOAL_HEADER_ALIASES_`) | `items`: a tree whose depth = however many `層N` columns exist. Each leaf also carries `goal` (first non-blank 測試場景與目標 under that leaf) |
+| `評分標準` | `分數`, `標籤`, `說明` | `criteria: { score, label, desc }[]`, one row per level, in sheet order (often high→low). Since 2026-10-16 the `分數` column is not just display text — it **is** the drill's scale: the evaluator's buttons and `meta.scale` both come from it. See "The score scale follows 評分標準"; the owner's current levels are in handover §4 |
+| `項目與問題` | `層1`, `層2`, … (any number, in order; `層1` also accepts `地點`, `場景階段` or the older `情境階段`, `層2` accepts `演練單元`) **or** `項目名稱` as a fallback single grouping column; plus `問題ID` (or `評核題號`), `問題內容` (or `評核題目`/`具體評核題目`), and an optional `測試場景與目標` column (older `測試場景`/`測試情境與目標`/`測試情境` still accepted — see `GOAL_HEADER_ALIASES_`) | `items`: a tree whose depth = however many `層N` columns exist. Each leaf also carries `goal` (first non-blank 測試場景與目標 under that leaf) |
 | `對應指標` (`INDICATOR_SHEET_NAME`) | Matched by **alias**, never by literal name — see the warning below | Read-only lookup, **not** part of `doGet`'s payload — read by `readIndicatorMap_` (write path, first three columns) / `readIndicatorFull_` (analysis path, all five). Lives in the config spreadsheet because it is config, not a record of a submission |
 
 > ⚠️ **This row used to list `問題ID`, `問題`, `問題所屬指標`, `評核潛能`, `4S 元素` as if
@@ -904,9 +919,15 @@ tolerable.
 Per-row fields: `{ questionId, stage, itemName, goal, potential, s4, indicator, question,
 scores:[{code,score}], mean, sd }` plus the new `exerciseId`,
 `comments:[{code,comment}]` (non-empty only, sorted by code), `labelSource`,
-`untriggered` (count of scores equal to 1 on that row), and `s4List` (2026-10-16 — what
+`untriggered` (count of scores equal to `meta.scale.lowValue` on that row — 1 on a legacy
+1–5 drill, 0 on a 0–4 drill), `s4List` (2026-10-16 — what
 `splitS4_` derives from `s4`: canonical 4S names, then any unrecognised pieces verbatim; see
-"A 4S cell can name several elements").
+"A 4S cell can name several elements"), and `ratedCount` (2026-10-16 — the number of non-0
+scores). Since 2026-10-16 `scores` still lists every evaluator **including 0s**, but `mean`/`sd`
+are over the non-0 scores only, so **`mean` is `null` when every score on the row is 0** (`sd`
+is then `0`). `scores.length` is "how many people scored this", `ratedCount` "how many gave a
+real rating"; a client on an old backend that lacks `ratedCount` treats it as `scores.length`.
+See "The score scale follows 評分標準".
 
 Rows split into `analysisRows` (potential `反應`/`監測`/`預期` — **see the rename note
 below; the spreadsheet still literally says `回應`**), `coverageRows` (potential
@@ -917,9 +938,13 @@ only places they surface.
 `meta` keeps `orgName`/`exerciseName`/`exerciseTopic`/`exerciseCategory`/`exerciseDate`/
 `exerciseDesc`/`generatedAt`/`evaluatorCodes` and adds `tenant`, `exercise`, `displayName`,
 `scenePrefix`, `tenantSource`, `configFileName`, `recordFileName`, `recordSheetName`,
-`recordRowCount` (raw rows before dedup), `commentCount`, and `labelSourceSummary`
+`recordRowCount` (raw rows before dedup), `commentCount`, `labelSourceSummary`
 (`{snapshot, join, none}` tallied over the three row arrays only — rows that never reach a
-chart aren't counted, so the report's disclosure line matches what the reader sees).
+chart aren't counted, so the report's disclosure line matches what the reader sees), and
+`scale` (2026-10-16 — the drill's score scale, see "The score scale follows 評分標準"), and
+`stageOrder` (2026-10-16 — the distinct 層1／地點 values in 項目與問題 sheet order, i.e.
+`readItems_`'s top-level node names; it is how `#notRatedCard` sorts by 地點 without depending
+on the browser's collation, which in a zh-TW locale puts 「綜合 (All)」 before 「A 點」).
 File **names** are allowed here (this branch is key-protected) and feed 附錄C; spreadsheet
 **IDs** never are.
 
@@ -930,16 +955,41 @@ one single-rater question nulls the whole dataset), `within1` (fraction of same-
 evaluator pairs differing by ≤1, computed per row so it doesn't need a rectangular matrix),
 `potentialByS4` (cross-tab feeding the iso-3D chart). Five are computed exactly as before;
 `s4` and `potentialByS4` group by `s4List` membership since 2026-10-16 (identical numbers on
-canonically-spelled single-element cells). Both consistency figures are computed
-over `analysisRows + coverageRows` (`consistencyRows`). Three keys are **added**:
+canonically-spelled single-element cells). **Also since 2026-10-16, every one of the seven
+drops score 0 (不予評分)**: `overall`/`potentials`/`s4`/`coverage`/`potentialByS4` summarise
+non-0 scores only, so `n` counts real ratings and any of them — including a 潛能×4S cell or a
+4S category that *has* questions, if they were all 0-ed — can be `{n:0, mean:null}`;
+`icc2k` treats a 0 as "did not rate", which drops that evaluator from the common intersection
+(one 0 anywhere is enough — expect `null` more often on 0–4 drills); `within1` never pairs a
+0. On data with no 0 — every legacy drill — all seven are unchanged. Both consistency figures
+are computed over `analysisRows + coverageRows` (`consistencyRows`). Keys **added** since:
 
-- `untriggered: {n, total, rate}` — share of individual scores equal to 1 over
-  `consistencyRows` (the 1 = 「劇本未走到」 problem: it was being averaged in with 2–5).
+- `untriggered: {n, total, rate, value, label, excluded}` — `n` counts scores equal to
+  `meta.scale.lowValue` over `consistencyRows`; `total` counts every score **including 0s**.
+  On a legacy 1–5 drill that is the old 「1 = 劇本未走到」 rate (1 was being averaged in with
+  2–5, so it needed its own figure); on a 0–4 drill it is the 不予評分 rate, the **only**
+  place a 0 is counted. `value`/`label`/`excluded` (2026-10-16) are `lowValue`/`lowLabel`/
+  `lowExcluded`; an old backend sends none of them → treat as `1`/`''`/`false`. The UI label is
+  `(label || '未觸發') + '率（' + value + ' 分占比）'`. When `excluded` is true, prose must say
+  that level is in **no** average; when false the old prose (1 分＝劇本未走到，與 2–5 分一起平均)
+  is still correct. The key keeps its old name so an un-repasted `Report.gs` doesn't lose it.
 - `missingQuestions: [{questionId, stage, itemName, goal}]` — every question id in
   `readItems_` with zero scores. Blank question ids (owner separator rows) are skipped.
+- `unratedQuestions: [{questionId, stage, itemName, goal}]` (2026-10-16) — questions that
+  **were** scored but whose every score is 0 (`r.mean === null`), over all rows like
+  `missingQuestions`. The two lists are disjoint, and without this one such a question is in
+  neither and silently vanishes from every chart. Old backend → `[]`.
 - `byEvaluator: [{code, n, mean, deviation}]` — 寬嚴傾向; `deviation` is that code's mean
   minus the mean of the row-means of the rows *they* scored, so scoring only hard questions
-  doesn't read as strictness. Must be renderable anonymised.
+  doesn't read as strictness. Must be renderable anonymised. Since 2026-10-16 an
+  evaluator's 0 is skipped on **both** sides (own score and that row's baseline), so `n` is
+  their real ratings; a row they rated non-0 always has a non-null `r.mean`.
+- `rwg: {mean, items, skipped, clamped, scalePoints, expectedVar}` (2026-10-13; replaced
+  `icc2k` on screen) — per-question r<sub>wg</sub> = 1 − S<sub>x</sub>²/σ<sub>E</sub>²
+  averaged; `skipped` = questions with < 2 **non-0** scores, `clamped` = negatives floored to
+  0, `null` when no question qualifies. Since 2026-10-16 σ<sub>E</sub>² is
+  `meta.scale.expectedVar` and `scalePoints` is `meta.scale.rated.length` (2 / 5 on 1–5,
+  1.25 / 4 on 0–4); they used to be the hardcoded `RWG_SCALE_POINTS_ = 5`.
 
 ### A 4S cell can name several elements (2026-10-16)
 
@@ -1009,6 +1059,107 @@ each, **not** 1/k. Before this the cell was one opaque string, so on the owner's
   `ABILITY_NOTES_` in `Report.gs`, in one commit. Nothing at runtime notices a mismatch.
   (`Analysis.html`'s `S4_COLORS` is defined but never read.)
 
+### The score scale follows 評分標準; 0 = 不予評分 is never averaged (2026-10-16)
+
+The owner changed the config spreadsheet's 評分標準 from 1–5 (1 = 未觸發「劇本未走到此條件」) to
+0–4 with 0 = 不予評分 (levels and labels: handover §4). Until then the evaluator's buttons were
+a hardcoded `[1, 2, 3, 4, 5]` and the backend assumed a 5-point scale with 1 as the "untriggered"
+level, so the sheet change alone would have left 0 unpickable and 5 still offered. Two owner
+decisions, both final:
+
+1. **0 is not a rating.** It is excluded from every mean, SD, min/max, r<sub>wg</sub>,
+   within1, ICC and 寬嚴傾向, and reported only as a count/rate (`stats.untriggered`,
+   `stats.unratedQuestions`).
+2. **The scale follows each drill's own 評分標準 automatically.** Old 1–5 drills keep
+   rendering exactly as before; 0–4 drills chart on the rated levels 1–4.
+
+- **One source, two derivations.** The sheet's `分數` column is the scale. Server-side,
+  `buildAnalysis_` calls `scaleOf_(readCriteria_(configSs))` and returns it as `meta.scale`:
+  `{values, rated, min, max, lowValue, lowLabel, lowExcluded, expectedVar, levels, source}` —
+  read the comment above `scaleOf_` for each field rather than this list. On a 0–4 sheet that is
+  values `[0..4]`, rated `[1..4]`, min 1, max 4, lowValue 0, lowExcluded true, expectedVar 1.25;
+  on a legacy 1–5 sheet values/rated `[1..5]`, max 5, lowValue 1, lowExcluded false,
+  expectedVar 2. A 評分標準 read failure must not take the dashboard down with it, so it falls
+  back to 1–5 with `source:'error'` (`'default'` when the sheet simply lists no number).
+  ⚠️ That fallback is **silent on screen**: `ConfigWithSubmit.gs`'s `readCriteria_` throws on
+  any of the three headers (`標籤`/`說明` too, not just `分數`), so retitling one 說明 header
+  quietly re-scales a 0–4 drill to 1–5 (max 5, 1 = 未達成 counted as 未觸發). `Analysis.html`
+  never reads `source`; the only place it surfaces is `Report.gs`'s 檢查設定 「評分量尺」 row —
+  which is pushed `ok: true` either way, so read its text, not its colour.
+  Client-side, `scoreScale(criteria)` in `Start.dc.html` derives the buttons from the config
+  payload's `criteria` — the same sheet. The two agree on: dedupe, ascending sort, skip a
+  non-numeric `分數`, fall back to `[1, 2, 3, 4, 5]`. **Change one, change the other**; nothing
+  at runtime compares them.
+- **The 0 rule is code, not sheet data.** `NOT_RATED_SCORE_ = 0` + `ratedOnly_` exclude 0
+  unconditionally, whether or not the drill's scale lists 0. Only 0: an owner who puts 不予評分
+  on another number gets it averaged in. `lowValue` (what `untriggered` counts) is 0 when the
+  scale has a 0, else the scale's minimum; `lowExcluded` is `lowValue === 0`.
+- **Why legacy drills are byte-identical.** A 1–5 drill's records contain no 0 (the buttons
+  were hardcoded 1–5), so `ratedOnly_` removes nothing; its scale gives `lowValue` 1 (the old
+  `=== 1` count), `expectedVar` 2 (the old `(5²−1)/12`) and `scalePoints` 5. The only payload
+  differences are the additive fields — `meta.scale`, `ratedCount`, `stats.unratedQuestions`,
+  `untriggered.value/label/excluded`. **The one legacy behaviour change:** a blank `分數` cell is
+  now skipped in `buildAnalysis_`'s record loop. It used to pass the `isNaN` check as
+  `Number('') === 0`, so a cleared cell was averaged in as a 0 **and**, under last-write-wins
+  dedup, overwrote that evaluator's earlier real score for the question. A record sheet with
+  blank score cells will move; one without them won't. (This had to change: 0 now *means*
+  something, and a blank must not impersonate it.) Byte-identical also assumes the old drill's
+  評分標準 still says 1–5 — see the re-scaling hazard below.
+- **What every client must handle** (the contract `Analysis.html`/`Report.gs` code against):
+  `r.mean === null` (any `r.mean.toFixed`, sort comparator or radar value must guard it);
+  `ratedCount` absent → `scores.length`; any `summarize_` stat as `{n:0, mean:null}`; no
+  `meta.scale` (old backend) → `{values:[1,2,3,4,5], rated:[1,2,3,4,5], min:1, max:5,
+  lowValue:1, lowLabel:'', lowExcluded:false, expectedVar:2, levels:[]}`, which makes a new
+  client on an old backend render exactly as today. Hand-written prose that describes the scale
+  (`Analysis.html`'s 統計方法 panel, `Report.gs`'s 評核方法 chapter) has to branch on
+  `excluded`/`lowExcluded` — the 1–5 sentence is false on a 0–4 drill and vice versa.
+- **`Start.dc.html`'s buttons.** `renderVals()` maps `scoreScale(criteriaList)` instead of the
+  literal array, ascending. `optionsGridStyle` is `repeat(min(n, 6), minmax(0, 1fr))`, so five
+  buttons give exactly the old inline style and a seventh wraps rather than shrinking below a
+  tappable width on a 390-wide screen. The 1–5 fallback is mandatory, not cosmetic: zero
+  buttons would make every question unanswerable. 0 already works downstream — every
+  "answered" test is `!= null`, not truthiness, and the comment gate is `score <=
+  commentRequiredBelow`, so on 0–4 a threshold of 1 requires a comment for 0 **and** 1, and
+  no integer threshold requires one for 0 alone (threshold 0 means "never"; a fractional `0.5`
+  does work — `Number()` keeps it — but the hint then reads 「評 0.5 分以下必填」). Both config
+  backends — `Config.gs` (no-param links) and `ConfigWithSubmit.gs` (`?t=`/`?ex=`) — have always
+  returned `criteria`, so **the buttons need no backend change**: the new page switches them
+  the moment it deploys.
+- **`doPost` still does not validate the score range — deliberately.** `appendSubmission_`
+  writes `Number(a.score)` as received. Checking it would mean reading 評分標準 on every POST,
+  and then one broken 評分標準 sheet (a renamed header, a mid-drill edit) would refuse every
+  submission mid-drill — the same "a config slip must not cost scores" rule as the comment gate.
+  The buttons are the only gate. Consequence: an out-of-scale value (a stale tab still showing
+  5 on a 0–4 drill, a hand-crafted POST) is stored and averaged in; only 0 is filtered.
+- **Deploy order: clients first, backend last** — push `master` (`Start.dc.html`,
+  `Analysis.html`), repaste `Report.gs` into the report Web App and edit its existing
+  deployment → New version, then repaste `ConfigWithSubmit.gs` and edit its existing
+  deployment. The scale change itself needs nothing from `Config.gs` (it already returns
+  `criteria`); any other `Config.gs` edit shipping in the same release still needs its own
+  repaste and redeploy.
+  - New clients + old backend: no `meta.scale`, so the dashboard renders as today. The new
+    `Start.dc.html` already offers 0 on a 0–4 sheet, and the old backend averages those 0s in
+    and counts 1s as 未觸發 — wrong numbers on screen, but the stored rows are right and the new
+    backend re-reads them correctly. Display-only and self-healing.
+  - **Old `Analysis.html` + new backend can throw**: its radar code calls `.toFixed(1)` on
+    `r.mean` (`svgRadar` first, then `radarTable`; in `renderCoverage` too), and `r.mean` is
+    `null` on any question everyone scored 0 — and its overview `barsSVG` does the same, earlier
+    still, on a 4S category whose every score is 0. Legacy drills have no such row, so this
+    bites only on a 0–4 drill — but then the throw escapes `init()` into `load()`'s `.catch`,
+    which prints 「讀取失敗，請確認網路連線…」 (a network message for a render bug), leaves the
+    panel that threw and every panel `init()` renders after it empty, and never enables
+    產生報告. Even when nothing throws, the old page draws on a hardcoded 5-point axis and
+    prints the 0 rate under 「未觸發率（1 分占比）」.
+  - Old `Start.dc.html` on a 0–4 sheet is the worst of the three: 1–5 buttons, so evaluators
+    can submit a 5 and never a 0. That is wrong **data**, which no later deploy repairs — so
+    the evaluator page must not lag the sheet.
+- **Re-scaling hazard.** The scale is read from the *current* 評分標準 every time the
+  analysis is built; nothing freezes it per drill. Changing 評分標準 after a drill re-scales
+  that drill's dashboard and report: 1–5 → 0–4 turns max 5 into 4 (old 5s sit above it), stops
+  counting 1 as 未觸發 and changes σ<sub>E</sub>². Changing it mid-drill mixes two scales in one
+  record sheet. A new scale belongs in a new config spreadsheet (the `Setup.gs` wizard copies
+  one per drill). `README.md`'s 評分標準 section tells the owner this.
+
 ### Admin / listing endpoints
 
 | action | auth | returns |
@@ -1051,10 +1202,20 @@ places share.
   `abilityCells()` + `rankedTop()` (ties share a rank), then the `n:0` cells — combinations
   with no questions in this drill — listed last with no rank and `—`, because "no questions"
   must not read as "lowest score". `#overview` is reused as report section R3, so it prints.
+  Since 2026-10-16 that second card shares a 50/50 row (`.grid.halves`, which collapses to one
+  column under 1050px and in print, like `.cols2`) with **`#notRatedCard` 「不予評分項目」**
+  (`renderNotRated()`/`notRatedScenes()`, owner request): one row per scene where *any*
+  evaluator gave a 0, columns 項次／地點／演練單元／場景說明, sorted by `meta.stageOrder` then
+  natural 演練單元 order (fallback when `stageOrder` is absent: natural sort with an explicit
+  `'en'` locale). All three row groups count, coverage and 學習 included — 0 is in no average,
+  so this card is the on-screen place that shows where nothing was scored. It reads only
+  `r.scores`/`stage`/`itemName`/`goal`, which an old backend also sends, so it needs no repaste
+  to appear; on a 1–5 drill (no 0 level) it says so instead of showing an empty table.
 - **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category, stacked by
   演練單元/SCENE short code, segments in natural code order (`A1 < A2 < B < … < F`), colors
   from an HSL spectrum (hue 0–300° across the sorted list) so adjacent codes read as
-  adjacent hues. Bar **length** is the real 4S average (`stats.s4[s4].mean`, ~1–5), not a
+  adjacent hues. Bar **length** is the real 4S average (`stats.s4[s4].mean`, within the drill's rated range
+  `meta.scale.min`–`max`: 1–5 on a legacy drill, 1–4 on a 0–4 one, 0 excluded), not a
   sum; each segment's **width** is that scenario's share of the sum of per-scenario means,
   while its label (`D2 3.7`) shows the scenario's actual average. Bars sorted by total,
   descending. The per-scene segments are the one place this page groups rows by 4S itself,
@@ -1065,12 +1226,18 @@ places share.
   clockwise lowest→highest (sorting happens inside `svgRadar()`, so every caller gets it).
   Each radar card is followed by a **separate** card (not nested, so chart height stays
   fixed regardless of table length) holding a `radarTable()` — 場景編號 / 指標 /
-  具體評核題目 / 分數, ascending by score.
+  具體評核題目 / 分數, ascending by score. A row with `mean === null` (every score 0) is left
+  off the radar, said so under it by `unratedRadarNote()`, and listed last in the table with
+  `—` (`cmpNullLast`); `#coverage` does the same.
 - **演習覆蓋率 (`#coverage`)** — coverage radar plus a `radarTable()` in the 覆蓋率指標摘要 card.
 - **統計方法 (`#method`)** — static prose, except item 4's r<sub>wg</sub> value: two spans
   (`#methodRwg`, `#methodRwgNote`) filled by `renderMethod()` from `rwgStat()`, the same
-  value the report summary shows. Everything else is hand-written; update it by hand if
-  the stats computation changes.
+  value the report summary shows — plus, since 2026-10-16, three places that follow
+  `meta.scale`: item 3's 不予評分 sentence (`#methodNotRated`, empty unless `lowExcluded`),
+  item 4's σ<sub>E</sub>² (`#methodSigmaE`), and the right-hand 評分尺度 card
+  (`renderMethodScale()`, from `meta.scale.levels`, restoring the hardcoded 1–5 text when there
+  are none). Everything else is hand-written; update it by hand if the stats computation
+  changes.
 
 ### Panels with no tab button
 
@@ -1078,7 +1245,8 @@ places share.
   `learningRows` appear. Rendered on load, unreachable from the tab bar, and shown in the
   report only behind the `#includeRanking` opt-in.
 - **`#detail` (評核官明細)** — per-question identified table with scope/evaluator filters,
-  CSV export, and the `ICC(2,k)` badge (`#iccBadge`). Rendered on load, unreachable.
+  CSV export, and the r<sub>wg</sub> badge (`#agreeBadge`; it was an `ICC(2,k)` `#iccBadge`
+  before 2026-10-13). Rendered on load, unreachable.
 
 > **Do not add tab buttons for these two.** Commit `54b33dd` hid them deliberately:
 > `#detail` is the per-assessor identified-score table plus CSV export, and in a
