@@ -190,7 +190,7 @@ button{font-family:inherit;cursor:pointer}
         </div>
         </sc-if>
 
-        <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px;">
+        <div style="{{ q.optionsGridStyle }}">
           <sc-for list="{{ q.options }}" as="o" hint-placeholder-count="5">
             <button type="button" onClick="{{ o.pick }}" style="{{ o.style }}">{{ o.n }}</button>
           </sc-for>
@@ -404,6 +404,23 @@ function collectLeafNames(nodes, out) {
     else if (n.children) collectLeafNames(n.children, out);
   });
   return out;
+}
+// 分數按鈕跟設定表的「評分標準」同步：那張表列了哪些分數，就是哪幾顆按鈕
+// （業主 2026-10-16 把量尺從 1–5 改成 0–4，按鈕卻還寫死 1–5）。由小到大排，跟
+// 改版前一樣；試算表上常是由大到小列，那只影響上面的評分標準說明。讀不到任何
+// 數字（舊設定表、整張空白）時退回 1–5 —— 一顆按鈕都沒有的話整題永遠送不出去。
+// 後端不檢查分數範圍，所以按鈕上有的分數一定寫得進去。
+function scoreScale(criteria) {
+  const seen = {};
+  const out = [];
+  (criteria || []).forEach((c) => {
+    if (!c || c.score === '' || c.score == null) return;
+    const n = Number(c.score);
+    if (!isFinite(n) || seen[n]) return;
+    seen[n] = true;
+    out.push(n);
+  });
+  return out.length ? out.sort((a, b) => a - b) : [1, 2, 3, 4, 5];
 }
 // 場次狀態的配色與備援文字。狀態字串（開放中／尚未開放／已結束）本體由後端給，
 // 跟 doPost 的判斷同一套用語，不會兩邊各說一套；這裡只在後端沒給 statusText 時
@@ -818,9 +835,14 @@ class Component extends DCLogic {
     // 當成 0，也就是「永遠只是選填」。
     const commentEnabled = !loaded || config.commentEnabled !== false;
     const commentRequiredBelow = (loaded && Number(config.commentRequiredBelow)) || 0;
+    const scoreValues = scoreScale(criteriaList);
+    // 一列最多 6 顆，再多就換行，免得 390 寬的手機上按鈕窄到按不準；5 顆時就是原本的
+    // repeat(5, minmax(0, 1fr))。
+    const optionsGridStyle = 'display: grid; grid-template-columns: repeat(' +
+      Math.min(scoreValues.length, 6) + ', minmax(0, 1fr)); gap: 6px;';
     const questions = itemQuestions.map((q) => {
       const current = answers[q.id];
-      const options = [1, 2, 3, 4, 5].map((n) => {
+      const options = scoreValues.map((n) => {
         const on = current === n;
         return {
           n,
@@ -840,6 +862,7 @@ class Component extends DCLogic {
         id: q.id,
         text: q.text,
         options,
+        optionsGridStyle,
         showCommentBox: commentEnabled,
         commentValue,
         setComment: (e) => this.setState({
