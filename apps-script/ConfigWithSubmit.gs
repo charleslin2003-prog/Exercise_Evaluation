@@ -1238,6 +1238,10 @@ function buildAnalysis_(t) {
       stage: stageInfo.stage,
       itemName: stageInfo.itemName || b.itemName,
       goal: goal,
+      // 這一題自己那一列的場景說明（設定表），goal 則是整個葉節點（場景）的說明。兩層的表
+      // 兩者通常一樣；一層的表一個場景底下有好幾種說明，只有這個欄位分得出來。只給
+      // Analysis.html 的「不予評分項目」一題一列時用，其他地方照舊讀 goal。
+      questionGoal: stageInfo.questionGoal || '',
       potential: potential,
       s4: s4,
       // s4 是格子原字串（明細表、CSV、報告附錄A 照原樣印）；s4List 是 splitS4_ 拆好的
@@ -1441,6 +1445,9 @@ function buildAnalysis_(t) {
       // 「不予評分項目」依地點排序時照這個順序排：業主排好的順序本身就是答案，而用字串
       // 排序的話，結果會隨瀏覽器語系變（繁中語系把「綜合」排在「A 點」前面）。
       stageOrder: items.map(function (n) { return String(n.name || ''); }),
+      // 「項目與問題」實際有幾層分組（一層＝只有層一／地點，沒有演練單元）。Analysis.html
+      // 的「不予評分項目」據此決定要一個場景一列，還是一題一列。
+      levelCount: itemsDepth_(items),
     },
     analysisRows: analysisRows,
     coverageRows: coverageRows,
@@ -1456,6 +1463,15 @@ function buildAnalysis_(t) {
 var NOT_RATED_SCORE_ = 0;
 function ratedOnly_(vals) {
   return vals.filter(function (v) { return v !== NOT_RATED_SCORE_; });
+}
+
+function itemsDepth_(nodes) {
+  var depth = 0;
+  (nodes || []).forEach(function (n) {
+    var d = n.questions ? 1 : 1 + itemsDepth_(n.children);
+    if (d > depth) depth = d;
+  });
+  return depth;
 }
 
 function flattenScores_(rows) {
@@ -1652,7 +1668,7 @@ function indexQuestionsByStage_(nodes) {
   var out = {};
   nodes.forEach(function (root) {
     if (root.questions) {
-      root.questions.forEach(function (q) { out[q.id] = { stage: root.name, itemName: root.name, goal: root.goal || '' }; });
+      root.questions.forEach(function (q) { out[q.id] = { stage: root.name, itemName: root.name, goal: root.goal || '', questionGoal: q.goal || '' }; });
     } else if (root.children) {
       indexChildren_(root.children, root.name, out);
     }
@@ -1663,7 +1679,7 @@ function indexQuestionsByStage_(nodes) {
 function indexChildren_(nodes, stageName, out) {
   nodes.forEach(function (n) {
     if (n.questions) {
-      n.questions.forEach(function (q) { out[q.id] = { stage: stageName, itemName: n.name, goal: n.goal || '' }; });
+      n.questions.forEach(function (q) { out[q.id] = { stage: stageName, itemName: n.name, goal: n.goal || '', questionGoal: q.goal || '' }; });
     } else if (n.children) {
       indexChildren_(n.children, stageName, out);
     }
@@ -2351,7 +2367,10 @@ function readItems_(ss) {
     }
     if (goalCol !== -1 && !cursor.goal) cursor.goal = String(row[goalCol] || '');
     cursor.questions = cursor.questions || [];
-    cursor.questions.push({ id: String(row[idCol] || ''), text: String(row[textCol] || '') });
+    // goal：這一題自己那一列的場景說明（可能是空白）。葉節點的 goal 只留第一筆，一層的表
+    // （整群題目共用一個「場景」）就分不出每題各自的說明，所以每題另外帶一份。
+    cursor.questions.push({ id: String(row[idCol] || ''), text: String(row[textCol] || ''),
+      goal: goalCol !== -1 ? String(row[goalCol] || '') : '' });
   }
   return stripGroupInternals_(root.children);
 }

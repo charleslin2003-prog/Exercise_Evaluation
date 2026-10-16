@@ -193,7 +193,10 @@ function readItems_(ss) {
     }
     if (goalCol !== -1 && !cursor.goal) cursor.goal = String(row[goalCol] || '');
     cursor.questions = cursor.questions || [];
-    cursor.questions.push({ id: String(row[idCol] || ''), text: String(row[textCol] || '') });
+    // goal：這一題自己那一列的場景說明（可能是空白）。葉節點的 goal 只留第一筆，一層的表
+    // （整群題目共用一個「場景」）就分不出每題各自的說明，所以每題另外帶一份。
+    cursor.questions.push({ id: String(row[idCol] || ''), text: String(row[textCol] || ''),
+      goal: goalCol !== -1 ? String(row[goalCol] || '') : '' });
   }
   return stripGroupInternals_(root.children);
 }

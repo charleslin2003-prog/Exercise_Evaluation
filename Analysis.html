@@ -1119,11 +1119,30 @@ function renderAbilityRank(){
 // 舊名「測試情境」）。三組題目（三項潛能、覆蓋率、學習）都算：0 分不進任何平均，
 // 這張表是畫面上看得到「哪裡沒評到」的地方。只讀 r.scores 與 r.stage／itemName／goal，
 // 這幾個欄位舊後端也有，所以不必等後端重貼。
+// 一層的演習（只有層一，沒有演練單元）改成一題一列：序號／場景／場景說明／問題（業主
+// 2026-10-16）。一層時 stage 與 itemName 是同一個值，照兩層的格式印會出現兩欄一模一樣。
+// 層數取後端 meta.levelCount；舊後端沒有這個欄位時，改看「每一列的 stage 都等於
+// itemName」——那正是 indexQuestionsByStage_ 對一層的表給的形狀。
+function isSingleLevel(rows){
+  const lc=DATA.meta&&DATA.meta.levelCount;
+  if (typeof lc==='number') return lc===1;
+  return rows.length>0&&rows.every(r=>(r.stage||'')===(r.itemName||''));
+}
 function notRatedScenes(){
   const all=[...(DATA.analysisRows||[]),...(DATA.coverageRows||[]),...(DATA.learningRows||[])];
+  const zero=all.filter(r=>(r.scores||[]).some(s=>s.score===NOT_RATED_SCORE));
+  const order=(DATA.meta&&Array.isArray(DATA.meta.stageOrder))?DATA.meta.stageOrder:[];
+  const rank=s=>{const i=order.indexOf(s);return i===-1?order.length:i};
+  const nat=(a,b)=>String(a).localeCompare(String(b),'en',{numeric:true});
+  if (isSingleLevel(all)){
+    // 場景說明用這一題自己的（questionGoal），舊後端沒有時退回場景的第一筆說明。
+    const list=zero.map(r=>({stage:r.stage||'', questionId:r.questionId||'', goal:r.questionGoal||r.goal||'', question:r.question||''}));
+    list.sort((a,b)=>(rank(a.stage)-rank(b.stage))||nat(a.stage,b.stage)||nat(a.questionId,b.questionId));
+    list.single=true;
+    return list;
+  }
   const seen=new Set(), out=[];
-  for (const r of all){
-    if (!(r.scores||[]).some(s=>s.score===NOT_RATED_SCORE)) continue;
+  for (const r of zero){
     const key=(r.stage||'')+'\u241f'+(r.itemName||'');
     if (seen.has(key)) continue;
     seen.add(key);
@@ -1132,9 +1151,6 @@ function notRatedScenes(){
   // 地點照「項目與問題」裡的出現順序（後端 meta.stageOrder）；舊後端沒有這個欄位、或
   // 地點不在清單裡時，退回自然排序。自然排序固定用 'en' 規則：不指定語系的話，繁中語系
   // 會把「綜合 (All)」排在「A 點」前面，畫面順序就跟著每台電腦的設定變。
-  const order=(DATA.meta&&Array.isArray(DATA.meta.stageOrder))?DATA.meta.stageOrder:[];
-  const rank=s=>{const i=order.indexOf(s);return i===-1?order.length:i};
-  const nat=(a,b)=>String(a).localeCompare(String(b),'en',{numeric:true});
   return out.sort((a,b)=>(rank(a.stage)-rank(b.stage))||nat(a.stage,b.stage)||nat(a.itemName,b.itemName));
 }
 function renderNotRated(){
@@ -1149,6 +1165,14 @@ function renderNotRated(){
   const list=notRatedScenes();
   if (!list.length){
     card.innerHTML=head+`<div class="small">本場沒有任何場景出現 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）。</div>`;
+    return;
+  }
+  if (list.single){
+    card.innerHTML=head+'<div class="table-wrap"><table>'+
+      '<thead><tr><th style="width:3em;text-align:center">序號</th><th>場景</th><th>場景說明</th><th>問題</th></tr></thead><tbody>'+
+      list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td>${esc(x.goal)}</td><td title="${esc(x.questionId)}">${esc(x.question||x.questionId)}</td></tr>`).join('')+
+      '</tbody></table></div>'+
+      `<div class="small" style="margin-top:8px">至少一位評核官給 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）的題目，依場景排序；${NOT_RATED_SCORE} 分不計入任何平均。</div>`;
     return;
   }
   card.innerHTML=head+'<div class="table-wrap"><table>'+

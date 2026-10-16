@@ -923,7 +923,9 @@ scores:[{code,score}], mean, sd }` plus the new `exerciseId`,
 1–5 drill, 0 on a 0–4 drill), `s4List` (2026-10-16 — what
 `splitS4_` derives from `s4`: canonical 4S names, then any unrecognised pieces verbatim; see
 "A 4S cell can name several elements"), and `ratedCount` (2026-10-16 — the number of non-0
-scores). Since 2026-10-16 `scores` still lists every evaluator **including 0s**, but `mean`/`sd`
+scores), and `questionGoal` (2026-10-16 — the question's own 場景說明 cell; `goal` stays the
+leaf's first one, so existing scene lookups don't move; `readItems_` now carries `goal` on each
+question object in both backends). Since 2026-10-16 `scores` still lists every evaluator **including 0s**, but `mean`/`sd`
 are over the non-0 scores only, so **`mean` is `null` when every score on the row is 0** (`sd`
 is then `0`). `scores.length` is "how many people scored this", `ratedCount` "how many gave a
 real rating"; a client on an old backend that lacks `ratedCount` treats it as `scores.length`.
@@ -942,6 +944,7 @@ only places they surface.
 (`{snapshot, join, none}` tallied over the three row arrays only — rows that never reach a
 chart aren't counted, so the report's disclosure line matches what the reader sees), and
 `scale` (2026-10-16 — the drill's score scale, see "The score scale follows 評分標準"), and
+`levelCount` (2026-10-16 — how many grouping levels 項目與問題 really has, `itemsDepth_`),
 `stageOrder` (2026-10-16 — the distinct 層1／地點 values in 項目與問題 sheet order, i.e.
 `readItems_`'s top-level node names; it is how `#notRatedCard` sorts by 地點 without depending
 on the browser's collation, which in a zh-TW locale puts 「綜合 (All)」 before 「A 點」).
@@ -1211,6 +1214,14 @@ places share.
   so this card is the on-screen place that shows where nothing was scored. It reads only
   `r.scores`/`stage`/`itemName`/`goal`, which an old backend also sends, so it needs no repaste
   to appear; on a 1–5 drill (no 0 level) it says so instead of showing an empty table.
+  **One-level drills get a different table** (owner, 2026-10-16 — 萬芳醫地下空間 has only 層一):
+  one row per *question* with a 0, columns 序號／場景／場景說明／問題, because with one level
+  `stage === itemName` and the two-level layout printed two identical columns. `isSingleLevel()`
+  reads `meta.levelCount` (`itemsDepth_(items)`), falling back to "every row has stage ===
+  itemName" on an old backend. 場景說明 there is the row's **own** `questionGoal` — a leaf's
+  `goal` keeps only its first non-blank 場景說明, so on a one-level sheet every question in a
+  group would otherwise show the first question's description. Old backend → falls back to
+  `goal`.
 - **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category, stacked by
   演練單元/SCENE short code, segments in natural code order (`A1 < A2 < B < … < F`), colors
   from an HSL spectrum (hue 0–300° across the sorted list) so adjacent codes read as
