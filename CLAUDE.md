@@ -34,17 +34,22 @@ at `a7d1871`.
 |---|---|---|
 | `CONFIG_SPREADSHEET_ID` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` | in **both** `ConfigWithSubmit.gs` and `Config.gs` — they must stay equal |
 | `RECORD_SPREADSHEET_ID` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` | |
-| `CONFIG_URL` / `RECORD_URL` | the `AKfycbyIEReG…` / `AKfycbzBiivE…` deployments | `Config` was **not** retired, so the two stay different values |
-| `REGISTRY_SPREADSHEET_ID` | `''` | registry **off** — every request, including one carrying `?t=`, takes the fallback tenant. No session dropdown, and `action=sessions` answers `REGISTRY_OFF`, so this release introduces **no** unauthenticated-`sessions` exposure. Re-answer that posture question on the day a production registry is created |
-| `REPORT_URL` (`Analysis.html`) | `''` | 產生 Google 文件 permanently disabled; the report is the print view (方案A) only. Never paste the dev deployment here — `docEndpoint` appends `&key=`, which would send the production analysis key to a personal deployment |
+| `CONFIG_URL` / `RECORD_URL` | the `AKfycbxtcCix…` / `AKfycbzA5pE8…` deployments (the owner's own cloud account, since `abb1b2d`, 2026-10-14) | `Config` was **not** retired, so the two stay different values. The release's original `AKfycbyIEReG…` / `AKfycbzBiivE…` are no longer referenced by either page |
+| `REGISTRY_SPREADSHEET_ID` | `1ZiluDuw…` (production 租戶註冊表, since `f813130`, 2026-10-14) | registry **on**: `?t=`/`?ex=` route, the session dropdown shows, and **`action=sessions` — no key of any kind — is live for a real hospital**. `f813130` flagged that this was the day the posture question had to be re-answered; `abb1b2d` then switched the frontend on after asserting **four** of the red-line items (no spreadsheet id, key, sheet name or row number — not 檔案擁有者, `registryWarning`, reason strings or file names). Nothing in the repo records the owner explicitly accepting the exposure. ⚠️ Also unverified: `abb1b2d`'s evidence used `wanfang-7f3a2c` / 2026a 萬芳醫地下空間 / 2026b 萬芳醫院急救站 — exactly the **sandbox** registry's rows (handover §4), the same hid `f813130` cited as proof a deployment was reading the sandbox. So no commit shows the live `RECORD_URL` deployment reading the *production* registry; resolve a production-only 醫院代號 before relying on it |
+| `REPORT_URL` (`Analysis.html`) | `AKfycby3amN8…` (the owner's report Web App, since `abb1b2d`) | 產生 Google 文件 is **enabled**. `docEndpoint` appends `&key=`, so this line may only ever name a deployment the owner controls — never a personal or dev one. That deployment answers `BAD_ACTION` to a bare GET and to `action=analysis` (verified in `abb1b2d`): it has zero keyless branches |
 | `ADMIN_KEY` | `''` | `action=selftest` / `action=flush` disabled |
 | `ANALYSIS_KEY` | **unchanged** | see the warning below — still byte-identical to `dev`'s |
 
-> ⚠️ **Pushing this branch deploys the frontend, but the two production Apps Script
-> projects are NOT updated by it.** Apps Script has no deploy hook; `ConfigWithSubmit.gs`
-> and `Config.gs` have to be pasted in by an account with edit rights on the owner's
-> company projects, then redeployed via **edit the existing deployment** (picking 「新增部署」
-> mints a different `/exec` and silently breaks the two URLs above). Until that paste
+> ⚠️ **Pushing this branch deploys the frontend, but none of the production Apps Script
+> projects are updated by it.** Three Web Apps have to be pasted by hand: `ConfigWithSubmit.gs`
+> (behind `RECORD_URL`), `Config.gs` (behind `CONFIG_URL`) and `Report.gs` (the report Web
+> App behind `REPORT_URL`) — plus `Report.gs`'s container-bound copy **only if one exists**:
+> the file's header still describes two copies, but handover §0.1 says the sandbox's
+> container-bound project is gone, and `abb1b2d` lists only those three production
+> deployments. Apps Script has no deploy hook; each has to be pasted in by an account with
+> edit rights on the owner's projects, and each Web App redeployed via **edit the existing
+> deployment → New version** — a Web App keeps serving its pinned version until then, and
+> picking 「新增部署」 instead mints a different `/exec` and silently breaks the URLs above. Until that paste
 > happens the site runs **new frontend + old backend**, which `docs/build-from-scratch-從零建置.md`
 > §4-2 identifies as the one intermediate state that loses data: evaluators see the
 > 觀察紀錄 box (the old backend returns no `commentEnabled`, so the client shows it) and
@@ -127,9 +132,14 @@ that warning exists to prevent.
 because the value lives in spreadsheet **cells**, not headers, and the owner's sheet was not
 going to be edited. So there are **two folding layers**, and they are both load-bearing:
 
-1. **`normPotential_(v)`** in `ConfigWithSubmit.gs` — `return s === '回應' ? '反應' : s;`,
-   applied at `readIndicatorFull_` and at `buildAnalysis_`'s snapshot read. This is why the
-   analysis payload says 反應 while the sheet says 回應.
+1. **`normPotential_(v)`** in `ConfigWithSubmit.gs` — strips a trailing 「潛能」 (since
+   2026-10-16), then `return s === '回應' ? '反應' : s;`, applied at `readIndicatorFull_`
+   and at `buildAnalysis_`'s snapshot read. This is why the analysis payload says 反應 while
+   the sheet says 回應 — or 反應潛能: a 對應指標 sheet the owner sent on 2026-10-16 writes
+   `反應潛能`/`監測潛能`/`預期潛能` (handover §4), which before that fold landed in **none**
+   of the three row groups, so every radar, 4S and ability chart was empty with no warning.
+   Layer 2 below does **not** fold 潛能 and cannot: an old backend never returns those rows
+   in any group, so there is nothing client-side to rewrite.
 2. **`normalisePotentials(DATA)`** in `Analysis.html` — it does **two** things, and the
    first is the load-bearing one: it rewrites `r.potential` on every row of
    `analysisRows`/`coverageRows`/`learningRows`, *then* folds the `stats.potentials` and
@@ -172,8 +182,9 @@ needs only `Start.dc.html`, `Analysis.html`, `support.js`, `vendor/`, `assets/`.
 **The owner decided on 2026-10-08 to fix `dev` only and leave production as-is**, so the
 exposure stayed live on production until the **2026-10-14 release carried `.vercelignore`
 across to `master`** — it is additive, one file, and changes no code. The three URLs above
-should 404 on the production site once that release deploys; **verify them, because this is
-the kind of claim that rots.** The pre-release commit (branch `一版`) still has no
+**do 404 on the production site — re-verified 2026-10-16** (`apps-script/ConfigWithSubmit.gs`,
+`apps-script/Config.gs`, `CLAUDE.md` all `404`); keep re-verifying, because this is the kind
+of claim that rots. The pre-release commit (branch `一版`) still has no
 `.vercelignore`, so rolling back re-opens the exposure. **Adding any new backend file,
 internal doc or scratch file means adding it to `.vercelignore` too.**
 
@@ -197,8 +208,12 @@ internal doc or scratch file means adding it to `.vercelignore` too.**
 
 `master` **is** the production version. It was frozen at `a7d1871` until the 2026-10-14
 release promoted `dev` onto it (see the Branch state section above); the pre-release commit
-is preserved as the branch **`一版`**, which is the rollback target. Outside a release,
-every change still lands on `dev` and "更新" still means `dev` — do not develop on `master`.
+is preserved as the branch **`一版`**, which is the rollback target. The rule was that outside
+a release every change lands on `dev` and "更新" means `dev`. **In practice `master` has
+taken direct commits since the release** (`f813130`, `abb1b2d`, `2201f36`, `7b946ee`, and the
+2026-10-16 multi-4S change, which the owner asked for directly on 正式版) while `dev` stayed at
+`4782edf` — so `dev` is now *behind* production. Ask which branch before starting; don't
+assume `dev`, and don't promote `dev` onto `master` without first bringing those across.
 A second Vercel project (`exercise_evaluation_test` →
 `exerciseevaluationtest.vercel.app`, same GitHub repo) has its Production Branch set to
 `dev`, so pushing `dev` deploys the test site and pushing `master` deploys the hospital's.
@@ -216,6 +231,7 @@ below has an owner, documents other than the owner should cite it, not restate i
 | fact | owner | don't restate in |
 |---|---|---|
 | Column names, aliases, accepted potential values | the `*_ALIASES_` constants in `apps-script/ConfigWithSubmit.gs` | anywhere — quote the constant name and let the reader look. `README.md` got four alias cells wrong by copying from the `RECORD_*` arrays into an `INDICATOR_*` table |
+| How a 4S cell is split, and which words map to which canonical 4S name (cell *values*, not headers — row 1 covers headers) | `S4_VALUE_ALIASES_` + `splitS4_` in `apps-script/ConfigWithSubmit.gs` | the clients — `Analysis.html` and `Report.gs` read `r.s4List` and must **never** split themselves. `README.md` restates the words for the owner, who can't read code, and names the constant as the authority |
 | Chapter count, chart-fallback layer count | `apps-script/Report.gs` (`REPORT_SECTIONS_`, `emitChart_`) | cite the line number; never repeat the number |
 | Live spreadsheet state (column counts, the literal 評核潛能 values, registry windows) | `docs/handover-筆電.md` §4 | this file and `README.md` should point at it |
 | Apps Script script properties | `apps-script/README.md` | — |
@@ -300,12 +316,17 @@ below has an owner, documents other than the owner should cite it, not restate i
   that gets edited. Serves the config branch, `action=analysis`, `action=selftest`,
   `action=exercises`, `action=sessions` (**no key** — see "Admin / listing endpoints"),
   `action=flush`, and `doPost`.
-- `apps-script/Report.gs` — **container-bound** report generator (plan §3.1's 方案B), pasted
-  under the 演習評核_設定 spreadsheet (擴充功能 > Apps Script), **not** a Web App and **not**
-  deployed: save, reload the sheet, the 演習評核報告 menu appears. It never touches
-  `ConfigWithSubmit.gs` and adds zero deploy risk — that is its entire reason to exist.
-  Reads `action=analysis` over `UrlFetchApp` and lays the numbers into a copy of an
-  owner-owned template Doc, then exports a PDF. **Never executed by anyone** — see
+- `apps-script/Report.gs` — report generator (plan §3.1's 方案B). **One source, pasted into
+  two projects, byte-identical** (the file's own header is the authority): (A) container-bound
+  under the 演習評核_設定 spreadsheet, not deployed — save, reload the sheet, the 演習評核報告
+  menu appears (handover §0.1: the sandbox's (A) no longer exists, and none is recorded for
+  production); and (B) a standalone project deployed as the **report Web App** behind
+  `Analysis.html`'s `REPORT_URL` (its `doGet` serves `reportCheck`/`reportStart`/
+  `reportContinue`/`reportStatus`/`reportAbandon`; no container, so it resolves the config
+  spreadsheet through the registry). Neither copy touches `ConfigWithSubmit.gs`. Reads
+  `action=analysis` over `UrlFetchApp` and lays the numbers into a copy of an owner-owned
+  template Doc, then exports a PDF. `REPORT_BUILD_` is the only way to tell from outside
+  whether the two copies have drifted — **bump it on every edit**. See
   "Report generator (方案B)".
 - `apps-script/ReportDialog.html` — the `HtmlService` modal (560×680) `Report.gs` serves.
   Plain modern browser JS (it runs in Chrome, not the V8 `.gs` runtime), so the ES5 house
@@ -330,8 +351,15 @@ below has an owner, documents other than the owner should cite it, not restate i
   on someone remembering to retype a dozen curls. Read-only by default and safe to re-run or
   schedule; `--with-write` adds the write-isolation and idempotency checks. Exit code 0/1.
   Keys come from `EVAL_KEY_MAIN`/`EVAL_KEY_CLINIC` env vars, never the file; without them the
-  key-dependent checks SKIP rather than fail. It refuses to run against the production
-  `/exec` ids outright. **It automates the one check CLAUDE.md says nobody actually runs**:
+  key-dependent checks SKIP rather than fail. It is *meant* to refuse to run against the
+  production `/exec` ids — ⚠️ **but `guard_production` (`smoke.sh:42-48`) still matches only
+  the retired `AKfycbzBiivE*`/`AKfycbyIEReG*`**, so since `abb1b2d` it does **not** block the
+  current production `RECORD_URL`/`CONFIG_URL`/`REPORT_URL` (`AKfycbzA5pE8…`/`AKfycbxtcCix…`/
+  `AKfycby3amN8…`). The same stale pair is the stop condition in
+  `docs/dispatch-e2e-manual.md` (紅線 row 2 and §5-0), whose forbidden-spreadsheet row also
+  lacks the production registry `1ZiluDuw…`, and `docs/build-from-scratch-從零建置.md` §4-0
+  still cites the guard as protection. Fix all three before pointing `--with-write` or a
+  dispatched e2e agent at anything. **It automates the one check CLAUDE.md says nobody actually runs**:
   asserting the keyless `action=sessions` payload carries no spreadsheet ID, key, sheet name,
   row number or 檔案擁有者. It also derives which session is `future`/`past` from the live
   registry instead of hardcoding 演習代號, so editing the registry doesn't silently rot it.
@@ -533,7 +561,8 @@ Resolution happens in exactly this order:
 0. `hid` = `normSlug_(body.tenant)` || `normSlug_(e.parameter.t)` || `''`; `exid` likewise
    from `body.exercise` / `e.parameter.ex` (**POST body wins over query**). A code that is
    present but fails `normSlug_` is a hard `BAD_CODE` error, never silently blanked.
-1. **`REGISTRY_SPREADSHEET_ID === ''` (the shipped state)** → `fallbackTenant_()`
+1. **`REGISTRY_SPREADSHEET_ID === ''`** (the shipped state of the 2026-10-14 release; `master`
+   has had a registry since `f813130`) → `fallbackTenant_()`
    unconditionally, *even if `t`/`ex` were supplied*. Supplied codes are echoed back in
    the payload but have zero routing effect. Rationale: links may circulate with `?t=`
    before the registry exists, and failing them would take a live drill down.
@@ -649,7 +678,7 @@ tenant. The specific reason strings are returned **only** by `action=selftest`.
 project, which has no registry code and would silently serve the hardcoded tenant for any
 `?t=`. Do not "simplify" this into one unconditional URL.
 
-### The `action=sessions` exposure (accepted on `dev`; **re-confirm before merging to `master`**)
+### The `action=sessions` exposure (accepted on `dev`; **live on `master` since 2026-10-14**)
 
 `action=sessions` is the **second** branch with no auth of any kind. It is fetched by every
 evaluator's phone on a `?t=`-only link, and it reads the registry. It is deliberately a
@@ -718,10 +747,11 @@ Boundaries that do hold, and must keep holding:
 > 人員代號／問題ID／分數／觀察紀錄 or any cell contents, or any file name (it opens no
 > file, so it cannot physically reach one).
 
-> **Before merging to `master`, re-confirm this exposure is still the decision you want.**
-> `dev` is a sandbox owned by one developer; `master` serves a real hospital. Nothing about
-> the code changes at merge — this is a posture question, not a defect, and it belongs on
-> the pre-merge checklist beside the spreadsheet IDs and keys.
+> **This was the pre-merge posture question, and it is no longer hypothetical.** `f813130`
+> set the production `REGISTRY_SPREADSHEET_ID` and `abb1b2d` pointed the frontend at it on
+> 2026-10-14, so a real hospital's `?t=` holders can now enumerate that hospital's sessions.
+> See the Branch state table for what is (and isn't) recorded about that decision. Nothing
+> about the code changed at merge — this is a posture question, not a defect.
 
 ### Config spreadsheet (per-tenant `設定試算表ID`, fallback `CONFIG_SPREADSHEET_ID`) — read by `doGet`
 
@@ -873,8 +903,10 @@ tolerable.
 
 Per-row fields: `{ questionId, stage, itemName, goal, potential, s4, indicator, question,
 scores:[{code,score}], mean, sd }` plus the new `exerciseId`,
-`comments:[{code,comment}]` (non-empty only, sorted by code), `labelSource`, and
-`untriggered` (count of scores equal to 1 on that row).
+`comments:[{code,comment}]` (non-empty only, sorted by code), `labelSource`,
+`untriggered` (count of scores equal to 1 on that row), and `s4List` (2026-10-16 — what
+`splitS4_` derives from `s4`: canonical 4S names, then any unrecognised pieces verbatim; see
+"A 4S cell can name several elements").
 
 Rows split into `analysisRows` (potential `反應`/`監測`/`預期` — **see the rename note
 below; the spreadsheet still literally says `回應`**), `coverageRows` (potential
@@ -891,12 +923,14 @@ chart aren't counted, so the report's disclosure line matches what the reader se
 File **names** are allowed here (this branch is key-protected) and feed 附錄C; spreadsheet
 **IDs** never are.
 
-`stats` keeps all seven existing keys with identical computation — `overall`, `potentials`,
+`stats` keeps all seven existing keys — `overall`, `potentials`,
 `s4`, `coverage`, `icc2k` (Shrout–Fleiss ICC(2,k) over the evaluator intersection common to
 every row; `null` with <2 common raters or <2 questions — and that is *not* an edge case:
 one single-rater question nulls the whole dataset), `within1` (fraction of same-question
 evaluator pairs differing by ≤1, computed per row so it doesn't need a rectangular matrix),
-`potentialByS4` (cross-tab feeding the iso-3D chart). Both consistency figures are computed
+`potentialByS4` (cross-tab feeding the iso-3D chart). Five are computed exactly as before;
+`s4` and `potentialByS4` group by `s4List` membership since 2026-10-16 (identical numbers on
+canonically-spelled single-element cells). Both consistency figures are computed
 over `analysisRows + coverageRows` (`consistencyRows`). Three keys are **added**:
 
 - `untriggered: {n, total, rate}` — share of individual scores equal to 1 over
@@ -906,6 +940,74 @@ over `analysisRows + coverageRows` (`consistencyRows`). Three keys are **added**
 - `byEvaluator: [{code, n, mean, deviation}]` — 寬嚴傾向; `deviation` is that code's mean
   minus the mean of the row-means of the rows *they* scored, so scoring only hard questions
   doesn't read as strictness. Must be renderable anonymised.
+
+### A 4S cell can name several elements (2026-10-16)
+
+The owner asked for one question to count under two 4S elements: a 對應指標 「4S 元素」 cell
+reading `Staff / System`, scored 3, adds a 3 to **both** Staff and System — full weight in
+each, **not** 1/k. Before this the cell was one opaque string, so on the owner's real sheet
+(bare English, `Staff / System` *and* `System / Staff`, see handover §4) every combination
+— each ordering separately — became its own 4S category.
+
+- **One splitter, server-side only.** `splitS4_(v)` + `s4CanonicalOf_` in
+  `ConfigWithSubmit.gs`, driven by `S4_VALUE_ALIASES_`/`S4_BLANK_VALUES_`, run once per row
+  in `buildAnalysis_` *after* `pickLabel` — the one place snapshot and join values meet, so
+  old record rows carrying a snapshot string are split too. The result rides on each row as
+  the additive **`s4List`**; `r.s4` stays the raw cell text (what `#detail`, the CSV, 附錄A
+  and 報告快照 print). The rules live in the comment above `splitS4_` — read them there.
+- **Two design choices, each with a rejected alternative.** (1) It canonicalises
+  rather than splitting on `/`: `'Staff / System'.split('/')` gives `Staff`/`System`, which
+  are not the canonical `Staff (人員)`/`System (系統)` that `S4_PREFERRED_ORDER`, both
+  `ABILITY_NOTES` copies and `S4_PREFERRED_ORDER_` use as keys. (2) A piece must *equal* a
+  recognition word, not *contain* one: the first version used substring matching, and an
+  adversarial pass showed `Stuff (物資，含人員防護裝備)` silently counted under Staff too,
+  `Workspace` under Space, `組織結構` under Space — extra full-weight scores invisible on
+  screen. Unrecognised text now becomes its own visible category instead.
+- `stats.s4` and `stats.potentialByS4` group by **`s4List` membership**, so with
+  multi-element cells Σn over the 4S categories can exceed the 三項潛能 score count, and a
+  potential's row of `potentialByS4` can exceed `stats.potentials[p].n`. A blank cell gives
+  `s4List: []` and joins no category, as before. `overall`, `potentials`, `coverage`,
+  `icc2k`, `rwg`, `within1`, `untriggered`, `byEvaluator` and `missingQuestions` never look
+  at 4S and did not move.
+- **Clients never split.** `Analysis.html`'s `s4ListOf(r)` and `Report.gs`'s `s4ListOf_(r)`
+  return `r.s4List`, or `[r.s4]` when the backend predates it. The only row-level 4S grouping
+  in either client is the scene × 4S bucket (`renderS4`, `sceneS4Buckets_`); every other 4S
+  figure reads `stats`. (That bucket is also why `Report.gs`'s header claim that statistics
+  are never recomputed is not quite literal: both clients average the per-scene segments
+  themselves.)
+- **What moves on existing data.** Canonically-spelled single-element cells (the dev
+  sandbox's shape) give byte-identical payloads — verified by a differential harness that runs
+  the real `buildAnalysis_`, `renderS4` and `sceneS4Buckets_` at HEAD and after on mocked
+  sheets (every canonical-data comparison passes; the only failing probes are ones written
+  for the rejected substring version). What changes: any other
+  spelling (`Staff`, `staff`, `Staff（人員）`, a trailing space) folds into the canonical
+  category; a whitespace-only cell, `N/A`, `-` or `無` now joins no category (each used to be
+  one); and a custom label containing a separator (`/ 、 , ; + &` or a line break) is split.
+- **Deploy order: clients first, backend last.** New client + old backend gives the old
+  *numbers* exactly (the `[r.s4]` fallback) — but the new caption sentences already say a
+  multi-element cell counts under each element, which the old backend doesn't do yet, so keep
+  that window short. New backend + old client is the broken half-state: `stats.s4` keys are
+  canonical but the old `r.s4===s4` filters compare against the raw cell, so every row whose
+  raw text isn't exactly a canonical name drops out of the 4S tab's stacked segments and the
+  report's 各場景在各 4S 類別的平均; a category reached *only* through such rows draws as a
+  zero-length bar there. So: push `master` → repaste `Report.gs` into the report Web App and
+  edit its existing deployment → New version (and the container-bound copy, if one exists),
+  confirming the new `REPORT_BUILD_` via 檢查設定 → repaste `ConfigWithSubmit.gs` and edit its
+  existing deployment. `Config.gs` never reads 對應指標 and is untouched.
+- **Don't let anyone "fix" the header 「單一 4S 元素」** now that 「單一」 reads wrong. Today it
+  matches `INDICATOR_S4_ALIASES_` exactly; a renamed header resolves only if it *starts with*
+  an alias (`findHeaderCol_`'s prefix pass), so `多重 4S 元素` fails. Then
+  `readIndicatorFull_` throws, which fails `action=analysis` **and `doPost`** whenever the
+  record sheet has any 評核潛能/4S 元素/評核題目 snapshot column (`appendSubmission_` calls it
+  lazily). `README.md` tells the owner to leave it alone.
+- **報告快照 freezes the raw 4S text, not the split.** If `S4_VALUE_ALIASES_` changes later, an
+  issued report's 4S grouping can't be rebuilt from 報告快照. Add a split-result column the day
+  a 與前次演習比較 chapter is built, not before (it would need the live header edited first —
+  handover §3's ⛔).
+- Adding a canonical name (or a fifth S) means editing `S4_VALUE_ALIASES_` **and**
+  `S4_PREFERRED_ORDER`/`ABILITY_NOTES` in `Analysis.html` **and** `S4_PREFERRED_ORDER_`/
+  `ABILITY_NOTES_` in `Report.gs`, in one commit. Nothing at runtime notices a mismatch.
+  (`Analysis.html`'s `S4_COLORS` is defined but never read.)
 
 ### Admin / listing endpoints
 
@@ -941,7 +1043,9 @@ places share.
   `#overview` holds two cards. The first has three aligned sections in a `1fr 140px 1fr` title
   row + content row: 綜合能力柱狀圖 (isometric 3D potential × 4S bars, `svgIso3D`/`renderIso3D`),
   演習覆蓋率 (gauge, `svgCoverageGauge`), and 4S整備表現直方圖 (`barsSVG` — the simple
-  non-stacked 4S average, *not* the 4S 分析 tab's stacked chart). The second
+  non-stacked 4S average, *not* the 4S 分析 tab's stacked chart; sorted by mean, high to
+  low, since `7b946ee`, ties broken by `S4_PREFERRED_ORDER` then code order since
+  2026-10-16 — the same order as `Report.gs`'s `specS4Means_`). The second
   (`#abilityRankCard`, `renderAbilityRank()`, added 2026-10-13) is the full version of the
   report's 優勢前三項／待改善前三項: every 潛能×4S cell ranked high→low with the same
   `abilityCells()` + `rankedTop()` (ties share a rank), then the `n:0` cells — combinations
@@ -953,7 +1057,9 @@ places share.
   adjacent hues. Bar **length** is the real 4S average (`stats.s4[s4].mean`, ~1–5), not a
   sum; each segment's **width** is that scenario's share of the sum of per-scenario means,
   while its label (`D2 3.7`) shows the scenario's actual average. Bars sorted by total,
-  descending. The sibling card is `場景編號對照表` (`#s4ScenarioTable`), mapping each short
+  descending. The per-scene segments are the one place this page groups rows by 4S itself,
+  via `s4ListOf(r)` — a multi-element row lands in every bar it names (see "A 4S cell can
+  name several elements"). The sibling card is `場景編號對照表` (`#s4ScenarioTable`), mapping each short
   code to its full `goal` text (or raw `itemName`), with a matching color swatch per row.
 - **三項潛能雷達圖 (`#radars`)** — one `svgRadar` per potential (反應/監測/預期), axes sorted
   clockwise lowest→highest (sorting happens inside `svgRadar()`, so every caller gets it).
@@ -1009,7 +1115,10 @@ draws, deliberately, so the table and the chart can never disagree. Cells with `
 are dropped. `abilityLabel(pot, s4)` names a cell — it regex-extracts the Chinese inside the parens and
 joins with a space-x-space, so `('反應','Space (空間)')` returns **`反應 x 空間`**, not
 `反應×Space (空間)`. The `×` belongs to `ABILITY_NOTES`' *key* format (`pot + '×' + s4`,
-which keeps the raw 4S string) — two different strings, easy to conflate.
+which keeps the full canonical 4S name) — two different strings, easy to conflate. Since
+2026-10-16 the `s4` here is a `S4_VALUE_ALIASES_` canonical name whenever the cell was
+recognised, so rewording the sheet (`人員`, `Staff`) no longer blanks the notes; renaming a
+canonical name does (and an unrecognised piece never had a note).
 
 - **`rankedTop(cells, n, asc)` is competition ranking and includes every tie.** Rank comes
   from the *score*, not the row index, so 1,1,1 / 1,2,2 / 1,2,3,3,3 all print in full —
@@ -1110,8 +1219,10 @@ read is "try another session".
 `loadExercises()` is called automatically from `init()` the first time `meta.tenant` is
 non-empty (guarded by `exListLoaded`, so refreshing the analysis doesn't re-fetch the
 registry). It fills a `<select>` in the header with one `<option>` per `action=exercises`
-row, labelled `顯示名稱（代號 X｜日期｜已結束｜預設）`. Archived (`enabled:false`) sessions
-stay selectable on purpose — the report is what a finished drill is for.
+row, labelled `顯示名稱｜日期` (since `2201f36`; the 代號／已結束／預設 tags were dropped
+because they truncated the name at the picker's real width). Archived (`enabled:false`)
+sessions stay selectable on purpose — the report is what a finished drill is for — but the
+picker no longer says which ones are archived.
 
 Two things to preserve:
 
@@ -1128,7 +1239,7 @@ Two things to preserve:
 `syncPickerSelection()`, because a `?t=`-only link resolves server-side to the 預設演習 —
 the client would otherwise think it was viewing `''`.
 
-In fallback mode (today's `master`, and any link with no `?t=`) `meta.tenant` is empty, so
+In fallback mode (any link with no `?t=`) `meta.tenant` is empty, so
 the picker never appears. That is correct: there is only one exercise to show.
 
 ## Report generator (方案B) — `apps-script/Report.gs` + `apps-script/ReportDialog.html`
