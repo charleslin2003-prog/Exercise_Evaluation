@@ -1215,13 +1215,13 @@ places share.
   `r.scores`/`stage`/`itemName`/`goal`, which an old backend also sends, so it needs no repaste
   to appear; on a 1–5 drill (no 0 level) it says so instead of showing an empty table.
   **One-level drills get a different table** (owner, 2026-10-16 — 萬芳醫地下空間 has only 層一):
-  one row per *question* with a 0, columns 序號／場景／場景說明／問題, because with one level
+  one row per *question* with a 0, columns 序號／場景／問題, because with one level
   `stage === itemName` and the two-level layout printed two identical columns. `isSingleLevel()`
   reads `meta.levelCount` (`itemsDepth_(items)`), falling back to "every row has stage ===
-  itemName" on an old backend. 場景說明 there is the row's **own** `questionGoal` — a leaf's
-  `goal` keeps only its first non-blank 場景說明, so on a one-level sheet every question in a
-  group would otherwise show the first question's description. Old backend → falls back to
-  `goal`.
+  itemName" on an old backend. A 場景說明 column (from the row's own `questionGoal`) shipped
+  first and was dropped the same day at the owner's request — it read too close to 場景. So
+  **`questionGoal` is currently read by no client**; it is kept in the payload (additive,
+  already deployed) for the day a per-question description is wanted again.
 - **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category, stacked by
   演練單元/SCENE short code, segments in natural code order (`A1 < A2 < B < … < F`), colors
   from an HSL spectrum (hue 0–300° across the sorted list) so adjacent codes read as
