@@ -35,8 +35,8 @@ var RECORD_TIME_ALIASES_ = ['送出時間'];
 var RECORD_EXERCISE_ALIASES_ = ['演習名稱'];
 var RECORD_ITEM_ALIASES_ = ['項目名稱'];
 // 2026-10-16 業主把「情境階段」改名「地點」；舊紀錄表的欄名照收。
-var RECORD_STAGE_ALIASES_ = ['地點', '場景階段', '情境階段'];
-var RECORD_SCENE_ALIASES_ = ['演練單元'];
+var RECORD_STAGE_ALIASES_ = ['地點', '層1', '層一', '場景階段', '情境階段'];
+var RECORD_SCENE_ALIASES_ = ['演練單元', '層2', '層二'];
 var RECORD_INDICATOR_ALIASES_ = ['指標代號'];
 // 以下七欄全部是「新增的選填欄」：業主現在那張 6 欄表一欄都沒有，findHeaderCol_
 // 會回 -1，寫入時整欄跳過（跟上面那批選填欄同一套模式，見 appendSubmission_），
@@ -2299,20 +2299,35 @@ function findHeaderCol_(header, names) {
   }
   return -1;
 }
+// 「層N」表頭的第 N 欄；找不到回傳 -1（readItems_ 的迴圈靠這個 -1 結束，不是錯誤）。
+// 阿拉伯數字「層1」以外，也收國字「層一」與全形「層１」：業主 2026-10-16 照著錯誤訊息
+// 的「層1」改表頭時，打成的是「層一」，結果兩版後端都不認、兩場評核單一起打不開。
+// 前後空白不算（「層一 」也找得到）。
+var LEVEL_DIGITS_ZH_ = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+var LEVEL_DIGITS_FULL_ = ['', '１', '２', '３', '４', '５', '６', '７', '８', '９', '１０'];
+function levelHeaderCol_(header, lvl) {
+  var names = ['層' + lvl];
+  if (LEVEL_DIGITS_ZH_[lvl]) names.push('層' + LEVEL_DIGITS_ZH_[lvl]);
+  if (LEVEL_DIGITS_FULL_[lvl]) names.push('層' + LEVEL_DIGITS_FULL_[lvl]);
+  for (var i = 0; i < header.length; i++) {
+    if (names.indexOf(String(header[i] == null ? '' : header[i]).trim()) !== -1) return i;
+  }
+  return -1;
+}
 function readItems_(ss) {
   var values = nullSafeSheet_(ss, '項目與問題').getDataRange().getValues();
   var header = values[0];
   var groupCols = [];
   for (var lvl = 1; ; lvl++) {
     // 這裡的 -1 是迴圈終止條件（層數到底了），不是錯誤，所以維持裸 indexOf。
-    var at = header.indexOf('層' + lvl);
+    var at = levelHeaderCol_(header, lvl);
     if (at === -1 && GROUP_HEADER_ALIASES_[lvl - 1]) at = findHeaderCol_(header, GROUP_HEADER_ALIASES_[lvl - 1]);
     if (at === -1) break;
     groupCols.push(at);
   }
   if (!groupCols.length) {
     var nameCol = findHeaderCol_(header, ['項目名稱']);
-    if (nameCol === -1) throw new Error('項目與問題缺少欄位：項目名稱 或 層1/地點');
+    if (nameCol === -1) throw new Error('項目與問題缺少第一層欄位：請把表頭寫成「層1」（或「層一」、「地點」），單層的表可以用「項目名稱」');
     groupCols = [nameCol];
   }
   var idCol = safeHeaderCol_(header, ID_HEADER_ALIASES_, '項目與問題');
