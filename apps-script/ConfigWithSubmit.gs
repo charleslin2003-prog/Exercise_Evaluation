@@ -72,6 +72,21 @@ var INDICATOR_TEXT_ALIASES_ = ['問題', '具體評核題目'];
 var INDICATOR_TAG_ALIASES_ = ['問題所屬指標', '單一指標對應'];
 var INDICATOR_POTENTIAL_ALIASES_ = ['評核潛能'];
 var INDICATOR_S4_ALIASES_ = ['4S 元素', '單一 4S 元素'];
+// 4S 元素「格子內容」（不是欄名）的正規名稱與辨識字。一格可以標好幾個元素
+// （例如 `Staff / System`），splitS4_ 會把它拆開、每一段對回下面四個正規名稱
+// 之一。正規名稱必須跟 Analysis.html 的 S4_PREFERRED_ORDER/ABILITY_NOTES 與
+// Report.gs 的 S4_PREFERRED_ORDER_/ABILITY_NOTES_ 逐字相同 —— 那幾處都拿它當鍵。
+// 辨識字是「整段剛好等於」才算（見 s4CanonicalOf_），比對前兩邊都轉小寫。
+// 「結構」「structure」是業主矩陣表「空間/結構」與 4S 原文 Structure 的寫法。
+var S4_VALUE_ALIASES_ = [
+  ['Space (空間)', ['space', 'structure', '空間', '結構']],
+  ['Staff (人員)', ['staff', '人員']],
+  ['Stuff (物資)', ['stuff', '物資']],
+  ['System (系統)', ['system', 'systems', '系統']]
+];
+// 整格只寫這些字，視同空白（不屬於任何 4S 類別）。沒有這一條的話，`N/A` 會被
+// 斜線切成 `N`、`A` 兩個假類別。
+var S4_BLANK_VALUES_ = ['n/a', 'na', 'none', '-', '－', '—', '無'];
 
 // 分析頁（Analysis.html）用的存取金鑰：Analysis.html 是一個不公開連結、
 // 不會被 Start.dc.html 引用到的獨立頁面，但因為 CONFIG_URL/RECORD_URL 兩個
@@ -989,11 +1004,90 @@ function readIndicatorFull_(ss) {
   return map;
 }
 
+// 4S 元素一格 -> 正規名稱陣列（空白格回傳 []）。一題的分數會**全額**計入它標到
+// 的每一個元素：標 `Staff / System` 的題目打 3 分，Staff 與 System 兩邊都算一個 3
+// 分（業主 2026-10-16 的需求，不是 1/2 加權）。所以有多元素的題目時，stats.s4 與
+// potentialByS4 各格的 n 加總可能大於三項潛能的評分數。
+//
+// 1. 只在括號外切：/ ／ 、 , ， ; ； + ＋ & ＆ 與換行。括號（半形或全形）裡的不切，所以
+//    `Space (空間/結構)` 仍是一段。
+// 2. 每一段交給 s4CanonicalOf_：去掉括號註記後必須**剛好等於**某個辨識字才算。
+//    所以 `Staff`、`staff`、`Staff (人員)`、`Staff（人員）`、`人員` 都是 Staff，而
+//    `Stuff (物資，含人員防護裝備)` 只算 Stuff。刻意不做「包含就算」：那會讓
+//    `Workspace` 變 Space、`組織結構` 變 Space，而多算的分數在畫面上看不出來。
+// 3. 認不得的段落去頭尾空白後原樣保留、自成一類 —— 跟改版前一樣看得見，不會
+//    默默丟掉，也不會默默併進別類。
+// 4. 去重；正規名稱依 S4_VALUE_ALIASES_ 的順序在前，認不得的依出現順序在後。
+//
+// 只在 buildAnalysis_ 的 pickLabel 之後呼叫：快照值與對照值都得經過它（舊紀錄列帶的
+// 是送出當時的原字串），而那裡是兩者唯一的交會點。Analysis.html 與 Report.gs **不另外
+// 拆**，只讀這裡產出的 s4List —— 拆法全專案只有這一份。
+function splitS4_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s || S4_BLANK_VALUES_.indexOf(s.toLowerCase()) !== -1) return [];
+  var pieces = [];
+  var cur = '';
+  var depth = 0;
+  for (var i = 0; i < s.length; i++) {
+    var ch = s.charAt(i);
+    if (ch === '(' || ch === '（') depth++;
+    else if ((ch === ')' || ch === '）') && depth > 0) depth--;
+    if (depth === 0 && '/／、,，;；+＋&＆\n\r'.indexOf(ch) !== -1) {
+      pieces.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  pieces.push(cur);
+
+  var hit = {};
+  var unknown = [];
+  for (var p = 0; p < pieces.length; p++) {
+    var piece = pieces[p].trim();
+    if (!piece) continue;
+    var label = s4CanonicalOf_(piece);
+    if (label) hit[label] = true;
+    else if (unknown.indexOf(piece) === -1) unknown.push(piece);
+  }
+  var out = [];
+  for (var b = 0; b < S4_VALUE_ALIASES_.length; b++) {
+    if (hit[S4_VALUE_ALIASES_[b][0]]) out.push(S4_VALUE_ALIASES_[b][0]);
+  }
+  return out.concat(unknown);
+}
+
+// splitS4_ 切出來的一段 -> 正規名稱；認不得回傳 ''。先把括號（含全形）裡的註記
+// 拿掉、去掉所有空白、轉小寫，剩下的字必須剛好等於某個辨識字。括號外完全沒字時
+// （例如整段就是 `（人員）`），才改看括號裡的字。
+function s4CanonicalOf_(piece) {
+  var outside = String(piece).toLowerCase().replace(/（/g, '(').replace(/）/g, ')');
+  var inner = [];
+  var prev;
+  do {
+    prev = outside;
+    outside = outside.replace(/\(([^()]*)\)/g, function (m, g) { inner.push(g); return ''; });
+  } while (outside !== prev);
+  outside = outside.replace(/\s+/g, '');
+  var keys = outside ? [outside] : inner;
+  for (var c = 0; c < keys.length; c++) {
+    var k = String(keys[c]).replace(/\s+/g, '');
+    for (var a = 0; a < S4_VALUE_ALIASES_.length; a++) {
+      var words = S4_VALUE_ALIASES_[a][1];
+      for (var w = 0; w < words.length; w++) {
+        if (k === String(words[w]).toLowerCase()) return S4_VALUE_ALIASES_[a][0];
+      }
+    }
+  }
+  return '';
+}
+
 // 彙總 評核紀錄 目前所有已送出的分數，依潛能/4S/指標分組並計算統計量，
 // 供 Analysis.html 畫雷達圖、4S 長條圖、逐題明細與一致性統計。
 // 同一題同一位評核官若送出過不只一次，以試算表裡較晚的那列為準。
 //
-// 這一版的三個改動（統計本體 :292-350 一行都沒動）：
+// 這一版的三個改動（當時統計本體一行都沒動；2026-10-16 起 s4／potentialByS4 改用
+// s4List 分組，見 splitS4_）：
 // 1. 四個 openById/getSheetByName 改成吃解析出來的租戶。
 // 2. byQuestion 的鍵從「問題ID」改成「(醫院代號, 演習代號, 問題ID)」組合鍵。
 //    方案 A 每場演習各有自己的紀錄檔，所以正常情況下前兩段都是同一個值、
@@ -1129,6 +1223,10 @@ function buildAnalysis_(t) {
       goal: goal,
       potential: potential,
       s4: s4,
+      // s4 是格子原字串（明細表、CSV、報告附錄A 照原樣印）；s4List 是 splitS4_ 拆好的
+      // 正規名稱，統計與分群一律看它。舊版後端沒有這個欄位，前端以 Array.isArray
+      // 判斷、退回 [r.s4]，行為與改版前相同。
+      s4List: splitS4_(s4),
       indicator: indicator,
       question: question,
       scores: scores,
@@ -1169,27 +1267,35 @@ function buildAnalysis_(t) {
   ['反應', '監測', '預期'].forEach(function (p) {
     stats.potentials[p] = summarize_(flattenScores_(analysisRows.filter(function (r) { return r.potential === p; })));
   });
+  // 4S 用 s4List 的「成員關係」分組，不是 r.s4 整串相等：一題標了幾個元素，它的
+  // 每個分數就全額進那幾個類別（見 splitS4_）。所以有多元素題目時，四類的 n 加總
+  // 可能大於 stats.potentials 的 n 加總；反過來，4S 格空白的題目一個類別都不進。
   var s4Labels = {};
-  analysisRows.forEach(function (r) { if (r.s4) s4Labels[r.s4] = true; });
+  analysisRows.forEach(function (r) {
+    r.s4List.forEach(function (label) { s4Labels[label] = true; });
+  });
   Object.keys(s4Labels).forEach(function (label) {
-    stats.s4[label] = summarize_(flattenScores_(analysisRows.filter(function (r) { return r.s4 === label; })));
+    stats.s4[label] = summarize_(flattenScores_(analysisRows.filter(function (r) { return r.s4List.indexOf(label) !== -1; })));
   });
 
   // 潛能 x 4S 交叉統計，給 Analysis.html 的立體圖用（12 格：3 潛能 x 實際出現
   // 過的 4S 類別）。某個組合如果完全沒有對應題目，summarize_([]) 會回傳
-  // n:0/mean:null，前端看到 n===0 就跳過那一格不畫。
+  // n:0/mean:null，前端看到 n===0 就跳過那一格不畫。多元素的題目同樣全額
+  // 進它標到的每一格。
   stats.potentialByS4 = {};
   ['反應', '監測', '預期'].forEach(function (p) {
     stats.potentialByS4[p] = {};
     Object.keys(s4Labels).forEach(function (label) {
-      var pool = analysisRows.filter(function (r) { return r.potential === p && r.s4 === label; });
+      var pool = analysisRows.filter(function (r) { return r.potential === p && r.s4List.indexOf(label) !== -1; });
       stats.potentialByS4[p][label] = summarize_(flattenScores_(pool));
     });
   });
 
   // 以下三組是新增的，而且全部是「現有資料的純推導」，沒有要求任何新欄位
   // （plan §3.3 的「不需新資料、只是目前沒人算」那一列）。原有七個 stats 鍵
-  // 的計算方式一個字都沒改。
+  // 的計算方式在這三組加入時一個字都沒改。之後的改動：2026-10-12 potentials／
+  // potentialByS4 的鍵由「回應」改名「反應」（數字不變，見 normPotential_）；
+  // 2026-10-16 s4／potentialByS4 改用 s4List 分組（上面）。
   // 1 分的定義是「劇本未走到此條件」（見 評分標準 工作表），跟 2-5 分放在一起
   // 平均會讓「沒演到」和「表現差」分不出來，所以單獨算一個未觸發率。
   var untriggeredN = 0;
@@ -2054,8 +2160,13 @@ var GOAL_HEADER_ALIASES_ = ['測試場景與目標', '測試場景', '測試情�
 // 舊名刻意**繼續收**：評核紀錄裡已經寫進去的快照列仍然是「回應」，而業主改
 // 對應指標那一欄是人工作業、不會跟程式同一秒發生。兩個名字都接受，改表前後
 // 的資料才會落在同一個桶子裡 —— 否則改名當下，舊資料會整批從三項潛能消失。
+//
+// 2026-10-16 起也收「反應潛能」「監測潛能」「預期潛能」「學習潛能」這種多寫「潛能」
+// 兩字的寫法（業主的對應指標就是這樣填的）。不收的話，這些題目三組都進不去、也沒有
+// 任何警告：雷達圖、4S、綜合能力全部空白，只剩覆蓋率。
 function normPotential_(v) {
   var s = String(v == null ? '' : v).trim();
+  if (s.length > 2 && s.slice(-2) === '潛能') s = s.slice(0, -2).trim();
   return s === '回應' ? '反應' : s;
 }
 

@@ -253,7 +253,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <div class="reportHead reportChapter" data-reportonly="1">綜合結果</div>
 <section id="overview" class="panel active"><div class="card"><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div class="sec" style="text-align:center">綜合能力柱狀圖</div><div class="sec" style="text-align:center">演習覆蓋率</div><div class="sec" style="text-align:center">4S整備表現直方圖</div></div><div style="display:grid;grid-template-columns:1fr 140px 1fr;gap:20px"><div><div id="iso3dChart"></div><div id="iso3dLegend" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px"></div></div><div style="border-left:1px solid var(--line);padding-left:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center"><div id="coverageGauge"></div><div style="font-size:20px;font-weight:800" id="coverageVal"></div><div class="small" id="coverageSdNote"></div></div><div style="border-left:1px solid var(--line);padding-left:20px;display:flex;flex-direction:column"><div id="overviewS4Chart" style="flex:1;display:flex;align-items:flex-end;justify-content:center;transform:translateY(-25%)"></div></div></div></div><div class="card" id="abilityRankCard" style="margin-top:16px"></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">4S 整備分析</div>
-<section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S整備表現直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（1–5）；橫條內依場景編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該場景占所有場景平均分的比重，段內文字為編號與該場景平均分。場景編號對照表見右方。4S 分析僅納入反應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div><div class="card"><div class="sec">場景編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
+<section id="s4" class="panel"><div class="grid cols2"><div class="card chartbox"><div class="sec">4S整備表現直方圖</div><div id="s4BarsChart"></div><div class="small" style="margin-top:8px">每根橫條是一個 4S 類別，條尾數字為該類別平均分（1–5）；橫條內依場景編號堆疊分段（顏色依編號順序排成色譜），段的寬度代表該場景占所有場景平均分的比重，段內文字為編號與該場景平均分。場景編號對照表見右方。一題若標了多個 4S 元素（例如 Staff / System），它的分數會全額計入每一個元素，這時各類別的評分數加總可能大於三項潛能題目的評分數。4S 分析僅納入反應、監測、預期三項潛能題目；覆蓋率題組與學習潛能不混入 4S 平均值。</div></div><div class="card"><div class="sec">場景編號對照表</div><div class="table-wrap"><table id="s4ScenarioTable"></table></div></div></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">三項潛能分項分析</div>
 <section id="radars" class="panel"><div class="grid cols3" id="radarGrid"></div></section>
 <div class="reportHead reportChapter" data-reportonly="1">演習覆蓋率分析</div>
@@ -264,7 +264,7 @@ body.reportMode:not(.withRanking) #rankingHead{display:none}
 <div id="reportComments" class="card reportSection" data-reportonly="1"></div>
 <div id="reportQuality" class="card reportSection" data-reportonly="1" style="margin-top:16px"></div>
 <div class="reportHead reportChapter" data-reportonly="1">評核方法與評分尺度</div>
-<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均。</li><li>評核官一致性使用 <b>r<sub>wg</sub><span id="methodRwg"></span></b><span id="methodRwgNote"></span>（within-group agreement index）：逐題計算 r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，再將各題平均。S<sub>x</sub><sup>2</sup> 是該題實際評分的樣本變異數（分母 n−1）；σ<sub>E</sub><sup>2</sup> 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率（uniform）時為 (A<sup>2</sup>−1)∕12，本表為 5 點量表所以 σ<sub>E</sub><sup>2</sup> = (25−1)∕12 = 2。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。只有一位評核官評過的題目無法計算群組內一致性，會被跳過；r<sub>wg</sub> 為負時依慣例截為 0。兩者都會把平均往上拉，所以發生時會在數字旁註明題數。<br><span class="small">粗略解讀：≥ 0.90 一致性很高、0.70–0.90 可接受、&lt; 0.70 偏低。</span></li><li>另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 r<sub>wg</sub> 相同。它與 r<sub>wg</sub> 回答的是不同問題：r<sub>wg</sub> 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
+<section id="method" class="panel"><div class="grid cols2"><div class="card method"><div class="sec">統計方法</div><ol><li>資料來自評核官透過評核單實際送出的分數；同一題同一位評核官若送出多次，以最後一次為準。</li><li>三項潛能分析只納入「反應、監測、預期」；「學習」題目排除在外。</li><li>各雷達圖軸值為所有評核官對該指標的平均分；4S 直方圖為各 4S 類別內所有相關題目 × 所有評核官之平均；一題標了多個 4S 元素時（例如 Staff / System），它的分數全額計入每一個元素。</li><li>評核官一致性使用 <b>r<sub>wg</sub><span id="methodRwg"></span></b><span id="methodRwgNote"></span>（within-group agreement index）：逐題計算 r<sub>wg</sub> = 1 − S<sub>x</sub><sup>2</sup> ∕ σ<sub>E</sub><sup>2</sup>，再將各題平均。S<sub>x</sub><sup>2</sup> 是該題實際評分的樣本變異數（分母 n−1）；σ<sub>E</sub><sup>2</sup> 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率（uniform）時為 (A<sup>2</sup>−1)∕12，本表為 5 點量表所以 σ<sub>E</sub><sup>2</sup> = (25−1)∕12 = 2。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。只有一位評核官評過的題目無法計算群組內一致性，會被跳過；r<sub>wg</sub> 為負時依慣例截為 0。兩者都會把平均往上拉，所以發生時會在數字旁註明題數。<br><span class="small">粗略解讀：≥ 0.90 一致性很高、0.70–0.90 可接受、&lt; 0.70 偏低。</span></li><li>另計算任兩位評核官同一題「相差不超過 1 分」比例，逐題採該題實際評分人數配對，範圍與 r<sub>wg</sub> 相同。它與 r<sub>wg</sub> 回答的是不同問題：r<sub>wg</sub> 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。</li></ol></div><div class="card method"><div class="sec">1–5 級評分尺度</div><ul><li><b>5 完整達成：</b>關鍵關係形成、行動完成，且有回饋、確認或再評估。</li><li><b>4 基本達成：</b>核心行動或資源完成且有證據，但仍存在小缺口。</li><li><b>3 部分達成：</b>已啟動處理或安排，但延遲、不完整、需提醒，或未形成閉環。</li><li><b>2 未達成：</b>已明確觸發且具足夠證據，但在關鍵時點前未完成必要行動。</li><li><b>1 未觸發：</b>劇本未走到此條件，該關係或場景沒有被測試。</li></ul><div class="note">建議保留每位評核官原始評分與觀察紀錄，不宜只看平均分；如此才能追溯評分差異與後續改善依據。</div></div></div></section>
 <div id="reportAppendixC" class="card reportSection" data-reportonly="1"></div>
 <div class="foot">單一檔案 HTML｜資料即時讀取自後台試算表｜此連結請勿公開分享</div>
 </div>
@@ -347,6 +347,11 @@ function stackedHBarsSVG(rows,colorOf){if(!rows.length) return '<div class="smal
 
 const POTENTIAL_COLORS = { '反應': '#147d83', '監測': '#274c67', '預期': '#2f7d5b' };
 const S4_PREFERRED_ORDER = ['Space (空間)', 'Staff (人員)', 'Stuff (物資)', 'System (系統)'];
+// 一題可以標多個 4S 元素（例如 `Staff / System`），它的分數全額計入每一個。拆法只在
+// 後端 ConfigWithSubmit.gs 的 splitS4_ 有一份，這裡只讀它產出的 r.s4List，**不在前端
+// 另外拆**——否則拆法會有兩份、畫面跟報告可能對不上。舊版後端沒有 s4List，退回
+// [r.s4]，行為與改版前完全相同（所以前端先上線是安全的）。
+function s4ListOf(r){return Array.isArray(r.s4List)?r.s4List:(r.s4?[r.s4]:[])}
 
 function mixHex(hex,target,t){const h=hex.replace('#',''),th=target.replace('#','');const r1=parseInt(h.substr(0,2),16),g1=parseInt(h.substr(2,2),16),b1=parseInt(h.substr(4,2),16);const r2=parseInt(th.substr(0,2),16),g2=parseInt(th.substr(2,2),16),b2=parseInt(th.substr(4,2),16);const r=Math.round(r1+(r2-r1)*t),g=Math.round(g1+(g2-g1)*t),b=Math.round(b1+(b2-b1)*t);return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('')}
 
@@ -575,8 +580,12 @@ function init(){
   renderCoverageGauge();
   renderAbilityRank();
 
-  // 由高到低排列，與 Report.gs 的 specS4Means_ 同一個順序；同分保留後端原順序（sort 是穩定的）。
-  let overviewS4Items=Object.entries(DATA.stats.s4).map(([k,v])=>({label:k,value:v.mean,n:v.n})).sort((a,b)=>b.value-a.value);
+  // 由高到低排列，與 Report.gs 的 specS4Means_ 同一個順序。同分時依 S4_PREFERRED_ORDER
+  // （其餘依字碼）排，也就是 Report.gs s4Keys_ 的規則 —— 不這樣做的話同分會照後端的出現
+  // 順序排，螢幕跟紙本就會不一樣；一題標兩個 4S 元素時，兩類同分並不少見。
+  const s4PrefRank=k=>{const i=S4_PREFERRED_ORDER.indexOf(k);return i===-1?S4_PREFERRED_ORDER.length:i};
+  let overviewS4Items=Object.entries(DATA.stats.s4).map(([k,v])=>({label:k,value:v.mean,n:v.n}))
+    .sort((a,b)=>(b.value-a.value)||(s4PrefRank(a.label)-s4PrefRank(b.label))||(a.label<b.label?-1:(a.label>b.label?1:0)));
   document.getElementById('overviewS4Chart').innerHTML=barsSVG(overviewS4Items);
   renderRadars();renderCoverage();renderS4();renderDetail();renderRanking();renderMethod();
 
@@ -674,7 +683,7 @@ function renderS4(){
   const colorOf=code=>{const i=scenarioCodes.indexOf(code);return n<=1?'#147d83':`hsl(${Math.round(i/(n-1)*300)},55%,45%)`};
   const rows=s4Keys.map(s4=>{
     const bucket={};
-    DATA.analysisRows.filter(r=>r.s4===s4).forEach(r=>{const code=shortScene(r.itemName);(bucket[code]=bucket[code]||[]).push(...r.scores.map(s=>s.score))});
+    DATA.analysisRows.filter(r=>s4ListOf(r).includes(s4)).forEach(r=>{const code=shortScene(r.itemName);(bucket[code]=bucket[code]||[]).push(...r.scores.map(s=>s.score))});
     const sceneMeans=scenarioCodes.filter(c=>bucket[c]).map(c=>{const arr=bucket[c];return{key:c,mean:arr.reduce((a,v)=>a+v,0)/arr.length}});
     // 橫條總長＝該 4S 類別的真實平均分（跟 4S 統計摘要同一個數字，
     // DATA.stats.s4 已經用該類別所有評分算好），不是場景分數加總；橫條內
@@ -880,10 +889,12 @@ function abilityCells(){
 // 「空間/結構」＝ 4S 欄的 'Space (空間)'。⚠️ Report.gs 的 ABILITY_NOTES_ 是第二份
 // 副本，兩份必須在同一個 commit 一起改（第一版是「在…上展現出的…能力」句型）。
 //
-// ⚠️ 鍵是 潛能 + '×' + 4S 的**原始值**，而 4S 原始值直接來自 對應指標 的
-// 「4S 元素」欄（目前是 'Space (空間)' 這種中英並列）。業主哪天把那一欄改成
-// 純中文，這十二個鍵就全部對不上，abilityNote 會回空字串而「說明」欄整欄變空白
-// ——不會報錯。改試算表標籤時這裡要跟著改。
+// ⚠️ 鍵是 潛能 + '×' + 4S 的**正規名稱**（'Space (空間)' 這種中英並列）。2026-10-16
+// 起後端的 splitS4_ 會把 對應指標「4S 元素」欄的各種寫法（`Staff`、`人員`、
+// `Staff / System`…）都對回 ConfigWithSubmit.gs S4_VALUE_ALIASES_ 的四個正規名稱，
+// 所以業主改試算表的寫法不會讓這裡對不上。真正會讓十二個鍵全部落空的是改
+// S4_VALUE_ALIASES_ 裡的正規名稱本身 —— abilityNote 會回空字串、「說明」欄整欄
+// 變空白，不會報錯。那邊改，這裡（與 Report.gs 的 ABILITY_NOTES_）要一起改。
 const ABILITY_NOTES = {
   '反應×Space (空間)':  '突發狀況下迅速重排實體場域，彈性改變空間或結構部屬，以吸收壓力。',
   '反應×Staff (人員)':  '危機發生時，人員能迅速接受具體任務指派，發揮跨單位協同運作與靈活應變的執行力。',

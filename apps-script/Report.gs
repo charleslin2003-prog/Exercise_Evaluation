@@ -49,7 +49,7 @@ var MENU_TITLE_ = '演習評核報告';
 
 // 兩份手貼副本的指紋。**改這個檔案就要改這一行**，否則它會從「可查核的版本號」
 // 退化成「兩邊都印同一個字串的裝飾」。reportCheck 與附錄C 都會印它。
-var REPORT_BUILD_ = '2026-10-13 notes v2';
+var REPORT_BUILD_ = '2026-10-16 multi-4S';
 
 // ===== 指令碼屬性鍵 =====
 var PROP_ANALYSIS_KEY_ = 'REPORT_ANALYSIS_KEY';
@@ -3726,7 +3726,7 @@ function sectionMethod_(cursor, ctx) {
   heading_(cursor, '統計方法', 2);
   bullet_(cursor, '資料來源：評核官透過評核單實際送出的分數。同一題、同一位評核官若送出多次，以最後一次送出為準（重送視為更正）。');
   bullet_(cursor, '三項潛能分析只納入「反應、監測、預期」三類題目；「學習」類題目排除在統計之外，另列於學習潛能觀察一章。');
-  bullet_(cursor, '各指標分數為所有評核官對該題評分的算術平均；4S 類別平均為該類別內所有題目 × 所有評核官評分的平均。');
+  bullet_(cursor, '各指標分數為所有評核官對該題評分的算術平均；4S 類別平均為該類別內所有題目 × 所有評核官評分的平均；一題若標了多個 4S 元素（例如 Staff / System），它的分數全額計入每一個元素，這時各 4S 類別的評分數加總可能大於三項潛能題目的評分數。');
   bullet_(cursor, 'r_wg（within-group agreement index）：逐題計算 r_wg = 1 − S² ∕ σ_E² 再將各題平均。S² 是該題實際評分的樣本變異數（分母 n−1）；σ_E² 是「完全沒有共識」時的期望變異數，假設無共識時各選項等機率時為 (A²−1)∕12，本表為 5 點量表所以 σ_E² = 2。只有一位評核官評過的題目會被跳過，r_wg 為負時依慣例截為 0；兩者都會把平均往上拉，所以發生時會在數字旁註明題數。粗略解讀：≥ 0.90 很高、0.70–0.90 可接受、< 0.70 偏低。範圍涵蓋三項潛能與覆蓋率題目（不含學習）。');
   bullet_(cursor, '「相差不超過 1 分」比例：逐題取該題所有已評分的評核官兩兩配對，計算分數差 ≤ 1 的配對占全部配對的比例。不要求各題的評核官一致，範圍與 r_wg 相同。它與 r_wg 回答的是不同問題：r_wg 問「評分有多集中」，這一項問「有多少對人實際掃得很近」。');
   bullet_(cursor, '未觸發率：評分等於 1 分的個數占該範圍內全部評分的比例。範圍與 r_wg 相同（三項潛能＋覆蓋率題目，不含學習），因此它的分母小於本報告的評分總數。1 分的定義是「劇本未走到此條件」，與 2–5 分的表現評價不同質。');
@@ -4508,10 +4508,13 @@ function sectionAppendixD_(cursor, ctx) {
 // 這個 repo 已經為同一件事付過代價 —— Config.gs 與 ConfigWithSubmit.gs 漂移到
 // 線上那份**不等於任何一個 commit**（見 apps-script/README.md，2026-10-12）。
 //
-// ⚠️ 鍵是 潛能 + '×' + 4S 的**原始值**，而 4S 原始值直接來自 對應指標 的
-// 「4S 元素」欄（目前是 'Space (空間)' 這種中英並列）。業主哪天把那一欄改成
-// 純中文，這十二個鍵就全部對不上，abilityNote_ 會回空字串而「說明」欄整欄變空白
-// —— **不會報錯**，而且螢幕與紙本會同時變空白。改試算表標籤時這裡要跟著改。
+// ⚠️ 鍵是 潛能 + '×' + 4S 的**正規名稱**（'Space (空間)' 這種中英並列）。2026-10-16
+// 起後端的 splitS4_ 會把 對應指標「4S 元素」欄的各種寫法（`Staff`、`人員`、
+// `Staff / System`…）都對回 ConfigWithSubmit.gs S4_VALUE_ALIASES_ 的四個正規名稱，
+// 所以業主改試算表的寫法不會讓這裡對不上。真正會讓十二個鍵全部落空的是改
+// S4_VALUE_ALIASES_ 裡的正規名稱本身 —— abilityNote_ 會回空字串、「說明」欄整欄
+// 變空白，**不會報錯**，而且螢幕與紙本會同時變空白。那邊改，這裡（與 Analysis.html
+// 的 ABILITY_NOTES）要一起改。
 //
 // 2026-10-13 第二版，取自業主「韌性潛能與 4S 擴容元素整合矩陣表」，每格只取內文、
 // 逐字照抄（不取「1. 任務編組與自我組織」這種編號標題）。原稿的「預見」＝這裡的
@@ -4559,7 +4562,7 @@ function abilityNote_(pot, s4) {
 }
 
 // 「反應x空間」這種顯示名。注意與 abilityNote_ 的不對稱是**刻意的**：
-// 標籤只留括號裡的中文，查說明用的鍵卻是 4S 的原字。兩個字串長得很像，很容易
+// 標籤只留括號裡的中文，查說明用的鍵卻是 4S 的正規名稱全字。兩個字串長得很像，很容易
 // 混成一個。
 function abilityLabel_(pot, s4) {
   var m = String(s4 == null ? '' : s4).match(/[（(]([^）)]+)[）)]/);
@@ -4723,13 +4726,25 @@ function sceneS4Buckets_(ctx) {
     var r = arows[k];
     var code = shortScene_(r.itemName, ctx.prefix);
     if (!scenarioText[code]) scenarioText[code] = r.goal || r.itemName || '';
-    if (!r.s4) continue;
-    var key = r.s4 + '␟' + code;
-    if (!bucket[key]) bucket[key] = [];
+    // 一題標了多個 4S 元素時，分數全額進每一個（與 Analysis.html renderS4 的
+    // s4ListOf 同一規則）。4S 格空白的題目 s4ListOf_ 回傳 []，一個桶都不進。
+    var list = s4ListOf_(r);
     var sc = r.scores || [];
-    for (var s2 = 0; s2 < sc.length; s2++) bucket[key].push(sc[s2].score);
+    for (var m = 0; m < list.length; m++) {
+      var key = list[m] + '␟' + code;
+      if (!bucket[key]) bucket[key] = [];
+      for (var s2 = 0; s2 < sc.length; s2++) bucket[key].push(sc[s2].score);
+    }
   }
   return { bucket: bucket, scenarioText: scenarioText };
+}
+
+// 一列的 4S 元素清單。拆法只在後端 ConfigWithSubmit.gs 的 splitS4_ 有一份，這裡只讀
+// 它產出的 r.s4List，**不另外拆**——否則報告與儀表板可能對不上。舊版後端沒有
+// s4List，退回 [r.s4]，行為與改版前完全相同。
+function s4ListOf_(r) {
+  if (Array.isArray(r.s4List)) return r.s4List;
+  return r.s4 ? [r.s4] : [];
 }
 
 // 與 Analysis.html 的 4S 分頁堆疊橫條帶的是同一批數字（那張圖的每個色段標籤
