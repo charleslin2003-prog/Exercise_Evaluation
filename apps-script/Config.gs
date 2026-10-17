@@ -17,6 +17,8 @@ function doGet(e) {
     exerciseCategory: info.category,
     exerciseDate: info.date,
     exerciseDesc: info.desc,
+    // 2026-10-17：演習資訊 的「演習地點」（或「地點」）列。ConfigWithSubmit.gs 的設定分支回同一個欄位。
+    exerciseLocation: info.location,
     // 這兩個欄位 ConfigWithSubmit.gs 的設定分支一直都有回；這支沒有，所以
     // Start.dc.html 讀到 undefined，而它的判斷是 config.commentEnabled !== false
     // ——undefined !== false 成立，留言框就一直開著。補上之後兩條路徑才一致。
@@ -46,7 +48,7 @@ function readExerciseInfo_(ss) {
   var values = ss.getSheetByName('演習資訊').getDataRange().getValues();
   // commentEnabled 預設 true、commentRequiredBelow 預設 0：沒填那兩列就跟以前
   // 一模一樣（留言框開著、永不強制）。
-  var info = { org: '', name: '', topic: '', category: '', date: '', desc: '',
+  var info = { org: '', name: '', topic: '', category: '', date: '', desc: '', location: '',
     commentEnabled: true, commentRequiredBelow: 0 };
   for (var i = 0; i < values.length; i++) {
     var key = values[i][0];
@@ -57,6 +59,8 @@ function readExerciseInfo_(ss) {
     else if (key === '演習類別') info.category = val;
     else if (key === '演習日期') info.date = val;
     else if (key === '說明') info.desc = val;
+    // 2026-10-17 新增的選填列（「地點」也收），與 ConfigWithSubmit.gs 一字不差。
+    else if (key === '演習地點' || key === '地點') info.location = val;
     // 下面兩個標籤原本只有 ConfigWithSubmit.gs 認得，於是「關掉觀察紀錄」只在帶
     // ?t= 的連結上生效，不帶參數的舊連結留言框照樣在 —— 因為那條走的是這支
     // Config.gs。兩邊的判斷必須一字不差，否則同一張設定表會因為連結形狀不同而

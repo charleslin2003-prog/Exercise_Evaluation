@@ -1110,17 +1110,20 @@ function renderReportCover(){
   const rows=[['機構名稱',m.orgName],['演習名稱',m.exerciseName],['演習類別',m.exerciseCategory],
     ['演習日期',fmtExerciseDate(m.exerciseDate)],['演習主題',m.exerciseTopic]];
   if(m.exercise) rows.push(['演習代號',m.exercise]);
-  // 演習地點後端沒有這個欄位，而且加一個要動兩支 Apps Script 並重新部署。
-  // 報告樣板只要它出現在封面，所以比照 報告版次 那五格做成可在畫面上打字的
-  // 欄位 —— 同樣不會被儲存，重新整理就沒了。
+  // 演習地點比照 報告版次 那五格做成可在畫面上打字的欄位 —— 同樣不會被儲存，重新整理就沒了。
+  // 2026-10-17 起後端從 演習資訊 的「演習地點」（或「地點」）列讀出 meta.exerciseLocation，
+  // 有值就預先填進這一格（仍然可以改）；舊後端不回這個欄位、或那一列沒填，就跟以前一樣是空白。
   rows.push(['產出時間',m.generatedAt?new Date(m.generatedAt).toLocaleString('zh-TW'):'—']);
   const signs=['演習地點','報告版次','文件編號','製表','審核','核定'];
+  const place=String(m.exerciseLocation==null?'':m.exerciseLocation).trim();
+  const prefill={'演習地點':place};
   document.getElementById('reportCover').innerHTML=
     `<div class="coverOrg">${esc(m.displayName||m.orgName||'演習評核')}</div>`+
     `<div class="coverTitle">演習評核分析報告</div>`+
     `<div class="coverGrid">${rows.map(r=>`<div class="k">${esc(r[0])}</div><div>${esc(r[1]||'—')}</div>`).join('')}</div>`+
-    `<div class="signGrid">${signs.map((s,i)=>`<div><div class="k">${esc(s)}</div><div class="editable" contenteditable="true" spellcheck="false" id="coverEdit${i}"></div></div>`).join('')}</div>`+
-    `<div class="small" style="margin-top:14px">上列各格可直接在畫面上點進去打字；內容不會被儲存，重新整理或換台電腦就消失。</div>`;
+    `<div class="signGrid">${signs.map((s,i)=>`<div><div class="k">${esc(s)}</div><div class="editable" contenteditable="true" spellcheck="false" id="coverEdit${i}">${esc(prefill[s]||'')}</div></div>`).join('')}</div>`+
+    // 補充句只在真的帶入了值時才出現：沒有地點時（舊後端、或那一列沒填）這段跟改版前逐字相同。
+    `<div class="small" style="margin-top:14px">上列各格可直接在畫面上點進去打字；內容不會被儲存，重新整理或換台電腦就消失。${place?'演習地點已先帶入設定表「演習資訊」的值，仍可修改。':''}</div>`;
 }
 
 // R1 列印設定提示卡：螢幕專用（@media print 裡明確隱藏），同時也是兩個勾選框

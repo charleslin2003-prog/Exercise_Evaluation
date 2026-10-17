@@ -760,6 +760,7 @@ function doGet(e) {
       exerciseCategory: info.category,
       exerciseDate: info.date,
       exerciseDesc: info.desc,
+      exerciseLocation: info.location,
       codes: readCodes_(ss),
       criteria: readCriteria_(ss),
       items: readItems_(ss),
@@ -1439,6 +1440,9 @@ function buildAnalysis_(t) {
       exerciseCategory: exerciseInfo.category,
       exerciseDate: exerciseInfo.date,
       exerciseDesc: exerciseInfo.desc,
+      // 2026-10-17：演習資訊 的「演習地點」（或「地點」）列，沒有就是 ''。
+      // Report.gs 的 {{演習地點}} 與 Analysis.html 報告封面的「演習地點」格讀它。
+      exerciseLocation: exerciseInfo.location,
       generatedAt: new Date().toISOString(),
       evaluatorCodes: Object.keys(codeSet).sort(),
       // ⚠️ 這裡刻意「只回真的解析到的身分」，不像設定分支那樣把使用者帶來的
@@ -2207,10 +2211,12 @@ function formatCellValue_(val) {
 // 沒有。key/value 的形狀本身刻意沒有改動，所以 README.md 那份業主實際在填的
 // 對外契約逐字保持有效（plan §2.1）。多出來的兩列是「有填才生效」，業主不填
 // 就是今天的行為（留言框開著、不強制說明）。
+// （更正：2026-10-08 起 Config.gs 也認那兩個標籤；2026-10-17 的「演習地點」同樣兩份一起加。
+//  兩份回傳的物件必須逐鍵相同 —— 差在哪裡，就是「有沒有帶 ?t=」的連結看到不同的東西。）
 function readExerciseInfo_(ss) {
   var values = nullSafeSheet_(ss, '演習資訊').getDataRange().getValues();
   var info = {
-    org: '', name: '', topic: '', category: '', date: '', desc: '',
+    org: '', name: '', topic: '', category: '', date: '', desc: '', location: '',
     commentEnabled: true, commentRequiredBelow: 0,
   };
   for (var i = 0; i < values.length; i++) {
@@ -2222,6 +2228,10 @@ function readExerciseInfo_(ss) {
     else if (key === '演習類別') info.category = val;
     else if (key === '演習日期') info.date = val;
     else if (key === '說明') info.desc = val;
+    // 2026-10-17 新增的選填列，給業主定稿報告範本的「演習地點」格（Report.gs 的
+    // {{演習地點}}）與儀表板報告封面。「地點」也收。沒有這一列就是空字串＝改版前的行為。
+    // ⚠️ Config.gs 那一份要一字不差地跟著改：兩份 readExerciseInfo_ 必須回同一個物件。
+    else if (key === '演習地點' || key === '地點') info.location = val;
     else if (key === '啟用觀察紀錄') {
       // 只有明確寫 N／否／關閉（或 FALSE，含沒打勾的核取方塊）才關掉；空白或任何其他值都當成開啟，
       // 因為「少一個留言框」比「意外關掉報告唯一的質性資料來源」好修。

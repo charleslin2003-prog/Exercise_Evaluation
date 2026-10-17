@@ -50,7 +50,7 @@ var MENU_TITLE_ = '演習評核報告';
 
 // 兩份手貼副本的指紋。**改這個檔案就要改這一行**，否則它會從「可查核的版本號」
 // 退化成「兩邊都印同一個字串的裝飾」。reportCheck 與附錄C 都會印它。
-var REPORT_BUILD_ = '2026-10-17 inclusion';
+var REPORT_BUILD_ = '2026-10-17 template';
 
 // ===== 指令碼屬性鍵 =====
 var PROP_ANALYSIS_KEY_ = 'REPORT_ANALYSIS_KEY';
@@ -130,7 +130,13 @@ var COVER_TOKENS_ = [
   // 2026-10-13 新增，給業主自己的報告手稿用（儀表板上那張「說明」KPI 卡的同一個值）。
   // 它走的是既有的 applyCoverTokens_ 三容器 replaceText，所以**打在表格儲存格裡
   // 也會被替換** —— replaceText 會走訪表格，這正是填入式範本不需要為它寫新程式的原因。
-  '{{演習說明}}'
+  '{{演習說明}}',
+  // 2026-10-17 新增，業主定稿範本（博嘉國小／萬芳的那一版）資訊表格裡的兩格。
+  // {{演習地點}} 是 演習資訊 的「演習地點」（或「地點」）列 —— 後端 readExerciseInfo_
+  // 讀進 meta.exerciseLocation，舊後端不回這個欄位就印「—」。
+  // {{報告日期}} 是本輪的產生日期，寫成「2026年10月18日」，與 {{報告產生時間}} 同源
+  // （見 formatReportDate_）。
+  '{{演習地點}}', '{{報告日期}}'
 ];
 
 // 缺席時**不計入** scan.coverMissing 的封面 token。
@@ -138,7 +144,17 @@ var COVER_TOKENS_ = [
 // 若讓它進 coverMissing，每一份用舊範本產出的報告都會在附錄C 多一則
 // 「範本缺少封面 token：演習說明」—— 一則對那份範本而言完全正確、卻每次都響的
 // 警告。這個檔案已經為同一個病付過一次代價（見 OWNER_FILLED_TOKENS_）。
-var COVER_TOKENS_SILENT_ = ['{{演習說明}}'];
+// {{演習地點}}／{{報告日期}}（2026-10-17）同理：舊範本（21 章骨架與第一版填入式手稿）
+// 都沒有它們，不能因為這一版加了 token 就開始每份都響。
+var COVER_TOKENS_SILENT_ = ['{{演習說明}}', '{{演習地點}}', '{{報告日期}}'];
+
+// 檢查設定「封面 token」那一列的選填說明：每個 COVER_TOKENS_SILENT_ 各一句「放了會填什麼」。
+// 只給對話框看（不進文件），所以裡面可以留完整的 {{…}}。
+var COVER_TOKENS_SILENT_NOTES_ = {
+  '{{演習說明}}': '演習資訊 的「說明」',
+  '{{演習地點}}': '演習資訊 的「演習地點」（或「地點」），沒填印「—」',
+  '{{報告日期}}': '本次報告的產生日期，例如 2026年10月18日'
+};
 
 // **刻意不填**的 token：報告版次／文件編號／製表／審核／核定 是留給業主在產生出來
 // 的文件裡自己簽的（附錄C 最後一段就是這樣寫的）。
@@ -224,7 +240,12 @@ var FILL_IMAGE_TOKENS_ = [
   { id: 'IMG_SCENE_S4', token: '{{圖_場景4S}}',    kind: 'image', title: '各場景在各 4S 類別的平均' }
 ];
 
-// 七種資料列標記。
+// 九種資料列標記。
+// 最後兩個（ROW_ABILITY、ROW_SCENE_PLAIN）是 2026-10-17 業主定稿範本用的：
+//   {{列_綜合能力排序}}＝每一個有平均的 潛能×4S 交叉格、由高到低、競賽排名（同分同名次），
+//     也就是儀表板 #abilityRankCard 的有名次部分；n:0 的格子不列（沒有平均，不是最低分）。
+//   {{列_場景說明}}＝{{列_場景對照}} 的同一批列、同一個順序，只是少了最左邊的色塊欄。
+// 舊的 {{列_優勢前三}}／{{列_待改善前三}}／{{列_場景對照}} 照樣支援（別的範本還在用）。
 // ⚠️ columns 不是註解，是**契約本身**：它同時是欄數檢查、拒絕訊息的文字來源、
 // 以及由左至右的寫入順序。想多填一欄就只改這一張表 —— 一個地方可讀、一個地方
 // 可改，這也正是「欄位順序」這條約定查得動的原因
@@ -238,7 +259,9 @@ var FILL_ROW_TOKENS_ = [
   { id: 'ROW_P1',    token: '{{列_反應指標}}',   kind: 'row', title: '反應潛能指標明細',       columns: ['場景編號', '指標', '具體評核題目', '分數'], potential: '反應' },
   { id: 'ROW_P2',    token: '{{列_監測指標}}',   kind: 'row', title: '監測潛能指標明細',       columns: ['場景編號', '指標', '具體評核題目', '分數'], potential: '監測' },
   { id: 'ROW_P3',    token: '{{列_預期指標}}',   kind: 'row', title: '預期潛能指標明細',       columns: ['場景編號', '指標', '具體評核題目', '分數'], potential: '預期' },
-  { id: 'ROW_SCENE', token: '{{列_場景對照}}',   kind: 'row', title: '場景編號對照表',         columns: ['色塊', '場景編號', '場景說明'] }
+  { id: 'ROW_SCENE', token: '{{列_場景對照}}',   kind: 'row', title: '場景編號對照表',         columns: ['色塊', '場景編號', '場景說明'] },
+  { id: 'ROW_ABILITY', token: '{{列_綜合能力排序}}', kind: 'row', title: '綜合能力排序（由高到低）', columns: ['排序', '綜合能力', '分數', '能力說明'] },
+  { id: 'ROW_SCENE_PLAIN', token: '{{列_場景說明}}', kind: 'row', title: '場景說明對照表',       columns: ['場景編號', '場景說明'] }
 ];
 
 var DRAFT_BANNER_ ='草稿 — 產生未完成（本份報告尚未完成，請勿分發）';
@@ -2003,14 +2026,19 @@ function scanTemplate_(doc) {
   // COVER_TOKENS_SILENT_ 裡的 token 缺席不算缺 —— 舊的 21 章骨架範本因此在
   // 附錄C 的警告清單上一個字都不會變。
   var coverMissing = [];
+  var coverSilentMissingList = [];
   for (var c = 0; c < anchors.coverMissing.length; c++) {
     if (COVER_TOKENS_SILENT_.indexOf(anchors.coverMissing[c]) === -1) coverMissing.push(anchors.coverMissing[c]);
+    else coverSilentMissingList.push(anchors.coverMissing[c]);
   }
 
   return {
     mode: mode, anchors: anchors, fill: fill, coverMissing: coverMissing,
     secFound: secFound, fillFound: fillFound,
-    coverSilentMissing: (anchors.coverMissing.length !== coverMissing.length)
+    // 布林那個保留（舊的呼叫點與外部工具可能讀它）；檢查設定改讀逐個的清單 ——
+    // 選填 token 不只一個之後，「有任何一個缺」已經說不出是哪一個缺。
+    coverSilentMissing: (coverSilentMissingList.length > 0),
+    coverSilentMissingList: coverSilentMissingList
   };
 }
 
@@ -2680,6 +2708,24 @@ function formatGeneratedAt_(iso) {
   }
 }
 
+// {{報告日期}}：本輪報告的產生日期，寫成「2026年10月18日」（業主定稿範本的寫法，月日不補零）。
+// ⚠️ 來源與時區刻意與 formatGeneratedAt_ 逐字相同 —— 同一個 meta.generatedAt、同一個
+// new Date(...) 解析、同一個 tz_()（指令碼時區，取不到才退回 Asia/Taipei）。兩個值印在同一份
+// 文件上（資訊表格的報告日期、產生紀錄的報告產生時間），各取各的「現在」或各用各的時區，
+// 跨午夜產生的報告就會一處寫 17 日、另一處寫 18 日。
+// 不用 'yyyy年M月d日' 當格式字串：中文字在 SimpleDateFormat 裡雖然是字面值，拆開組比較不用賭。
+function formatReportDate_(iso) {
+  var tz = tz_();
+  try {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var p = String(Utilities.formatDate(d, tz, 'yyyy-M-d')).split('-');
+    return p[0] + '年' + p[1] + '月' + p[2] + '日';
+  } catch (err) {
+    return '';
+  }
+}
+
 // 後端的 exerciseDate 已經是 formatCellValue_ 格式化過的字串（yyyy/MM/dd），
 // 但業主也可能在 演習資訊 填「115年6月12日」這種純文字。看起來像日期就重新
 // 格式化，不像就原樣輸出 —— 絕不猜，也絕不把看不懂的字串變成空白。
@@ -2750,7 +2796,12 @@ function coverTokenMap_(payload, st) {
     '{{資料列數}}': '原始 ' + String(m.recordRowCount || 0) + ' 列／納入統計 ' + rowCounts + ' 題',
     '{{報告產生時間}}': st.generatedAtText,
     '{{報告編號}}': st.runId,
-    '{{匿名模式}}': st.identified ? '⚠ 含可識別評核官代號' : '已匿名（評核官 1…N）'
+    '{{匿名模式}}': st.identified ? '⚠ 含可識別評核官代號' : '已匿名（評核官 1…N）',
+    // 2026-10-17。演習資訊 的「演習地點」（或「地點」）列；舊後端沒有 exerciseLocation → 「—」。
+    '{{演習地點}}': txt_(m.exerciseLocation),
+    // 唯一的呼叫點是 reportStart，傳進來的 payload 就是 st.generatedAtText
+    // （＝formatGeneratedAt_(meta.generatedAt)）的那一份，所以兩者同源、不會對不上。
+    '{{報告日期}}': txt_(formatReportDate_(m.generatedAt))
   };
 }
 
@@ -2864,14 +2915,28 @@ function reportValidateOnly(target) {
 
       // 封面 token（兩種模式都印）。原本這一行寫死「全部 12 個」，加了
       // {{演習說明}} 之後那個數字就會是錯的，所以改成動態計數。
+      // 選填的不只一個之後（{{演習說明}}，2026-10-17 加 {{演習地點}}／{{報告日期}}），
+      // 每一個各自說「已放置／未放置」—— 一個布林答不出是哪一個缺。
       var coverRequired = COVER_TOKENS_.length - COVER_TOKENS_SILENT_.length;
-      var descPresent = !scan.coverSilentMissing;
+      var silentMissing = scan.coverSilentMissingList || [];
+      var optionalParts = [];
+      for (var oi = 0; oi < COVER_TOKENS_SILENT_.length; oi++) {
+        var ot = COVER_TOKENS_SILENT_[oi];
+        optionalParts.push(ot + (silentMissing.indexOf(ot) === -1
+          ? '（已放置，會填入 ' + (COVER_TOKENS_SILENT_NOTES_[ot] || '對應的值') + '）'
+          : '（未放置，略過）'));
+      }
       checks.push({
         label: '封面 token', ok: true,
+        // 填入式範本是業主自己的版型，放哪幾個封面 token 是他的選擇（2026-10-17 的最終
+        // 報告範本只放 8 個），沒放的不是錯，所以不標 ⚠、只列出來。錨點式的 21 章骨架才
+        // 預期每一個都在。
         detail: (scan.coverMissing.length
-          ? '⚠ 範本裡找不到這些 token（不影響產生，只是這些欄位不會被填）：' + scan.coverMissing.join('、')
+          ? (scan.mode === 'fill'
+            ? '填入式範本只填有放的封面 token；未放置（略過）：' + scan.coverMissing.join('、')
+            : '⚠ 範本裡找不到這些 token（不影響產生，只是這些欄位不會被填）：' + scan.coverMissing.join('、'))
           : '全部 ' + coverRequired + ' 個封面 token 都在範本裡。') +
-          '　｜　選填：{{演習說明}}' + (descPresent ? '（已放置，會填入 演習資訊 的「說明」）' : '（未放置，略過）')
+          '　｜　選填：' + optionalParts.join('、')
       });
     } catch (err3) {
       add('範本標記掃描', false, '掃描範本時發生錯誤：' + msg_(err3));
@@ -3091,7 +3156,7 @@ function pushFillPreviewChecks_(checks, scan, payload) {
   checks.push({
     label: '本次預計填入的列數', ok: true,
     detail: (parts.length ? parts.join('；') : '範本沒有放任何資料列標記。') +
-      '　｜　目前 12 個 潛能×4S 交叉格中有 ' + cells.length + ' 格有資料（優勢／待改善前三都從這幾格取，同分同名次全部列入）。'
+      '　｜　目前 12 個 潛能×4S 交叉格中有 ' + cells.length + ' 格有資料（綜合能力排序與優勢／待改善前三都從這幾格取，同分同名次全部列入）。'
   });
 
   // 這個版型裝不下的東西，附上本次的實際筆數。
@@ -3300,7 +3365,9 @@ function reportStart(opts) {
         ? '這份範本是填入式（您自己的報告版型），沒有評核官差異的輸出位置，識別模式無處可放，已自動改回匿名模式。'
         : '範本缺少 ' + plainToken_('{{SEC_評核官差異}}') + ' 錨點，識別模式無處輸出，已自動改回匿名模式。');
     }
-    if (scan.coverMissing.length) {
+    // 只在錨點式範本警告：填入式範本沒放的封面 token 是業主的版型選擇，每一份報告都響的
+    // 警告等於沒有警告（理由同 OWNER_FILLED_TOKENS_ 的註解）。
+    if (scan.coverMissing.length && scan.mode !== 'fill') {
       addWarning_(st, '範本缺少封面 token：' + plainTokens_(scan.coverMissing).join('、') + '（這些欄位不會被填）。');
     }
     if (totalRows > 400) {
@@ -5358,6 +5425,12 @@ function fillRowData_(def, ctx) {
   if (def.id === 'ROW_BOT3') {
     return { values: abilityValueRows_(rankedTop_(abilityCells_(ctx), 3, true)), colors: null };
   }
+  // 全部有平均的交叉格、由高到低。與儀表板 renderAbilityRank 是同一個呼叫
+  // （rankedTop(abilityCells(), Infinity, false)），所以紙本的名次與螢幕上那張表逐列相同；
+  // 儀表板額外列在最後、不給名次的 n:0 組合，這裡不列（範本的欄位契約沒有放「原因」的地方）。
+  if (def.id === 'ROW_ABILITY') {
+    return { values: abilityValueRows_(rankedTop_(abilityCells_(ctx), Infinity, false)), colors: null };
+  }
   // 指標明細的排序與錨點式第七、八章同一條（sortListedByMeanAsc_）：不納入的題目照列，
   // 排在納入的題目之後。填入式沒有表註，這件事只能寫在報告產生紀錄（fillModeCoverage_）。
   if (def.id === 'ROW_COV') {
@@ -5392,6 +5465,15 @@ function fillRowData_(def, ctx) {
       colors.push(sp.color[sp.codes[i]]);
     }
     return { values: out, colors: colors };
+  }
+  // 同一個 sceneSpectrum_、同一個順序，只拿掉色塊欄。colors 必須是 null：
+  // duplicateTemplateRow_ 只要 colors 不是 null 就把第 0 欄當色塊上色，而這張表的第 0 欄是場景編號。
+  if (def.id === 'ROW_SCENE_PLAIN') {
+    var sp2 = sceneSpectrum_(ctx);
+    for (i = 0; i < sp2.codes.length; i++) {
+      out.push([sp2.codes[i], txt_(sp2.text[sp2.codes[i]])]);
+    }
+    return { values: out, colors: null };
   }
   return { values: [], colors: null };
 }

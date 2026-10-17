@@ -291,8 +291,12 @@ below has an owner, documents other than the owner should cite it, not restate i
   - 醫院代號 is generated as `<醫事機構代碼>-<6 hex>`, never the bare public institution
     code. The code is public government data, and `?t=` is the only barrier between a
     stranger and submitting scores that overwrite a real evaluator's.
-  - 地點 is folded into 說明 because `readExerciseInfo_` has no 地點 label; giving it one
-    means editing and redeploying two Apps Script projects.
+  - 地點 is folded into 說明. That was forced when it was written, because `readExerciseInfo_`
+    had no 地點 label; since 2026-10-17 both backends read an optional `演習地點`/`地點` row
+    (→ `exerciseLocation`), but this wizard was not changed and still folds it into 說明, so a
+    wizard-made drill's `{{演習地點}}` prints 「—」 until someone adds the row by hand. The
+    comment at `Setup.gs:792` and the hint in `SetupDialog.html` still say the backend has no
+    such field — stale since 2026-10-17.
 - `apps-script/QrLib.html` — vendored verbatim from `kazuhikoarase/qrcode-generator`
   (`js/dist/qrcode.js`, MIT, SHA-256 `79ec86f8…f791c`), wrapped in `<script>` so
   `SetupDialog.html` can `<?!= include('QrLib') ?>` it. Don't hand-edit. Generates QR codes
@@ -323,7 +327,9 @@ below has an owner, documents other than the owner should cite it, not restate i
   no-param links — two behaviours from one sheet, keyed on link shape, which nobody would
   think to check. Verified by a differential harness over 10 label combinations: both
   copies of `readExerciseInfo_` now return byte-identical objects. **Keep them in sync** —
-  and note this needs the Config project redeployed separately from `RECORD_URL`'s.
+  and note this needs the Config project redeployed separately from `RECORD_URL`'s. The
+  optional `演習地點`/`地點` label (2026-10-17, → `location`, returned as `exerciseLocation`)
+  went into both copies in the same commit for exactly this reason.
 - `apps-script/ConfigWithSubmit.gs` — the script deployed behind `RECORD_URL` and the one
   that gets edited. Serves the config branch, `action=analysis`, `action=selftest`,
   `action=exercises`, `action=sessions` (**no key** — see "Admin / listing endpoints"),
@@ -773,7 +779,7 @@ Boundaries that do hold, and must keep holding:
 
 | Sheet | Columns (header row) | Read as |
 |---|---|---|
-| `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `機構名稱`/`演習名稱`/`演習主題`(or `主題`)/`演習類別`/`演習日期`/`說明`, plus the two **new** optional labels `啟用觀察紀錄` and `低分需說明門檻`, reading column B of each | `orgName`, `exerciseName`, `exerciseTopic`, `exerciseCategory`, `exerciseDate`, `exerciseDesc: string` (all optional, `''` when absent), `commentEnabled: boolean` (default `true`; only a literal `N`/`n`/`否`/`關閉`/`false` turns it off), `commentRequiredBelow: number` (default `0` = never required). `exerciseTopic` and `exerciseCategory` are **separate fields**, not aliases — the sheet has both a `主題` row (long descriptive title) and a `演習類別` row (short category) at the same time; conflating them silently drops whichever comes later. `Analysis.html`'s header pill uses `exerciseCategory`, its 主題 KPI card uses `exerciseTopic`, its 說明 card uses `exerciseDesc` |
+| `演習資訊` | key/value rows, no fixed header — `readExerciseInfo_` scans column A for `機構名稱`/`演習名稱`/`演習主題`(or `主題`)/`演習類別`/`演習日期`/`說明`, plus the two **new** optional labels `啟用觀察紀錄` and `低分需說明門檻`, and (2026-10-17) the optional `演習地點` (or `地點`), reading column B of each | `orgName`, `exerciseName`, `exerciseTopic`, `exerciseCategory`, `exerciseDate`, `exerciseDesc`, `exerciseLocation: string` (all optional, `''` when absent), `commentEnabled: boolean` (default `true`; only a literal `N`/`n`/`否`/`關閉`/`false` turns it off), `commentRequiredBelow: number` (default `0` = never required). `exerciseTopic` and `exerciseCategory` are **separate fields**, not aliases — the sheet has both a `主題` row (long descriptive title) and a `演習類別` row (short category) at the same time; conflating them silently drops whichever comes later. `Analysis.html`'s header pill uses `exerciseCategory`, its 主題 KPI card uses `exerciseTopic`, its 說明 card uses `exerciseDesc` |
 | `人員代號` | `代號` | `codes: { value, label }[]` (dropdown options, `value === label`) |
 | `評分標準` | `分數`, `標籤`, `說明` | `criteria: { score, label, desc }[]`, one row per level, in sheet order (often high→low). Since 2026-10-16 the `分數` column is not just display text — it **is** the drill's scale: the evaluator's buttons and `meta.scale` both come from it. See "The score scale follows 評分標準"; the owner's current levels are in handover §4 |
 | `項目與問題` | `層1`, `層2`, … (any number, in order; `層1` also accepts `地點`, `場景階段` or the older `情境階段`, `層2` accepts `演練單元`; every `層N` may also be written `層一`/`層１` — `levelHeaderCol_`, both backends, trimmed, since 2026-10-16, after the owner followed the old error text 「層1」 and typed 「層一」, which no backend then accepted) **or** `項目名稱` as a fallback single grouping column; plus `問題ID` (or `評核題號`), `問題內容` (or `評核題目`/`具體評核題目`), and an optional `測試場景與目標` column (older `測試場景`/`測試情境與目標`/`測試情境` still accepted — see `GOAL_HEADER_ALIASES_`) | `items`: a tree whose depth = however many `層N` columns exist. Each leaf also carries `goal` (first non-blank 測試場景與目標 under that leaf) |
@@ -808,10 +814,13 @@ there is the loop terminator, not an error.
 
 The existing keys are unchanged (`orgName`, `exerciseName`, `exerciseTopic`,
 `exerciseCategory`, `exerciseDate`, `exerciseDesc`, `codes`, `criteria`, `items`), plus
-nine additive fields: `tenant`, `exercise`, `displayName`, `scenePrefix`,
+ten additive fields: `tenant`, `exercise`, `displayName`, `scenePrefix`,
 `commentEnabled`, `commentRequiredBelow`, `submitOpen`, `submitClosedReason`,
 `tenantSource` (`'fallback' | 'registry'`, diagnostic only — clients must not branch on
-it for data).
+it for data), and `exerciseLocation` (2026-10-17, the optional 演習資訊 `演習地點`/`地點` row,
+`''` when absent; `Config.gs` returns it too). `Start.dc.html` does not read it today; it is
+there so both config payloads stay the shape of `readExerciseInfo_`. It is the same class of
+public text as 演習名稱／說明, so it does not touch the red line below.
 
 > **THREE branches have no auth at all and every evaluator's phone hits them: the config
 > branch, `action=sessions`, and `doPost`.** No payload of any of the three may ever
@@ -942,7 +951,9 @@ but still returned; the on-screen 排序視圖 panel and the report's opt-in R7 
 only places they surface.
 
 `meta` keeps `orgName`/`exerciseName`/`exerciseTopic`/`exerciseCategory`/`exerciseDate`/
-`exerciseDesc`/`generatedAt`/`evaluatorCodes` and adds `tenant`, `exercise`, `displayName`,
+`exerciseDesc`/`generatedAt`/`evaluatorCodes` and adds `exerciseLocation` (2026-10-17 — the
+optional 演習資訊 `演習地點`/`地點` row, `''` when absent; feeds `Report.gs`'s `{{演習地點}}` and
+the dashboard report cover's 演習地點 field), `tenant`, `exercise`, `displayName`,
 `scenePrefix`, `tenantSource`, `configFileName`, `recordFileName`, `recordSheetName`,
 `recordRowCount` (raw rows before dedup), `commentCount`, `labelSourceSummary`
 (`{snapshot, join, none}` tallied over the three row arrays only — rows that never reach a
@@ -1265,7 +1276,7 @@ for now**.
   the column and cards would only print 「100% 充分」 and a paragraph about a 0 it doesn't
   have. Verified: new page + new backend on a 1–5 drill renders a `<body>` identical to the
   pre-rule page on the old backend.
-- **`Report.gs` follows the same gate** (`REPORT_BUILD_ '2026-10-17 inclusion'`) without a
+- **`Report.gs` follows the same gate** (since `REPORT_BUILD_ '2026-10-17 inclusion'`) without a
   format change — no new chapter, column, table or token, as the advisor asked. Its headline
   figures come from the gated `stats`; its own row-level figures and rankings (the functions
   in the client-contract bullet above) skip `included === false` via `isIncluded_`/
@@ -1461,8 +1472,11 @@ against a real print yet — swap those two values if it is wrong.
 > yet true.
 
 `演習地點` was added to the cover's `contenteditable` fields (now six: 演習地點, 報告版次,
-文件編號, 製表, 審核, 核定). Like the others it is **persisted nowhere** — the backend has no
-such field and the cover says so.
+文件編號, 製表, 審核, 核定). Like the others it is **persisted nowhere** — whatever is typed into
+it is lost on reload. Since 2026-10-17 it is, however, **prefilled** from
+`meta.exerciseLocation` (the 演習資訊 `演習地點`/`地點` row) when that is non-empty; it stays
+editable. An old backend sends no `exerciseLocation`, so the field starts blank exactly as
+before.
 
 #### 場景說明浮層 (`SCENE_GOALS`)
 
@@ -1638,6 +1652,39 @@ is one `UrlFetchApp` GET to `action=analysis`.
   table cell, header/footer or list item, `body.getChildIndex` on the found `Text`'s parent
   silently inserts content in the wrong place, so `scanAnchors_` names each offender and the
   gate refuses.
+- **Fill mode (填入式) is the second template shape, and the one the owner uses.** Instead of
+  `{{SEC_*}}` anchors, the owner's own finished report carries `{{圖_*}}` image tokens (each
+  alone in a cell of a top-level body table — a 1×1 table, caption outside it) and `{{列_*}}`
+  row tokens (in the leftmost cell of the one sample row of a top-level body table that is
+  exactly header row + sample row — any extra blank row survives into the PDF). The two shapes
+  are mutually exclusive (`scanTemplate_`). The token list and each row token's column
+  contract are owned by `FILL_IMAGE_TOKENS_`/`FILL_ROW_TOKENS_`; cover tokens (plain `{{…}}`
+  text, valid anywhere including table cells) by `COVER_TOKENS_`, and the ones whose absence
+  must not warn by `COVER_TOKENS_SILENT_` — read those, don't copy them here. Added
+  2026-10-17 for the owner's final template (博嘉國小／萬芳, `REPORT_BUILD_ '2026-10-17
+  template'`): row tokens `{{列_綜合能力排序}}` (every ranked 潛能×4S cell high→low,
+  competition rank — the same `rankedTop(abilityCells(), Infinity, false)` call as
+  `#abilityRankCard`, minus its unranked n:0 tail) and `{{列_場景說明}}` (`{{列_場景對照}}`'s
+  rows without the colour column), and cover tokens `{{演習地點}}` (`meta.exerciseLocation`,
+  「—」 when blank) and `{{報告日期}}` (`formatReportDate_`: the same `meta.generatedAt` and
+  `tz_()` as `{{報告產生時間}}`, printed as 2026年10月18日). Both new cover tokens are in
+  `COVER_TOKENS_SILENT_`, so older templates don't start warning. In fill mode a cover token
+  the template doesn't place is the owner's layout choice, not a defect: since 2026-10-17
+  `reportStart` adds the 「範本缺少封面 token」 warning only for anchor templates, and 檢查設定
+  lists fill-mode absences as information without ⚠ — the final template places 8 of the 15, and
+  a warning on every run would train the operator to ignore warnings. The template file itself
+  (`演習評核分析報告_填入式範本.docx`, rebuilt from the owner's 博嘉國小 revision) lives in the
+  owner's OneDrive, not in this repo. `{{列_優勢前三}}`/
+  `{{列_待改善前三}}`/`{{列_場景對照}}` stay supported for older templates. **Deploy order:**
+  repaste `Report.gs` (edit the existing report Web App deployment → New version, confirm
+  `REPORT_BUILD_` via 檢查設定) *before* the new template is put behind
+  `REPORT_TEMPLATE_DOC_ID` — an older `Report.gs` refuses that template outright, because the
+  two new row tokens are unknown to it. `ConfigWithSubmit.gs` can follow; until it does,
+  `{{演習地點}}` prints 「—」 and nothing else changes (repaste `Config.gs` too, only to keep the
+  two `readExerciseInfo_` copies equal). The new template uses only 8 of the cover tokens, so
+  each of its runs still logs 「範本缺少封面 token：機構名稱、機構代號…」 (seven tokens) in the
+  產生紀錄 — by design (`planFillSlots_`'s comment: 報告編號／產生時間／機構代號／演習代號 are
+  printed in that record anyway), but it is a warning that rings on every run.
 - **Statistics come from the payload, never recomputed** — otherwise the Doc and the
   dashboard disagree and the owner has no way to tell which is right. The one exception is
   `verifyIcc_`, a local Shrout–Fleiss recomputation that also reports the included
