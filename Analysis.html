@@ -1329,6 +1329,22 @@ function notRatedScenes(){
   // 會把「綜合 (All)」排在「A 點」前面，畫面順序就跟著每台電腦的設定變。
   return out.sort((a,b)=>(rank(a.stage)-rank(b.stage))||nat(a.stage,b.stage)||nat(a.itemName,b.itemName));
 }
+// 「不予評分項目」表下的備註：寫出列入與不計分的**依據**（業主 2026-10-17：「這備註顯示
+// 依據」），不是只寫結論。三段：①列入條件 ②0 分的定義——直接引用本場「評分標準」0 分那一列
+// 的標籤與說明，設定表改了這裡跟著改，不寫死 ③有效觀察涵蓋率的納入門檻——只在後端真的
+// 有算（stats.inclusion）時才寫，舊後端上不能宣稱一條還沒生效的規則。
+function notRatedBasisHtml(unit, orderBy){
+  const Z=NOT_RATED_SCORE, sc=scaleInfo();
+  const lv=(Array.isArray(sc.levels)?sc.levels:[]).find(l=>l&&l.score!==''&&l.score!=null&&Number(l.score)===Z);
+  const label=(lv&&String(lv.label||'').trim())||notRatedLabel();
+  const desc=lv&&String(lv.desc||'').trim();
+  const lines=[
+    `列入依據：至少一位評核官在該${unit}給 ${Z} 分；依${orderBy}排序。`,
+    `計分依據：依本場「評分標準」，${Z} 分＝${esc(label)}${desc?'（'+esc(desc)+'）':''}，代表沒有可評的表現，不計入任何平均、標準差與一致性統計，只計入不予評分率。`
+  ];
+  if (inclusionStat()) lines.push(`納入依據：有效觀察涵蓋率（有效給分人數 ÷ 原指定評核官人數）未達 ${esc(inclusionPct())} 的題目，不納入綜合評比、三項潛能、4S、演習覆蓋率的加總與平均（明細見「統計方法」）。`);
+  return '<div class="small" style="margin-top:8px;line-height:1.7">'+lines.map(t=>`<div>${t}</div>`).join('')+'</div>';
+}
 function renderNotRated(){
   const card=document.getElementById('notRatedCard');
   if (!card) return;
@@ -1347,15 +1363,13 @@ function renderNotRated(){
     card.innerHTML=head+'<div class="table-wrap"><table>'+
       '<thead><tr><th style="width:3em;text-align:center">序號</th><th>場景</th><th>問題</th></tr></thead><tbody>'+
       list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td title="${esc(x.questionId)}">${esc(x.question||x.questionId)}</td></tr>`).join('')+
-      '</tbody></table></div>'+
-      `<div class="small" style="margin-top:8px">至少一位評核官給 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）的題目，依場景排序；${NOT_RATED_SCORE} 分不計入任何平均。</div>`;
+      '</tbody></table></div>'+notRatedBasisHtml('題','場景');
     return;
   }
   card.innerHTML=head+'<div class="table-wrap"><table>'+
     '<thead><tr><th style="width:3em;text-align:center">項次</th><th>地點</th><th>演練單元</th><th>場景說明</th></tr></thead><tbody>'+
     list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td>${esc(x.itemName)}</td><td>${esc(x.goal)}</td></tr>`).join('')+
-    '</tbody></table></div>'+
-    `<div class="small" style="margin-top:8px">至少一位評核官給 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）的場景，依地點排序；${NOT_RATED_SCORE} 分不計入任何平均。</div>`;
+    '</tbody></table></div>'+notRatedBasisHtml('場景','地點');
 }
 
 function abilityTable(list, caption){

@@ -1353,6 +1353,11 @@ places share.
   so this card is the on-screen place that shows where nothing was scored. It reads only
   `r.scores`/`stage`/`itemName`/`goal`, which an old backend also sends, so it needs no repaste
   to appear; on a 1–5 drill (no 0 level) it says so instead of showing an empty table.
+  Its footer (`notRatedBasisHtml`, owner 2026-10-17: 「這備註顯示依據」) states the *basis*, not
+  just the conclusion: 列入依據 (any evaluator gave 0; sort order), 計分依據 (quotes this drill's
+  評分標準 row for 0 — label and 說明 — so it follows the sheet), and 納入依據 (the 50% 有效觀察涵蓋率
+  gate) **only when `stats.inclusion` exists**, so a page on an un-repasted backend never claims a
+  rule that isn't in force yet.
   **One-level drills get a different table** (owner, 2026-10-16 — 萬芳醫地下空間 has only 層一):
   one row per *question* with a 0, columns 序號／場景／問題, because with one level
   `stage === itemName` and the two-level layout printed two identical columns. `isSingleLevel()`
