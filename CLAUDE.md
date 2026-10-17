@@ -1345,7 +1345,7 @@ places share.
   with no questions in this drill — listed last with no rank and `—`, because "no questions"
   must not read as "lowest score". `#overview` is reused as report section R3, so it prints.
   Since 2026-10-16 that second card shares a 50/50 row (`.grid.halves`, which collapses to one
-  column under 1050px and in print, like `.cols2`) with **`#notRatedCard` 「不納入評比計算項目」**
+  column under 1050px and in print, like `.cols2`) with **`#notRatedCard` 「不納入綜合評比計算項目」** (the owner's own wording, edited in by hand on 2026-10-17)
   (`renderNotRated()`/`excludedItems()`). History matters here because the card changed meaning
   twice in two days: it shipped 2026-10-16 as 「不予評分項目」 (one row per scene where *any*
   evaluator gave a 0), and on 2026-10-17 the owner renamed it and it now lists **the questions the
@@ -1383,7 +1383,11 @@ places share.
   clockwise lowest→highest (sorting happens inside `svgRadar()`, so every caller gets it).
   Each radar card is followed by a **separate** card (not nested, so chart height stays
   fixed regardless of table length) holding a `radarTable()` — 場景編號 / 指標 /
-  具體評核題目 / 分數, ascending by score. A row with `mean === null` (every score 0) is left
+  具體評核題目 / 分數, ascending by score. `svgRadar` wraps an axis label longer than
+  `RADAR_LABEL_UNITS` (7 full-width characters) onto several lines and grows the `viewBox` to the
+  labels' estimated bounding box, so a long indicator (「參演角色與權責覆蓋率」) shrinks the whole
+  chart a little instead of running past the card edge (owner report, 2026-10-17); a chart whose
+  labels already fit keeps the old 420×340 box and identical output. A row with `mean === null` (every score 0) is left
   off the radar, said so under it by `unratedRadarNote()`, and listed last in the table with
   `—` (`cmpNullLast`); `#coverage` does the same.
 - **演習覆蓋率 (`#coverage`)** — coverage radar plus a `radarTable()` in the 覆蓋率指標摘要 card.

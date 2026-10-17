@@ -415,12 +415,36 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 // 滿分與同心環跟著本場量尺（scaleInfo）：外圈＝scale.max，每一個可評分等級一圈。
 // 1–5 上就是原本的五圈、半徑 R*level/5。沒有平均的軸（整題都是不予評分）由呼叫端
 // 先濾掉；這裡再濾一次只是保險——null 一旦進 sort 或 toFixed 就會排錯或直接丟例外。
-function svgRadar(items,title){items=[...items].filter(it=>typeof it.value==='number'&&isFinite(it.value)).sort((a,b)=>a.value-b.value);const sc=scaleInfo(),max=sc.max;const W=420,H=340,cx=210,cy=176,R=120,n=items.length; if(!n) return '<div class="small">尚無資料</div>'; const pts=(rad)=>items.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+rad*Math.cos(a),cy+rad*Math.sin(a)]}); let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
+// 軸標籤的文字寬度（全形字＝1、半形字≈0.55 個字寬）與自動換行。長標籤（例如「參演角色與
+// 權責覆蓋率」）原本照單行畫在固定的 viewBox 外面，被卡片切掉（業主 2026-10-17 回報）。
+function radarTextUnits(str){let u=0;for(const ch of String(str)) u+=/[\u0000-\u00ff]/.test(ch)?0.55:1;return u}
+function wrapRadarLabel(str,maxUnits){const out=[];let line='',u=0;for(const ch of String(str)){const w=/[\u0000-\u00ff]/.test(ch)?0.55:1;if(u+w>maxUnits&&line){out.push(line);line='';u=0}line+=ch;u+=w}if(line)out.push(line);return out.length?out:['']}
+// 每行最多幾個字寬才換行。7 剛好讓「資源布置妥善度」維持一行。
+const RADAR_LABEL_UNITS=7;
+// 滿分與同心環跟著本場量尺（scaleInfo）：外圈＝scale.max，每一個可評分等級一圈。
+// 1–5 上就是原本的五圈、半徑 R*level/5。沒有平均的軸（整題都是不予評分）由呼叫端
+// 先濾掉；這裡再濾一次只是保險——null 一旦進 sort 或 toFixed 就會排錯或直接丟例外。
+// 標籤：超過 RADAR_LABEL_UNITS 個字寬就換行；畫完後依每個標籤估算的寬高算出整張圖的
+// 邊界框，viewBox 就用那個框——SVG 是 width:100% 等比縮放，所以標籤再長也只是整張圖
+// 縮小一點，不會超出卡片或被切掉。
+function svgRadar(items,title){items=[...items].filter(it=>typeof it.value==='number'&&isFinite(it.value)).sort((a,b)=>a.value-b.value);const sc=scaleInfo(),max=sc.max;const W=420,H=340,cx=210,cy=176,R=120,n=items.length; if(!n) return '<div class="small">尚無資料</div>'; const pts=(rad)=>items.map((_,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;return [cx+rad*Math.cos(a),cy+rad*Math.sin(a)]}); let s='';
 for(const level of sc.rated){let p=pts(R*level/max).map(x=>x.join(',')).join(' ');s+=`<polygon points="${p}" fill="none" stroke="#d8e4e7" stroke-width="1"/>`;}
 pts(R).forEach((p,i)=>s+=`<line x1="${cx}" y1="${cy}" x2="${p[0]}" y2="${p[1]}" stroke="#d8e4e7"/>`);
 let dp=items.map((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let rr=R*it.value/max;return [cx+rr*Math.cos(a),cy+rr*Math.sin(a)]});s+=`<polygon points="${dp.map(x=>x.join(',')).join(' ')}" fill="rgba(20,125,131,.20)" stroke="#147d83" stroke-width="2.4"/>`;
 dp.forEach(p=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.8" fill="#147d83"/>`);
-items.forEach((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let lr=R+31,x=cx+lr*Math.cos(a),y=cy+lr*Math.sin(a),anchor=Math.cos(a)>.25?'start':Math.cos(a)<-.25?'end':'middle';let label=it.label.replace(/^.*?\s*\(/,'('); if(it.label.length>15) label=it.label.replace(/^反應\d+\s*|^監測\d+\s*|^預期\d+\s*/,''); s+=`<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" fill="#48636c">${esc(label)}</text><text x="${x}" y="${y+13}" text-anchor="${anchor}" dominant-baseline="middle" font-size="10.5" font-weight="700" fill="#18323a">${it.value.toFixed(1)}</text>`});return s+'</svg>'}
+let minX=cx-R,maxX=cx+R,minY=cy-R,maxY=cy+R;const FS=10.5,LH=13;
+items.forEach((it,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;let lr=R+31,x=cx+lr*Math.cos(a),y=cy+lr*Math.sin(a),anchor=Math.cos(a)>.25?'start':Math.cos(a)<-.25?'end':'middle';let label=it.label.replace(/^.*?\s*\(/,'('); if(it.label.length>15) label=it.label.replace(/^反應\d+\s*|^監測\d+\s*|^預期\d+\s*/,'');
+  const lines=wrapRadarLabel(label,RADAR_LABEL_UNITS);
+  // 多行時：上方的軸往上長（數值那一行貼著圖）、左右的軸上下置中、下方的軸往下長。
+  const sy=Math.sin(a), y0=sy<-.25?y-(lines.length-1)*LH:sy>.25?y:y-(lines.length-1)*LH/2;
+  lines.forEach((ln,k)=>{s+=`<text x="${x}" y="${y0+k*LH}" text-anchor="${anchor}" dominant-baseline="middle" font-size="${FS}" fill="#48636c">${esc(ln)}</text>`});
+  const vy=y0+lines.length*LH;
+  s+=`<text x="${x}" y="${vy}" text-anchor="${anchor}" dominant-baseline="middle" font-size="${FS}" font-weight="700" fill="#18323a">${it.value.toFixed(1)}</text>`;
+  const w=Math.max(radarTextUnits(it.value.toFixed(1)),...lines.map(radarTextUnits))*FS;
+  const x1=anchor==='start'?x:anchor==='end'?x-w:x-w/2;
+  minX=Math.min(minX,x1);maxX=Math.max(maxX,x1+w);minY=Math.min(minY,y0-FS/2-2);maxY=Math.max(maxY,vy+FS/2+2)});
+const pad=6,vx=Math.min(0,Math.floor(minX-pad)),vy0=Math.min(0,Math.floor(minY-pad)),vw=Math.max(W,Math.ceil(maxX+pad))-vx,vh=Math.max(H,Math.ceil(maxY+pad))-vy0;
+return `<svg viewBox="${vx} ${vy0} ${vw} ${vh}" role="img" aria-label="${title}">`+s+'</svg>'}
 
 // 縱軸滿分＝scale.max，每個可評分等級一條格線（1–5 上就是原本的 1～5）。value 是
 // null 的類別（它的題目全部是不予評分，或 2026-10-17 起有效觀察涵蓋率都未達門檻）不畫
@@ -1330,7 +1354,7 @@ function excludedItems(){
 function renderNotRated(){
   const card=document.getElementById('notRatedCard');
   if (!card) return;
-  const head='<div class="sec">不納入評比計算項目</div>';
+  const head='<div class="sec">不納入綜合評比計算項目</div>';
   // 備註只寫這一句（業主 2026-10-17 指定的文字）；門檻取後端的值，門檻只有一份。
   const note=`<div class="small" style="margin-top:8px">凡是每一題評分計算後，有效觀察涵蓋率小於${esc(inclusionPct())}，則不納入綜合計算。</div>`;
   // 量尺裡沒有 0 這一級（舊的 1–5 場次）：每一題都是 100%，不會有不納入的題目。
