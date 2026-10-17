@@ -1055,7 +1055,7 @@ function renderInclusionMethod(){
 }
 // 未納入題目的表格（上面那張卡與列印檢視的資料品質一節共用）。依地點（後端
 // meta.stageOrder，也就是「項目與問題」裡的出現順序）、再依題號自然排序；自然排序固定
-// 用 'en' 規則，理由同 notRatedScenes()。地點與場景是同一個值（一層的演習）時只印一次。
+// 用 'en' 規則，理由同 excludedItems()。地點與場景是同一個值（一層的演習）時只印一次。
 function excludedQuestionsTable(list){
   const order=(DATA.meta&&Array.isArray(DATA.meta.stageOrder))?DATA.meta.stageOrder:[];
   const rank=s=>{const i=order.indexOf(s);return i===-1?order.length:i};
@@ -1289,15 +1289,17 @@ function renderAbilityRank(){
     (untested.length ? `<div class="small" style="margin-top:8px">共 ${ranked.length + untested.length} 項；其中 ${why}，列在最後、不排名。</div>` : '');
 }
 
-// 「不予評分項目」（業主 2026-10-16：綜合評比最下方分一半，右側這張）。列出至少有一位
-// 評核官給 0 分（不予評分）的場景，一個場景一列，依地點、再依演練單元排序（自然排序，
-// A 點 < B 點、SCENE 02 < SCENE 10）。場景說明取該場景的 goal（設定表「場景說明」欄，
-// 舊名「測試情境」）。三組題目（三項潛能、覆蓋率、學習）都算：0 分不進任何平均，
-// 這張表是畫面上看得到「哪裡沒評到」的地方。只讀 r.scores 與 r.stage／itemName／goal，
-// 這幾個欄位舊後端也有，所以不必等後端重貼。
-// 一層的演習（只有層一，沒有演練單元）改成一題一列：序號／場景／問題（業主 2026-10-16；
-// 原本還有一欄場景說明，業主看過後拿掉了，跟左邊的場景差異不大）。一層時 stage 與
-// itemName 是同一個值，照兩層的格式印會出現兩欄一模一樣。
+// 「不納入評比計算項目」（綜合評比最下方右半張；業主 2026-10-16 新增，10-17 改名並改規則：
+// 原本叫「不予評分項目」、列的是「有人給 0 分」的場景）。現在列的是**有效觀察涵蓋率**
+// （有效給分人數 ÷ 原指定評核官人數）未達門檻、因此沒有納入綜合計算的題目，也就是後端
+// r.included === false 的那些——範圍同 stats.inclusion：三項潛能＋覆蓋率（學習題本來就不進
+// 評比，不列）。一題有人給 0 分不等於不納入：4 人中 3 人有效給分（75%）照樣納入。
+// 舊後端沒有 included：用同一條公式在前端算（r.scores 裡非 0 的人數 ÷ 全部人數），清單在
+// 後端重貼前就是對的。
+// 一題一列（納不納入是「題」的屬性，同一個場景可以有的題納入、有的不納入）。一層的演習：
+// 序號／場景／問題；兩層：項次／地點／演練單元／問題（演練單元那格的 title 是場景說明）。
+// 依「項目與問題」的順序（meta.stageOrder），再依演練單元、題號自然排序；自然排序固定用
+// 'en' 規則，不指定語系的話繁中瀏覽器會把「綜合 (All)」排在「A 點」前面。
 // 層數取後端 meta.levelCount；舊後端沒有這個欄位時，改看「每一列的 stage 都等於
 // itemName」——那正是 indexQuestionsByStage_ 對一層的表給的形狀。
 function isSingleLevel(rows){
@@ -1305,71 +1307,54 @@ function isSingleLevel(rows){
   if (typeof lc==='number') return lc===1;
   return rows.length>0&&rows.every(r=>(r.stage||'')===(r.itemName||''));
 }
-function notRatedScenes(){
-  const all=[...(DATA.analysisRows||[]),...(DATA.coverageRows||[]),...(DATA.learningRows||[])];
-  const zero=all.filter(r=>(r.scores||[]).some(s=>s.score===NOT_RATED_SCORE));
-  const order=(DATA.meta&&Array.isArray(DATA.meta.stageOrder))?DATA.meta.stageOrder:[];
-  const rank=s=>{const i=order.indexOf(s);return i===-1?order.length:i};
-  const nat=(a,b)=>String(a).localeCompare(String(b),'en',{numeric:true});
-  if (isSingleLevel(all)){
-    const list=zero.map(r=>({stage:r.stage||'', questionId:r.questionId||'', question:r.question||''}));
-    list.sort((a,b)=>(rank(a.stage)-rank(b.stage))||nat(a.stage,b.stage)||nat(a.questionId,b.questionId));
-    list.single=true;
-    return list;
-  }
-  const seen=new Set(), out=[];
-  for (const r of zero){
-    const key=(r.stage||'')+'\u241f'+(r.itemName||'');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({stage:r.stage||'', itemName:r.itemName||'', goal:r.goal||''});
-  }
-  // 地點照「項目與問題」裡的出現順序（後端 meta.stageOrder）；舊後端沒有這個欄位、或
-  // 地點不在清單裡時，退回自然排序。自然排序固定用 'en' 規則：不指定語系的話，繁中語系
-  // 會把「綜合 (All)」排在「A 點」前面，畫面順序就跟著每台電腦的設定變。
-  return out.sort((a,b)=>(rank(a.stage)-rank(b.stage))||nat(a.stage,b.stage)||nat(a.itemName,b.itemName));
+function inclusionThreshold(){const s=DATA&&DATA.stats&&DATA.stats.inclusion;return s&&typeof s.threshold==='number'?s.threshold:0.5}
+function isExcludedFromScoring(r){
+  if (r.included===false) return true;
+  if (r.included===true) return false;
+  const sc=r.scores||[];
+  if (!sc.length) return false;
+  const k=sc.filter(x=>x.score!==NOT_RATED_SCORE).length;
+  return k===0||k/sc.length<inclusionThreshold();
 }
-// 「不予評分項目」表下的備註：寫出列入與不計分的**依據**（業主 2026-10-17：「這備註顯示
-// 依據」），不是只寫結論。三段：①列入條件 ②0 分的定義——直接引用本場「評分標準」0 分那一列
-// 的標籤與說明，設定表改了這裡跟著改，不寫死 ③有效觀察涵蓋率的納入門檻——只在後端真的
-// 有算（stats.inclusion）時才寫，舊後端上不能宣稱一條還沒生效的規則。
-function notRatedBasisHtml(unit, orderBy){
-  const Z=NOT_RATED_SCORE, sc=scaleInfo();
-  const lv=(Array.isArray(sc.levels)?sc.levels:[]).find(l=>l&&l.score!==''&&l.score!=null&&Number(l.score)===Z);
-  const label=(lv&&String(lv.label||'').trim())||notRatedLabel();
-  const desc=lv&&String(lv.desc||'').trim();
-  const lines=[
-    `列入依據：至少一位評核官在該${unit}給 ${Z} 分；依${orderBy}排序。`,
-    `計分依據：依本場「評分標準」，${Z} 分＝${esc(label)}${desc?'（'+esc(desc)+'）':''}，代表沒有可評的表現，不計入任何平均、標準差與一致性統計，只計入不予評分率。`
-  ];
-  if (inclusionStat()) lines.push(`納入依據：有效觀察涵蓋率（有效給分人數 ÷ 原指定評核官人數）未達 ${esc(inclusionPct())} 的題目，不納入綜合評比、三項潛能、4S、演習覆蓋率的加總與平均（明細見「統計方法」）。`);
-  return '<div class="small" style="margin-top:8px;line-height:1.7">'+lines.map(t=>`<div>${t}</div>`).join('')+'</div>';
+function excludedItems(){
+  const pool=[...(DATA.analysisRows||[]),...(DATA.coverageRows||[])];
+  const single=isSingleLevel([...pool,...(DATA.learningRows||[])]);
+  const order=(DATA.meta&&Array.isArray(DATA.meta.stageOrder))?DATA.meta.stageOrder:[];
+  const rank=v=>{const i=order.indexOf(v);return i===-1?order.length:i};
+  const nat=(a,b)=>String(a).localeCompare(String(b),'en',{numeric:true});
+  const list=pool.filter(isExcludedFromScoring).map(r=>({stage:r.stage||'', itemName:r.itemName||'', goal:r.goal||'', questionId:r.questionId||'', question:r.question||''}));
+  list.sort((a,b)=>(rank(a.stage)-rank(b.stage))||nat(a.stage,b.stage)||(single?0:nat(a.itemName,b.itemName))||nat(a.questionId,b.questionId));
+  list.single=single;
+  return list;
 }
 function renderNotRated(){
   const card=document.getElementById('notRatedCard');
   if (!card) return;
-  const head='<div class="sec">不予評分項目</div>';
-  // 量尺裡沒有 0 這一級（舊的 1–5 場次）：這張表永遠是空的，直接說為什麼。
+  const head='<div class="sec">不納入評比計算項目</div>';
+  // 備註只寫這一句（業主 2026-10-17 指定的文字）；門檻取後端的值，門檻只有一份。
+  const note=`<div class="small" style="margin-top:8px">凡是每一題評分計算後，有效觀察涵蓋率小於${esc(inclusionPct())}，則不納入綜合計算。</div>`;
+  // 量尺裡沒有 0 這一級（舊的 1–5 場次）：每一題都是 100%，不會有不納入的題目。
   if (!scaleInfo().values.includes(NOT_RATED_SCORE)){
-    card.innerHTML=head+`<div class="small">本場評分標準沒有 ${NOT_RATED_SCORE} 分（不予評分）這一級。</div>`;
+    card.innerHTML=head+`<div class="small">本場評分標準沒有 ${NOT_RATED_SCORE} 分（不予評分）這一級，每一題都納入評比計算。</div>`;
     return;
   }
-  const list=notRatedScenes();
+  const list=excludedItems();
   if (!list.length){
-    card.innerHTML=head+`<div class="small">本場沒有任何場景出現 ${NOT_RATED_SCORE} 分（${esc(notRatedLabel())}）。</div>`;
+    card.innerHTML=head+`<div class="small">本場每一題的有效觀察涵蓋率都達 ${esc(inclusionPct())} 以上，全部納入評比計算。</div>`+note;
     return;
   }
+  const q=x=>`<td title="${esc(x.questionId)}">${esc(x.question||x.questionId)}</td>`;
   if (list.single){
     card.innerHTML=head+'<div class="table-wrap"><table>'+
       '<thead><tr><th style="width:3em;text-align:center">序號</th><th>場景</th><th>問題</th></tr></thead><tbody>'+
-      list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td title="${esc(x.questionId)}">${esc(x.question||x.questionId)}</td></tr>`).join('')+
-      '</tbody></table></div>'+notRatedBasisHtml('題','場景');
+      list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td>${q(x)}</tr>`).join('')+
+      '</tbody></table></div>'+note;
     return;
   }
   card.innerHTML=head+'<div class="table-wrap"><table>'+
-    '<thead><tr><th style="width:3em;text-align:center">項次</th><th>地點</th><th>演練單元</th><th>場景說明</th></tr></thead><tbody>'+
-    list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td>${esc(x.itemName)}</td><td>${esc(x.goal)}</td></tr>`).join('')+
-    '</tbody></table></div>'+notRatedBasisHtml('場景','地點');
+    '<thead><tr><th style="width:3em;text-align:center">項次</th><th>地點</th><th>演練單元</th><th>問題</th></tr></thead><tbody>'+
+    list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td${x.goal?` title="${esc(x.goal)}"`:''}>${esc(x.itemName)}</td>${q(x)}</tr>`).join('')+
+    '</tbody></table></div>'+note;
 }
 
 function abilityTable(list, caption){

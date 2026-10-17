@@ -1345,27 +1345,29 @@ places share.
   with no questions in this drill — listed last with no rank and `—`, because "no questions"
   must not read as "lowest score". `#overview` is reused as report section R3, so it prints.
   Since 2026-10-16 that second card shares a 50/50 row (`.grid.halves`, which collapses to one
-  column under 1050px and in print, like `.cols2`) with **`#notRatedCard` 「不予評分項目」**
-  (`renderNotRated()`/`notRatedScenes()`, owner request): one row per scene where *any*
-  evaluator gave a 0, columns 項次／地點／演練單元／場景說明, sorted by `meta.stageOrder` then
-  natural 演練單元 order (fallback when `stageOrder` is absent: natural sort with an explicit
-  `'en'` locale). All three row groups count, coverage and 學習 included — 0 is in no average,
-  so this card is the on-screen place that shows where nothing was scored. It reads only
-  `r.scores`/`stage`/`itemName`/`goal`, which an old backend also sends, so it needs no repaste
-  to appear; on a 1–5 drill (no 0 level) it says so instead of showing an empty table.
-  Its footer (`notRatedBasisHtml`, owner 2026-10-17: 「這備註顯示依據」) states the *basis*, not
-  just the conclusion: 列入依據 (any evaluator gave 0; sort order), 計分依據 (quotes this drill's
-  評分標準 row for 0 — label and 說明 — so it follows the sheet), and 納入依據 (the 50% 有效觀察涵蓋率
-  gate) **only when `stats.inclusion` exists**, so a page on an un-repasted backend never claims a
-  rule that isn't in force yet.
-  **One-level drills get a different table** (owner, 2026-10-16 — 萬芳醫地下空間 has only 層一):
-  one row per *question* with a 0, columns 序號／場景／問題, because with one level
-  `stage === itemName` and the two-level layout printed two identical columns. `isSingleLevel()`
-  reads `meta.levelCount` (`itemsDepth_(items)`), falling back to "every row has stage ===
-  itemName" on an old backend. A 場景說明 column (from the row's own `questionGoal`) shipped
-  first and was dropped the same day at the owner's request — it read too close to 場景. So
-  **`questionGoal` is currently read by no client**; it is kept in the payload (additive,
-  already deployed) for the day a per-question description is wanted again.
+  column under 1050px and in print, like `.cols2`) with **`#notRatedCard` 「不納入評比計算項目」**
+  (`renderNotRated()`/`excludedItems()`). History matters here because the card changed meaning
+  twice in two days: it shipped 2026-10-16 as 「不予評分項目」 (one row per scene where *any*
+  evaluator gave a 0), and on 2026-10-17 the owner renamed it and it now lists **the questions the
+  有效觀察涵蓋率 gate left out of 綜合計算** — `r.included === false`, over `analysisRows +
+  coverageRows` (the `stats.inclusion` scope; 學習 never enters 評比 and is not listed). A
+  question with one 0 out of four (75%) is *included* and is not listed — that is the reason the
+  old "any 0" criterion had to go once the title said 不納入. On an old backend with no
+  `included`, `isExcludedFromScoring()` applies the same formula client-side (non-0 scores ÷ all
+  scores < `stats.inclusion.threshold`, default 0.5), so the list is right before the repaste.
+  One row per **question** in both layouts, because inclusion is a property of a question and one
+  scene can mix included and excluded ones: one-level drills (萬芳醫地下空間 has only 層一 —
+  `isSingleLevel()` reads `meta.levelCount`, falling back to "every row has stage === itemName")
+  show 序號／場景／問題; two-level drills show 項次／地點／演練單元／問題 with the 場景說明 as the
+  演練單元 cell's tooltip. Sorted by `meta.stageOrder`, then 演練單元 and question id with an
+  explicit `'en'` natural sort (a zh-TW browser otherwise puts 「綜合 (All)」 before 「A 點」).
+  The footer is exactly the owner's sentence 「凡是每一題評分計算後，有效觀察涵蓋率小於50%，則不納入
+  綜合計算。」 with the threshold taken from the payload. Caveat: until `ConfigWithSubmit.gs` is
+  repasted the list is correct but that sentence is not yet true of the totals (the old backend
+  still averages those questions in). A 1–5 drill says every question is included. A short-lived
+  3-line 「依據」 footer (`notRatedBasisHtml`) existed between these two versions and is gone.
+  **`questionGoal` is currently read by no client** (a per-question 場景說明 column shipped
+  2026-10-16 and was dropped the same day); it stays in the payload, additive and deployed.
 - **4S 分析 (`#s4`)** — `stackedHBarsSVG`: one horizontal bar per 4S category, stacked by
   演練單元/SCENE short code, segments in natural code order (`A1 < A2 < B < … < F`), colors
   from an HSL spectrum (hue 0–300° across the sorted list) so adjacent codes read as
