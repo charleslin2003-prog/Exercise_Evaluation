@@ -1255,6 +1255,12 @@ function buildAnalysis_(t) {
       sd: sd_(rated),
       // 有評（非 0）的分數個數。scores.length 仍是「評過這題的人數」，含不予評分。
       ratedCount: rated.length,
+      // 有效觀察涵蓋率＝有效給分人數 ÷ 原指定評核官人數（見 OBSERVED_RATE_MIN_）。
+      // 「原指定」用 scores.length：評核單規定一個場景的每一題都要給分（0 分也算）才能
+      // 送出，所以送出這個場景的評核官，對每一題不是給了有效分數就是給了 0。
+      observedRate: scores.length ? rated.length / scores.length : null,
+      // 是否納入綜合評比／三項潛能／4S／演習覆蓋率的加總與平均。
+      included: scores.length > 0 && rated.length > 0 && rated.length / scores.length >= OBSERVED_RATE_MIN_,
       exerciseId: b.exid || t.exid || '',
       comments: Object.keys(b.commentByCode).sort().map(function (c) {
         return { code: c, comment: b.commentByCode[c] };
@@ -1353,6 +1359,23 @@ function buildAnalysis_(t) {
   }).map(function (r) {
     return { questionId: r.questionId, stage: r.stage || '', itemName: r.itemName || '', goal: r.goal || '' };
   });
+  // 有效觀察涵蓋率未達門檻、因此沒有納入任何加總與平均的題目（範圍同 consistencyRows：
+  // 三項潛能＋覆蓋率；學習題本來就不進統計）。unratedQuestions（涵蓋率 0%）是它的子集。
+  // 分數本身照樣留在每一列的 mean 上——這份清單是告訴讀者「這幾題算了、但沒算進總分」。
+  var inclusionExcluded = consistencyRows.filter(function (r) { return !r.included; });
+  stats.inclusion = {
+    threshold: OBSERVED_RATE_MIN_,
+    total: consistencyRows.length,
+    included: consistencyRows.length - inclusionExcluded.length,
+    excluded: inclusionExcluded.length,
+    excludedQuestions: inclusionExcluded.map(function (r) {
+      return {
+        questionId: r.questionId, stage: r.stage || '', itemName: r.itemName || '', goal: r.goal || '',
+        potential: r.potential || '', question: r.question || '',
+        rated: r.ratedCount, assigned: r.scores.length, rate: r.observedRate,
+      };
+    }),
+  };
   stats.missingQuestions = [];
   Object.keys(stageIndex).forEach(function (qid) {
     // 項目與問題 裡「有分組名稱、但 評核題號 那一格空白」的列（業主常拿來放
@@ -1461,6 +1484,12 @@ function buildAnalysis_(t) {
 // 與 stats.unratedQuestions 裡被數到。一律排除、不看本場量尺有沒有 0：舊的 1–5
 // 紀錄裡本來就沒有 0（空白格已在讀取時擋掉），所以舊場次的數字一個位元都不變。
 var NOT_RATED_SCORE_ = 0;
+// 有效觀察涵蓋率門檻（老師 2026-10-17 的規則）：一題的「有效給分人數 ÷ 原指定評核官
+// 人數」要 ≥ 50%，這一題才納入綜合評比、三項潛能、4S、演習覆蓋率的加總與平均。以四位
+// 評核官為例：4 人 100% 充分、3 人 75% 可接受、2 人 50% 有條件接受（納入）、1 人 25%
+// 待確認（不納入）、0 人 0% 未觸發（不計分）。舊的 1–5 場次沒有 0 分，每題都是 100%，
+// 所以舊場次的數字不變。
+var OBSERVED_RATE_MIN_ = 0.5;
 function ratedOnly_(vals) {
   return vals.filter(function (v) { return v !== NOT_RATED_SCORE_; });
 }
@@ -1474,9 +1503,14 @@ function itemsDepth_(nodes) {
   return depth;
 }
 
+// 加總與平均只收「納入」的題目（r.included，見 OBSERVED_RATE_MIN_），而且每題裡的 0 分
+// 照舊不收。stats.overall／potentials／s4／potentialByS4／coverage 全部經過這裡，所以
+// 「綜合評比、三項潛能、4S、演習覆蓋率」用的是同一條納入規則。一致性統計（r_wg、
+// within1、ICC）與寬嚴傾向不經過這裡：它們問的是評核官之間的一致，不是總分。
 function flattenScores_(rows) {
   var out = [];
   rows.forEach(function (r) {
+    if (r.included === false) return;
     r.scores.forEach(function (s) { if (s.score !== NOT_RATED_SCORE_) out.push(s.score); });
   });
   return out;

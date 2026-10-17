@@ -243,6 +243,7 @@ below has an owner, documents other than the owner should cite it, not restate i
 | Column names, aliases, accepted potential values | the `*_ALIASES_` constants in `apps-script/ConfigWithSubmit.gs` | anywhere — quote the constant name and let the reader look. `README.md` got four alias cells wrong by copying from the `RECORD_*` arrays into an `INDICATOR_*` table |
 | How a 4S cell is split, and which words map to which canonical 4S name (cell *values*, not headers — row 1 covers headers) | `S4_VALUE_ALIASES_` + `splitS4_` in `apps-script/ConfigWithSubmit.gs` | the clients — `Analysis.html` and `Report.gs` read `r.s4List` and must **never** split themselves. `README.md` restates the words for the owner, who can't read code, and names the constant as the authority |
 | The score scale — which buttons exist, chart min/max, which level is 不予評分／未觸發, r_wg's σ_E² | each drill's own 評分標準 `分數` column, derived server-side by `scaleOf_` in `apps-script/ConfigWithSubmit.gs` (→ `meta.scale`) and, for the evaluator's buttons only, by `scoreScale()` in `Start.dc.html` from the same sheet. The one fixed point is code, not data: **0 is never averaged** (`NOT_RATED_SCORE_`) | the clients — `Analysis.html` and `Report.gs` read `meta.scale` and must never hardcode `5`, `1 = 未觸發` or `σ_E² = 2` again. `README.md` explains it to the owner. The owner's current levels are live spreadsheet state (next row) |
+| The 有效觀察涵蓋率 inclusion threshold — which questions enter 綜合評比／三項潛能／4S／演習覆蓋率 | `OBSERVED_RATE_MIN_` in `apps-script/ConfigWithSubmit.gs`, applied once per row as `r.included` and enforced in `flattenScores_`; echoed as `stats.inclusion.threshold` | the clients — they read `r.included` and `stats.inclusion`, and must never hardcode the threshold or re-derive inclusion from `observedRate`. The 充分／可接受／… judgement words are display text and decide nothing. `README.md` explains the rule to the owner with the advisor's four-person example |
 | Chapter count, chart-fallback layer count | `apps-script/Report.gs` (`REPORT_SECTIONS_`, `emitChart_`) | cite the line number; never repeat the number |
 | Live spreadsheet state (column counts, the literal 評核潛能 values, the owner's 評分標準 levels, registry windows) | `docs/handover-筆電.md` §4 | this file and `README.md` should point at it |
 | Apps Script script properties | `apps-script/README.md` | — |
@@ -929,7 +930,10 @@ question object in both backends). Since 2026-10-16 `scores` still lists every e
 are over the non-0 scores only, so **`mean` is `null` when every score on the row is 0** (`sd`
 is then `0`). `scores.length` is "how many people scored this", `ratedCount` "how many gave a
 real rating"; a client on an old backend that lacks `ratedCount` treats it as `scores.length`.
-See "The score scale follows 評分標準".
+See "The score scale follows 評分標準". Since 2026-10-17 each row also carries `observedRate`
+(`ratedCount / scores.length`, `null` when there are no scores) and `included` (whether that
+rate clears the threshold, so the row enters `stats`' score summaries); `mean`/`sd` are still
+computed for **every** row, included or not. See "有效觀察涵蓋率 and the 50% inclusion gate".
 
 Rows split into `analysisRows` (potential `反應`/`監測`/`預期` — **see the rename note
 below; the spreadsheet still literally says `回應`**), `coverageRows` (potential
@@ -965,7 +969,11 @@ non-0 scores only, so `n` counts real ratings and any of them — including a �
 `icc2k` treats a 0 as "did not rate", which drops that evaluator from the common intersection
 (one 0 anywhere is enough — expect `null` more often on 0–4 drills); `within1` never pairs a
 0. On data with no 0 — every legacy drill — all seven are unchanged. Both consistency figures
-are computed over `analysisRows + coverageRows` (`consistencyRows`). Keys **added** since:
+are computed over `analysisRows + coverageRows` (`consistencyRows`). **Since 2026-10-17 the
+five score summaries — `overall`/`potentials`/`s4`/`coverage`/`potentialByS4` — count only rows
+with `included` (有效觀察涵蓋率 ≥ 50%)**, so a category or cell whose every question was excluded
+is `{n:0, mean:null}` too; `icc2k` and `within1` are not gated. See "有效觀察涵蓋率 and the 50%
+inclusion gate". Keys **added** since:
 
 - `untriggered: {n, total, rate, value, label, excluded}` — `n` counts scores equal to
   `meta.scale.lowValue` over `consistencyRows`; `total` counts every score **including 0s**.
@@ -981,7 +989,15 @@ are computed over `analysisRows + coverageRows` (`consistencyRows`). Keys **adde
 - `unratedQuestions: [{questionId, stage, itemName, goal}]` (2026-10-16) — questions that
   **were** scored but whose every score is 0 (`r.mean === null`), over all rows like
   `missingQuestions`. The two lists are disjoint, and without this one such a question is in
-  neither and silently vanishes from every chart. Old backend → `[]`.
+  neither and silently vanishes from every chart. Old backend → `[]`. Its 三項潛能／覆蓋率
+  entries (有效觀察涵蓋率 0%) are a subset of `inclusion.excludedQuestions`.
+- `inclusion: {threshold, total, included, excluded, excludedQuestions:[{questionId, stage,
+  itemName, goal, potential, question, rated, assigned, rate}]}` (2026-10-17) — the 50% gate's
+  ledger over `consistencyRows`: every question whose scores were left out of the five score
+  summaries, with its 有效給分人數 (`rated`), 原指定評核官人數 (`assigned` = `scores.length`)
+  and `rate`. It exists so an excluded question is listed rather than silently missing from the
+  totals. Old backend → absent, and every row counts as included. See "有效觀察涵蓋率 and the
+  50% inclusion gate".
 - `byEvaluator: [{code, n, mean, deviation}]` — 寬嚴傾向; `deviation` is that code's mean
   minus the mean of the row-means of the rows *they* scored, so scoring only hard questions
   doesn't read as strictness. Must be renderable anonymised. Since 2026-10-16 an
@@ -1162,6 +1178,118 @@ decisions, both final:
   counting 1 as 未觸發 and changes σ<sub>E</sub>². Changing it mid-drill mixes two scales in one
   record sheet. A new scale belongs in a new config spreadsheet (the `Setup.gs` wizard copies
   one per drill). `README.md`'s 評分標準 section tells the owner this.
+
+### 有效觀察涵蓋率 and the 50% inclusion gate (2026-10-17)
+
+The owner's advisor (老師) added a rule on top of "0 is never averaged": a question's scores
+enter the sums and averages of 綜合評比, 三項潛能 (反應/監測/預期), 4S and 演習覆蓋率 **only if
+its 有效觀察涵蓋率 is ≥ 50%**, where 有效觀察涵蓋率 = 有效給分人數 ÷ 原指定評核官人數 × 100%.
+The advisor's own judgement scale, written for four evaluators:
+
+| 有效給分 | 涵蓋率 | 判斷 | 納入加總與平均 |
+|---|---|---|---|
+| 4 人 | 100% | 充分 | yes |
+| 3 人 | 75% | 可接受 | yes |
+| 2 人 | 50% | 有條件接受 | yes |
+| 1 人 | 25% | 待確認 | **no** |
+| 0 人 | 0% | 未觸發 | **no** (不計分) |
+
+For other head counts the words go by rate: 100% 充分, ≥ 75% 可接受, ≥ 50% 有條件接受, > 0
+待確認, 0 未觸發. Those words are display only — whether a question counts is decided by the
+backend's `r.included` and nothing else. The advisor also asked that the **platform**
+(`Analysis.html`) state the scoring method, show the 有效觀察涵蓋率 and explain the inclusion
+rule for 綜合評比／韌性能力／4S, while the Google-Doc report (`Report.gs`) **keeps its format
+for now**.
+
+> ⚠️ **有效觀察涵蓋率 is not 演習覆蓋率** — the advisor warned about this explicitly.
+> 演習覆蓋率 is a *potential*: `coverageRows`, `stats.coverage`, the gauge and the coverage
+> radar, all of them scores. 有效觀察涵蓋率 is a per-question ratio of evaluators who gave a real
+> score. The gate applies *to* the 演習覆蓋率 questions like any others (so it changes which
+> scores `stats.coverage` and the gauge average), but the ratio itself is never what the gauge shows.
+> Keep the two words apart in UI text, prose and code names — the backend calls the ratio
+> `observedRate`, never anything with "coverage" in it.
+
+- **原指定評核官人數 is `scores.length`** — every evaluator code with a stored score on that
+  question, 0 included (one entry per code, last write wins). That is sound for what the rule
+  is about, telling "gave a 0" from "didn't answer": `Start.dc.html` refuses to submit a scene
+  until every question in it has a score or a 0 (`ready` needs `answeredCount === totalCount`),
+  so each submitter of a scene answered every question there and a blank can't pose as either.
+  **Its limit:** there is no per-scene assignment list anywhere (人員代號 is the hospital-wide
+  dropdown), so "assigned" is really "submitted this scene". An evaluator who was assigned but
+  never submitted the scene is not in the denominator: four assigned, one submitted with a real
+  score gives 1/1 = 100% 充分, not 25% 待確認. Nothing in the payload can tell that apart from
+  a one-evaluator scene; the literal rule would need an assignment sheet that doesn't exist.
+- **One owner of the threshold: `OBSERVED_RATE_MIN_`** (next to `NOT_RATED_SCORE_` in
+  `ConfigWithSubmit.gs`). `buildAnalysis_` applies it once per row to set `included`, and
+  returns it as `stats.inclusion.threshold`. The test is `>=`, so exactly half is in (2 of 4,
+  1 of 2), 1 of 3 is out and 2 of 3 is in. A row with no non-0 score is never included.
+  Clients read `r.included`; they never hardcode the threshold or recompute it from
+  `observedRate`, or the platform and the backend's totals drift apart.
+- **Gated — through `flattenScores_` and nowhere else.** It skips a row with
+  `r.included === false`, then drops 0s as before. `stats.overall`, `potentials`, `s4`,
+  `potentialByS4` and `coverage` all go through it, which is what puts the five headline
+  figures under one rule. An excluded row still contributes its 4S labels to the key set, so a
+  4S category or 潛能×4S cell whose every question was excluded comes back `{n:0, mean:null}` —
+  a **third** cause of `n:0`, next to "no question" and "every score 0".
+- **Not gated:** `rwg`, `within1`, `icc2k`, `byEvaluator`, `untriggered`, `missingQuestions`,
+  `unratedQuestions`. They ask whether evaluators agree, or what went unscored, not what the
+  drill scored. `rwg` keeps its own cut (skip a question with < 2 non-0 scores), which is a
+  different line: 2 non-0 out of 5 (40%) is out of the averages but inside r<sub>wg</sub>.
+- **An excluded row keeps its own `mean`/`sd`** (over its non-0 scores; `null` only when every
+  score is 0). Exclusion takes a row out of the *aggregates*, not out of the payload.
+- **Row fields:** `observedRate` (`null` when there are no scores) and `included`. Test
+  `r.included !== false`, never truthiness: an old backend sends neither field, and every one
+  of its rows must count as included.
+- **`stats.inclusion`** — the ledger of what the gate removed, over `consistencyRows`
+  (三項潛能 + 覆蓋率; learning rows never enter `stats`). Shape in the `stats` key list above.
+- **Client contract.** Anything a client sums, averages, plots or ranks from rows *itself* must
+  apply the same `r.included` test — in `Analysis.html` the per-potential and coverage radars,
+  the 4S tab's per-scene segments and `#ranking`'s 表現優劣排序 (`renderRanking`); in `Report.gs`
+  `specPotentialRadar_`, `specCoverageRadar_`, `sceneS4Buckets_` and the per-question rankings
+  (`sectionSummary_`'s 優勢前三／待改善前三, `sectionRanking_`'s 優勢前十／待改善前十,
+  `sectionScene_`'s 本場景最高／最低). Otherwise one 4S bar's length (gated `stats.s4`) and its
+  segment labels (ungated per-scene means) disagree on the same screen, and a question only one
+  of four evaluators scored (待確認) gets printed as a strength. A table that simply lists every
+  question (附錄A, chapter 9's per-scene table) may keep an excluded row with its own mean —
+  exclusion takes a row out of aggregates and rankings, not out of listings. An `n:0` caption
+  must not say 「分數全部為 0 分」 when the cause is the gate — `abilityEmptyReason()` tells
+  none / all-0 / low-coverage / mixed apart, and the overview 4S bars' `—` tooltip uses it.
+- **Where the rule shows on the dashboard** (`Analysis.html`): the 統計方法 tab's
+  `#inclusionMethod` cards (計分方式與有效觀察涵蓋率 — formula, what 原指定 means here, the
+  advisor's judgement table, the ≥50% rule, the 「≠ 演習覆蓋率」 warning — plus 本場 counts and
+  the excluded-question table), a 「有效觀察」 column in every `radarTable` (「3/4（75%）可接受」,
+  excluded rows greyed and tagged 未納入), `#inclusionNote` under the overview's first card when
+  anything was excluded, the same excluded table in report-mode R9, and 未納入 tags with no
+  rank number in `renderRanking`'s 表現優劣排序. **All of it is hidden on a scale with no 0
+  level** (`inclusionApplies()` = `meta.scale.lowExcluded`): a 1–5 drill is 100% everywhere, so
+  the column and cards would only print 「100% 充分」 and a paragraph about a 0 it doesn't
+  have. Verified: new page + new backend on a 1–5 drill renders a `<body>` identical to the
+  pre-rule page on the old backend.
+- **`Report.gs` follows the same gate** (`REPORT_BUILD_ '2026-10-17 inclusion'`) without a
+  format change — no new chapter, column, table or token, as the advisor asked. Its headline
+  figures come from the gated `stats`; its own row-level figures and rankings (the functions
+  in the client-contract bullet above) skip `included === false` via `isIncluded_`/
+  `rankableRows_`, and sentences that would otherwise be false now name the exclusion with an
+  explicit scope (「其中三項潛能與覆蓋率題目有 N 題有效觀察涵蓋率未達 50%…」 — 學習 questions are
+  outside `stats.inclusion`, so an unscoped count read wrong next to totals that include them).
+  `verifyRwg_` is untouched (consistency is not gated). 報告快照 freezes whichever numbers were
+  current when it ran.
+- **Legacy unchanged.** A 1–5 drill has no 0, so every `observedRate` is 1, every row is
+  included and `flattenScores_` removes nothing; the only payload differences are the additive
+  `observedRate`, `included` and `stats.inclusion`. A **0–4 drill that already ran** moves the
+  moment the backend is repasted: like the scale, inclusion is computed every time the analysis
+  is built and frozen nowhere, so a report issued before the repaste and one after differ.
+- **Deploy order: frontend first, backend last.** New `Analysis.html` + old backend is safe: no
+  `included`, no `stats.inclusion`, so every row counts and the page must render exactly as
+  `2e58025` does — no new column, no new text. New backend + old page is the broken half: the
+  five stats are gated but the radars and the 4S tab's scene segments are not, so they disagree,
+  and a gate-emptied 4S bar (overview `barsSVG` tooltip) or 潛能×4S cell (`renderAbilityRank`)
+  is captioned 「分數全部為 0 分」. Nothing throws (`2e58025` already guards `mean === null`). So:
+  push `master` → repaste `ConfigWithSubmit.gs` and edit its existing deployment → New version.
+  If the same release also changes `Report.gs` (a new `REPORT_BUILD_`), repaste it into the
+  report Web App and edit that existing deployment → New version **before** the backend, and
+  confirm the build via 檢查設定 — the same order as the 4S and scale changes. `Config.gs` serves
+  no analysis and is untouched.
 
 ### Admin / listing endpoints
 

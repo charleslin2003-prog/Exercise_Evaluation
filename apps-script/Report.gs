@@ -50,7 +50,7 @@ var MENU_TITLE_ = '演習評核報告';
 
 // 兩份手貼副本的指紋。**改這個檔案就要改這一行**，否則它會從「可查核的版本號」
 // 退化成「兩邊都印同一個字串的裝飾」。reportCheck 與附錄C 都會印它。
-var REPORT_BUILD_ = '2026-10-16 score-scale';
+var REPORT_BUILD_ = '2026-10-17 inclusion';
 
 // ===== 指令碼屬性鍵 =====
 var PROP_ANALYSIS_KEY_ = 'REPORT_ANALYSIS_KEY';
@@ -1504,6 +1504,102 @@ function nullMeanNote_(rows, payload, withChart, inQuestionOrder) {
     }
   }
   return '';
+}
+
+// ===================================================================
+// 有效觀察涵蓋率（r.included，2026-10-17）
+// ===================================================================
+
+// 後端（ConfigWithSubmit.gs 的 OBSERVED_RATE_MIN_）逐題算「有效評分人數 ÷ 評過這題的
+// 人數（含給 0 分者）」，未達 50% 的題目 r.included === false：它照樣有自己的平均，但
+// 不進 stats 的任何加總與平均（綜合評比、三項潛能、4S、演習覆蓋率）。報告端**自己**
+// 從列去算或去排名的地方——場景 × 4S 分群、雷達圖、優勢／待改善、場景最高／最低、
+// 離散度前十——要跟著同一條規則，否則一題只有一位評核官看到的題目會被印成「優勢」
+// 或「待改善」，而且圖上的數字跟旁邊來自 stats 的平均對不起來。逐題全列的表（附錄、
+// 第九章逐場景表、觀察紀錄、報告快照）照列，不刪題。
+// 舊後端沒有 included（undefined）→ 一律視為納入，輸出與改版前逐位元相同。
+// ⚠️ 「有效觀察涵蓋率」是逐題的評核官觀察比例，與「演習覆蓋率」（覆蓋率潛能的題目）
+// 是兩回事。報告上一律寫全名，不簡稱「覆蓋率」。
+// r_wg、相差不超過 1 分、寬嚴傾向、未觸發／不予評分率**不**套用這條規則（後端也不套）：
+// 它們描述的是評核官之間的一致與評分的分布，不是總分。verifyRwg_ 因此不看 included。
+function isIncluded_(r) {
+  return !r || r.included !== false;
+}
+
+// 可以排名的列：有平均，而且納入加總與平均。
+function rankableRows_(rows) {
+  var out = [];
+  for (var i = 0; i < (rows || []).length; i++) {
+    if (!meanIsNull_(rows[i]) && isIncluded_(rows[i])) out.push(rows[i]);
+  }
+  return out;
+}
+
+// 有平均、但因有效觀察涵蓋率未達門檻而不納入的列。評分全是 0 分的列同樣是
+// included === false，但它沒有平均，2026-10-16 起就由 meanIsNull_ 那一套處理了；
+// 這裡挑的是 2026-10-17 才出現的那一種。報告上為這條規則新增的每一句話都只在這種
+// 列存在時才印，所以舊場次、以及「被排除的只有全 0 題」的 0–4 場次，文字一個字都不變。
+function lowCoverageRows_(rows) {
+  var out = [];
+  for (var i = 0; i < (rows || []).length; i++) {
+    if (!isIncluded_(rows[i]) && !meanIsNull_(rows[i])) out.push(rows[i]);
+  }
+  return out;
+}
+
+// 不納入的題數（含評分全是 0 分的題目：它的有效觀察涵蓋率是 0%，同樣未達門檻）。
+function excludedCount_(rows) {
+  var n = 0;
+  for (var i = 0; i < (rows || []).length; i++) {
+    if (!isIncluded_(rows[i])) n++;
+  }
+  return n;
+}
+
+// 門檻印成「50%」，不印「50.0%」（它是規則的常數，不是量測值，理由同 plainNumber_）。
+// 後端沒有 stats.inclusion 時退回 50%，與 OBSERVED_RATE_MIN_ 同值。
+function inclusionThresholdText_(payload) {
+  var inc = (payload && payload.stats && payload.stats.inclusion) || {};
+  var t = (typeof inc.threshold === 'number' && isFinite(inc.threshold) && inc.threshold > 0) ? inc.threshold : 0.5;
+  return String(Math.round(t * 1000) / 10) + '%';
+}
+
+// 「（其中 2 題有效觀察涵蓋率未達 50%，不計入平均）」—— 只在 rows 裡有 lowCoverageRows_
+// 時回傳，否則空字串。題數用 excludedCount_（含全 0 題），因為「未達 50%」對它們也成立。
+// scope：句子前面的總題數比 rows 大的時候（例如含學習題的「12 題」）要寫出題數的範圍，
+// 否則學習題自己也未達 50% 時，這個「其中 N 題」就少算了：「（其中三項潛能與覆蓋率題目有 2 題…）」。
+function exclusionClause_(rows, payload, scope) {
+  if (!lowCoverageRows_(rows).length) return '';
+  return '（其中' + (scope ? scope + '有 ' : ' ') + excludedCount_(rows) + ' 題有效觀察涵蓋率未達 ' + inclusionThresholdText_(payload) + '，不計入平均）';
+}
+
+// 「—」與空白的成因片語，接在「題目都因」後面。全 0 題的涵蓋率是 0%，也是這一類，要講到。
+// 用逗號接、不開括號：這個片語常被放進表註外層的一對括號裡（理由同 unratedText_）。
+function excludedReasonText_(payload) {
+  return '有效觀察涵蓋率未達 ' + inclusionThresholdText_(payload) + ' 而不計入，評分全是 ' +
+    unratedText_(reportScale_(payload)) + '的題目也屬此類';
+}
+
+// 指標明細表（第七、八章與填入式的 {{列_*指標}}）的排序：納入的題目依平均升冪，
+// 接著是有平均但不納入的題目（同樣依平均升冪），最後是沒有平均的題目。不納入的題目
+// 照列——那張表是逐題全列——但不能排在「最需改善」的最上方。沒有不納入的列時，結果
+// 與 sortByMeanAsc_ 逐位元相同。
+function sortListedByMeanAsc_(rows) {
+  var inc = [], low = [];
+  for (var i = 0; i < (rows || []).length; i++) {
+    if (!isIncluded_(rows[i]) && !meanIsNull_(rows[i])) low.push(rows[i]);
+    else inc.push(rows[i]);
+  }
+  return ratedRowsOnly_(inc).sort(compareMean_).concat(low.sort(compareMean_), nullMeanRows_(inc));
+}
+
+// 表上有「有平均但不納入」的列時的表註；沒有時回空字串（舊場次的表註一個字都不變）。
+// 參數與 nullMeanNote_ 相同，兩者可以直接接在一起。
+function lowCoverageNote_(rows, payload, withChart, inQuestionOrder) {
+  if (!lowCoverageRows_(rows).length) return '';
+  var head = '有效觀察涵蓋率未達 ' + inclusionThresholdText_(payload) + ' 的題目照列平均，但不計入任何加總與平均';
+  if (inQuestionOrder) return head + '，也不列為本場景最高或最低' + (withChart ? '，也不畫在圖上。' : '。');
+  return head + '，排在其他有平均的題目之後' + (withChart ? '，也不畫在圖上。' : '。');
 }
 
 // ===================================================================
@@ -3859,10 +3955,14 @@ function sectionSummary_(cursor, ctx) {
   // 量尺有 0 分（不予評分）時，所有平均都不含它，說明欄要講出來；舊 1–5 場次的字不變。
   var scale = reportScale_(ctx.payload);
   var zeroOut = scale.lowExcluded;
+  // 有題目因有效觀察涵蓋率未達門檻而不計入時，「全部評分平均」就不再是全部，要講出來。
+  var arowsS = ctx.payload.analysisRows || [];
+  var lowS = lowCoverageRows_(arowsS).length
+    ? '有效觀察涵蓋率未達 ' + inclusionThresholdText_(ctx.payload) + ' 的 ' + excludedCount_(arowsS) + ' 題' : '';
   var rows = [['項目', '數值', '說明']];
   rows.push(['總平均', num_(ov.mean, 2), (zeroOut
-    ? '三項潛能題目的全部有效評分平均，不含 ' + unratedText_(scale)
-    : '三項潛能題目的全部評分平均') + '（n=' + (ov.n || 0) + '，SD ' + num_(ov.sd, 2) + '）']);
+    ? '三項潛能題目的全部有效評分平均，不含 ' + unratedText_(scale) + (lowS ? '，也不含' + lowS : '')
+    : '三項潛能題目的全部評分平均' + (lowS ? '，不含' + lowS : '')) + '（n=' + (ov.n || 0) + '，SD ' + num_(ov.sd, 2) + '）']);
   for (var i = 0; i < POTENTIALS_.length; i++) {
     var p = (st.potentials || {})[POTENTIALS_[i]] || {};
     rows.push([POTENTIALS_[i] + '潛能', num_(p.mean, 2), 'n=' + (p.n || 0) + '，SD ' + num_(p.sd, 2)]);
@@ -3892,7 +3992,8 @@ function sectionSummary_(cursor, ctx) {
   table_(cursor, rows);
 
   // 沒有平均的題目（評分全是 0 分）不能進前三名，否則「優勢前三」會印出一個「—」。
-  var pool = ratedRowsOnly_(chartRows_(ctx.payload));
+  // 有效觀察涵蓋率未達門檻的題目也不行：它不計入任何平均，不能被印成優勢或待改善。
+  var pool = rankableRows_(chartRows_(ctx.payload));
   var best = sortByMeanDesc_(pool).slice(0, 3);
   var worst = sortByMeanAsc_(pool).slice(0, 3);
 
@@ -3928,9 +4029,12 @@ function sectionBasic_(cursor, ctx) {
   rows.push(['演習日期', txt_(formatExerciseDate_(m.exerciseDate))]);
   rows.push(['說明', txt_(m.exerciseDesc)]);
   rows.push(['評核官人數', String((m.evaluatorCodes || []).length) + ' 人']);
+  // 「納入統計」在有題目因有效觀察涵蓋率未達門檻而不計入時就不再是全部，括號裡補一句。
+  var exclB = exclusionClause_(chartRows_(ctx.payload), ctx.payload, '三項潛能與覆蓋率題目');
   rows.push(['納入統計的題數', String(counts) + ' 題（三項潛能 ' + (ctx.payload.analysisRows || []).length +
     '、覆蓋率 ' + (ctx.payload.coverageRows || []).length +
-    '、學習 ' + (ctx.payload.learningRows || []).length + '）']);
+    '、學習 ' + (ctx.payload.learningRows || []).length +
+    (exclB ? '；' + exclB.replace(/^（|）$/g, '') : '') + '）']);
   rows.push(['紀錄表原始列數', String(m.recordRowCount || 0) + ' 列（去重前）']);
   table_(cursor, rows);
 
@@ -3975,11 +4079,26 @@ function sectionMethod_(cursor, ctx) {
   heading_(cursor, '統計方法', 2);
   bullet_(cursor, '資料來源：評核官透過評核單實際送出的分數。同一題、同一位評核官若送出多次，以最後一次送出為準（重送視為更正）。');
   bullet_(cursor, '三項潛能分析只納入「反應、監測、預期」三類題目；「學習」類題目排除在統計之外，另列於學習潛能觀察一章。');
+  // 有題目因有效觀察涵蓋率未達門檻而不計入時（lowCoverageRows_），「4S 類別平均為該類別內
+  // 所有題目…」就不成立了：改說「納入的題目」，並在同一項裡說明規則與題數。沒有這種題目
+  // 時兩個分支的字與改版前逐字相同。
+  var chartRowsM = chartRows_(ctx.payload);
+  var lowCntM = lowCoverageRows_(chartRowsM).length;
+  var exCntM = excludedCount_(chartRowsM);
+  var lowM = lowCntM > 0;
+  // 題數含評分全是 0 分的題目（涵蓋率 0%），所以有那種題目時要說「含」，否則「照列平均」會被讀成每一題都有平均。
+  var inclM = lowM
+    ? '有效觀察涵蓋率（該題的有效評分人數 ÷ 評過該題的評核官人數，含給 ' + zt + '者）未達 ' +
+      inclusionThresholdText_(ctx.payload) + ' 的題目，即使有平均也不計入三項潛能、4S、演習覆蓋率與總平均，' +
+      '不畫在圖上、不參加任何排名，只在逐題的表上照列（本場三項潛能與覆蓋率題目共 ' + exCntM + ' 題' +
+      (exCntM > lowCntM ? '，含評分全是 ' + zt + '的 ' + (exCntM - lowCntM) + ' 題' : '') + '）。'
+    : '';
+  var s4Pool = lowM ? '納入平均的題目' : '所有題目';
   if (zeroOut) {
     bullet_(cursor, '各指標分數為所有評核官對該題有效評分的算術平均，' + zt + '不計入；一題的評分若全是 ' +
-      zt + '，該題沒有平均（表上印「—」），不畫在任何圖上，另列於第四章。4S 類別平均為該類別內所有題目 × 所有評核官有效評分的平均；一題若標了多個 4S 元素（例如 Staff / System），它的分數全額計入每一個元素，這時各 4S 類別的評分數加總可能大於三項潛能題目的評分數。');
+      zt + '，該題沒有平均（表上印「—」），不畫在任何圖上，另列於第四章。' + inclM + '4S 類別平均為該類別內' + s4Pool + ' × 所有評核官有效評分的平均；一題若標了多個 4S 元素（例如 Staff / System），它的分數全額計入每一個元素，這時各 4S 類別的評分數加總可能大於三項潛能題目的評分數。');
   } else {
-    bullet_(cursor, '各指標分數為所有評核官對該題評分的算術平均；4S 類別平均為該類別內所有題目 × 所有評核官評分的平均；一題若標了多個 4S 元素（例如 Staff / System），它的分數全額計入每一個元素，這時各 4S 類別的評分數加總可能大於三項潛能題目的評分數。');
+    bullet_(cursor, '各指標分數為所有評核官對該題評分的算術平均；' + inclM + '4S 類別平均為該類別內' + s4Pool + ' × 所有評核官評分的平均；一題若標了多個 4S 元素（例如 Staff / System），它的分數全額計入每一個元素，這時各 4S 類別的評分數加總可能大於三項潛能題目的評分數。');
   }
   // σ_E² 與量表點數取自後端 stats.rwg（ctx.rwg 已經退回過舊後端的 2／5），不寫死。
   var pts = ctx.rwg.scalePoints;
@@ -4011,7 +4130,7 @@ function sectionMethod_(cursor, ctx) {
       un.value + ' 分的定義是「劇本未走到此條件」，與 ' +
       (others.length ? others[0] + '–' + others[others.length - 1] : '其他') + ' 分的表現評價不同質。');
   }
-  bullet_(cursor, '等權聲明：所有題目、所有評核官在各項平均中權重相同。本系統沒有題目權重欄位，也沒有關鍵題標記，因此無法產生加權總分。');
+  bullet_(cursor, '等權聲明：' + (lowM ? '納入平均的所有題目' : '所有題目') + '、所有評核官在各項平均中權重相同。本系統沒有題目權重欄位，也沒有關鍵題標記，因此無法產生加權總分。');
   para_(cursor, '本章除評分尺度取自本試算表的「評分標準」工作表外，所有統計數值均直接取自後端 action=analysis 的回傳值，報告端不另行計算，以確保與分析儀表板完全一致。唯一的例外是 r_wg 的本機驗算，結果列於第四章與附錄C。');
 }
 
@@ -4085,7 +4204,8 @@ function sectionQuality_(cursor, ctx) {
   heading_(cursor, '資料列數與去重', 2);
   var dedup = (ctx.payload.analysisRows || []).length + (ctx.payload.coverageRows || []).length +
     (ctx.payload.learningRows || []).length;
-  para_(cursor, '紀錄表原始 ' + (m.recordRowCount || 0) + ' 列，去重後納入統計 ' + dedup + ' 題。' +
+  para_(cursor, '紀錄表原始 ' + (m.recordRowCount || 0) + ' 列，去重後納入統計 ' + dedup + ' 題' +
+    exclusionClause_(chartRows_(ctx.payload), ctx.payload, '三項潛能與覆蓋率題目') + '。' +
     '去重規則是（醫院代號, 演習代號, 問題ID）取最後一列，因此同一題多位評核官的分數會合併成一題、' +
     '同一題同一人重複送出只保留最後一次。兩個數字的差額主要來自這兩種合併；' +
     '但另有兩類列不會進入統計：問題ID 或人員代號空白、分數非數值的列，' +
@@ -4130,8 +4250,13 @@ function sectionOverall_(cursor, ctx) {
   // 0–4 量尺：n、平均、最低／最高都不含 0 分（不予評分），要講出來，否則「最低 1 分」
   // 會被讀成「沒有人給 0 分」。舊量尺的字不變。
   var scale = reportScale_(ctx.payload);
+  // 有效觀察涵蓋率未達門檻的題目不在 ov 裡，「合計 N 個評分」要說它不含哪幾題。
+  var arowsO = ctx.payload.analysisRows || [];
+  var lowO = lowCoverageRows_(arowsO).length
+    ? '有效觀察涵蓋率未達 ' + inclusionThresholdText_(ctx.payload) + ' 的 ' + excludedCount_(arowsO) + ' 題' : '';
   para_(cursor, '三項潛能題目合計 ' + (ov.n || 0) + ' 個' +
-    (scale.lowExcluded ? '有效評分（不含 ' + unratedText_(scale) + '）' : '評分') + '，平均 ' + num_(ov.mean, 2) +
+    (scale.lowExcluded ? '有效評分（不含 ' + unratedText_(scale) + (lowO ? '，也不含' + lowO : '') + '）'
+      : '評分' + (lowO ? '（不含' + lowO + '）' : '')) + '，平均 ' + num_(ov.mean, 2) +
     '，標準差 ' + num_(ov.sd, 2) + '，最低 ' + num_(ov.min, 0) + ' 分、最高 ' + num_(ov.max, 0) + ' 分。');
   para_(cursor, NO_THRESHOLD_NOTE_);
 
@@ -4177,12 +4302,22 @@ function sectionOverall_(cursor, ctx) {
     }
     // 0–4 量尺多一種「—」：組合有題目，但那些題目的評分全是 0 分（不予評分）——
     // 後端回 {n:0, mean:null}，跟「沒有題目」長得一模一樣，表註要把兩種都講到。
-    table_(cursor, t2, reportScale_(ctx.payload).lowExcluded
-      ? '表：潛能 × 4S 交叉平均（「—」代表該組合沒有對應題目，或對應題目的評分全是 ' +
+    // 2026-10-17 再多一種：題目都因有效觀察涵蓋率未達門檻而不計入（全 0 是它的特例）。
+    // 只在真的有這種題目時換句子，否則與改版前逐字相同。
+    var t2Note;
+    if (lowCoverageRows_(ctx.payload.analysisRows || []).length) {
+      t2Note = '表：潛能 × 4S 交叉平均（「—」代表該組合沒有對應題目，或對應題目都因' +
+        excludedReasonText_(ctx.payload) + '；兩者都是沒有平均，不是平均 0 分。' +
+        '上圖對這些組合不畫柱子；n 為納入平均的有效評分數）';
+    } else if (reportScale_(ctx.payload).lowExcluded) {
+      t2Note = '表：潛能 × 4S 交叉平均（「—」代表該組合沒有對應題目，或對應題目的評分全是 ' +
         unratedText_(reportScale_(ctx.payload)) + '；兩者都是沒有平均，不是平均 0 分。' +
-        '上圖對這些組合不畫柱子；n 為有效評分數）'
-      : '表：潛能 × 4S 交叉平均（「—」代表該組合沒有對應題目，不是 0 分；' +
-        '上圖對這些組合不畫柱子）');
+        '上圖對這些組合不畫柱子；n 為有效評分數）';
+    } else {
+      t2Note = '表：潛能 × 4S 交叉平均（「—」代表該組合沒有對應題目，不是 0 分；' +
+        '上圖對這些組合不畫柱子）';
+    }
+    table_(cursor, t2, t2Note);
   } else {
     para_(cursor, '本次沒有可用的 4S 分類資料，潛能 × 4S 交叉圖未產生。');
   }
@@ -4247,9 +4382,14 @@ function sectionS4_(cursor, ctx) {
     var se = st.s4[emptyKeys[e]] || {};
     t.push([emptyKeys[e], String(se.n || 0), num_(se.mean, 2), num_(se.sd, 2)]);
   }
+  // 有題目因有效觀察涵蓋率未達門檻而不計入時，「—」的成因不只「全是 0 分」（見 sectionOverall_ 表2）。
+  var lowS4 = lowCoverageRows_(ctx.payload.analysisRows || []).length > 0;
   table_(cursor, t, emptyKeys.length
-    ? '表：4S 整備平均（「—」代表該類別題目的評分全是 ' + unratedText_(reportScale_(ctx.payload)) +
-      '，沒有平均，上圖不畫這一類）'
+    ? (lowS4
+      ? '表：4S 整備平均（「—」代表該類別的題目都因' + excludedReasonText_(ctx.payload) +
+        '；沒有平均，上圖不畫這一類）'
+      : '表：4S 整備平均（「—」代表該類別題目的評分全是 ' + unratedText_(reportScale_(ctx.payload)) +
+        '，沒有平均，上圖不畫這一類）')
     : undefined);
 
   // 各場景對各 4S 的平均。分群規則與 Analysis.html 的 renderS4 相同
@@ -4291,15 +4431,19 @@ function sectionS4_(cursor, ctx) {
     for (var c = 0; c < codes.length; c++) {
       var arr = bucket[keys[a] + '␟' + codes[c]];
       // 桶裡只有有效評分（sceneS4Buckets_ 已剔掉 0 分），空桶＝該場景在該類別的評分全是
-      // 0 分：評分數印 0、平均印「—」，並在表註說明。
+      // 0 分：評分數印 0、平均印「—」，並在表註說明。2026-10-17 起不納入的題目（有效觀察
+      // 涵蓋率未達門檻）也不進桶，所以空桶也可能是那些題目造成的。
       if (!arr.length) emptyBucket = true;
       detail.push([keys[a], codes[c], String(arr.length), num_(avg_(arr), 2)]);
     }
   }
   if (detail.length > 1) {
     table_(cursor, detail, emptyBucket
-      ? '表：評分數為有效評分數。「—」代表該場景在該 4S 類別的題目評分全是 ' +
-        unratedText_(reportScale_(ctx.payload)) + '，沒有平均。'
+      ? (lowS4
+        ? '表：評分數為納入平均的有效評分數。「—」代表該場景在該 4S 類別沒有平均：題目都因' +
+          excludedReasonText_(ctx.payload) + '。'
+        : '表：評分數為有效評分數。「—」代表該場景在該 4S 類別的題目評分全是 ' +
+          unratedText_(reportScale_(ctx.payload)) + '，沒有平均。')
       : undefined);
   } else {
     para_(cursor, '沒有可分群的場景資料。');
@@ -4324,7 +4468,8 @@ function sectionPotential_(cursor, ctx) {
       if (arows[j].potential === p) rows.push(arows[j]);
     }
     var ps = (ctx.stats.potentials || {})[p] || {};
-    para_(cursor, '共 ' + rows.length + ' 題、' + (ps.n || 0) + (reportScale_(ctx.payload).lowExcluded ? ' 個有效評分' : ' 個評分') + '，平均 ' + num_(ps.mean, 2) +
+    // ps 只含納入的題目；有不納入的題目時題數後面補一句（exclusionClause_，否則空字串）。
+    para_(cursor, '共 ' + rows.length + ' 題' + exclusionClause_(rows, ctx.payload) + '、' + (ps.n || 0) + (reportScale_(ctx.payload).lowExcluded ? ' 個有效評分' : ' 個評分') + '，平均 ' + num_(ps.mean, 2) +
       '，標準差 ' + num_(ps.sd, 2) + '。');
     if (!rows.length) {
       para_(cursor, '本次沒有歸類為「' + p + '」潛能的題目。');
@@ -4339,7 +4484,9 @@ function sectionPotential_(cursor, ctx) {
     });
     figureNo++;
     var t = [['場景編號', '指標', '評核題目', '平均', '標準差']];
-    var sorted = sortByMeanAsc_(rows);
+    // 逐題全列，但不納入的題目（有效觀察涵蓋率未達門檻）排在納入的題目之後，
+    // 不能出現在「最需改善」的最上方（sortListedByMeanAsc_）。
+    var sorted = sortListedByMeanAsc_(rows);
     for (var s = 0; s < sorted.length; s++) {
       t.push([
         shortScene_(sorted[s].itemName, ctx.prefix),
@@ -4349,7 +4496,7 @@ function sectionPotential_(cursor, ctx) {
         sdText_(sorted[s], 2)
       ]);
     }
-    var noteP = nullMeanNote_(rows, ctx.payload, true);
+    var noteP = nullMeanNote_(rows, ctx.payload, true) + lowCoverageNote_(rows, ctx.payload, true);
     table_(cursor, t, '表：' + p + '潛能指標明細（依平均升冪，最需改善的在最上方）' + (noteP ? '。' + noteP : ''));
   }
   scenarioMapTable_(cursor, arows, ctx.prefix);
@@ -4363,7 +4510,7 @@ function sectionCoverage_(cursor, ctx) {
   heading_(cursor, sectionById_('COVERAGE').title, 1);
   var cov = ctx.stats.coverage || {};
   var rows = ctx.payload.coverageRows || [];
-  para_(cursor, '覆蓋率題目共 ' + rows.length + ' 題、' + (cov.n || 0) + (reportScale_(ctx.payload).lowExcluded ? ' 個有效評分' : ' 個評分') + '，平均 ' +
+  para_(cursor, '覆蓋率題目共 ' + rows.length + ' 題' + exclusionClause_(rows, ctx.payload) + '、' + (cov.n || 0) + (reportScale_(ctx.payload).lowExcluded ? ' 個有效評分' : ' 個評分') + '，平均 ' +
     num_(cov.mean, 2) + '，標準差 ' + num_(cov.sd, 2) + '。');
   para_(cursor, NO_THRESHOLD_NOTE_);
   if (!rows.length) {
@@ -4374,7 +4521,7 @@ function sectionCoverage_(cursor, ctx) {
   var specC = specCoverageRadar_(ctx);
   emitChart_(cursor, ctx, { title: '圖7　演習覆蓋率各指標平均', type: specC.type, headers: specC.headers, rows: specC.rows });
   var t = [['場景編號', '指標', '評核題目', '平均', '標準差']];
-  var sorted = sortByMeanAsc_(rows);
+  var sorted = sortListedByMeanAsc_(rows); // 理由同 sectionPotential_
   for (var j = 0; j < sorted.length; j++) {
     t.push([
       shortScene_(sorted[j].itemName, ctx.prefix),
@@ -4384,7 +4531,7 @@ function sectionCoverage_(cursor, ctx) {
       sdText_(sorted[j], 2)
     ]);
   }
-  var noteC = nullMeanNote_(rows, ctx.payload, true);
+  var noteC = nullMeanNote_(rows, ctx.payload, true) + lowCoverageNote_(rows, ctx.payload, true);
   table_(cursor, t, '表：覆蓋率指標明細（依平均升冪）' + (noteC ? '。' + noteC : ''));
   scenarioMapTable_(cursor, rows, ctx.prefix);
   // 量規圖刻意不做：Charts 的 GAUGE 可用性不確定，而且它傳達的資訊就是上面
@@ -4445,10 +4592,11 @@ function sectionScene_(cursor, ctx) {
     }
     // 「評核人數」含給 0 分（不予評分）的人，平均不含。有沒有平均的題時表註說明「—」；
     // 這張表照題目原順序列（沒有依平均排序），所以表註不能說「排在表的最後」。
-    var noteS = nullMeanNote_(grp.rows, ctx.payload, false, true);
+    // 這張表逐題全列，不納入的題目（有效觀察涵蓋率未達門檻）照列在原位，表註說明它不算最高／最低。
+    var noteS = nullMeanNote_(grp.rows, ctx.payload, false, true) + lowCoverageNote_(grp.rows, ctx.payload, false, true);
     table_(cursor, t, noteS ? '表：' + noteS : undefined);
-    // 最高／最低只在有平均的題目裡挑；整個場景都沒有平均時這一句不印。
-    var sorted = sortByMeanDesc_(ratedRowsOnly_(grp.rows));
+    // 最高／最低只在有平均、而且納入的題目裡挑；一題都沒有時這一句不印。
+    var sorted = sortByMeanDesc_(rankableRows_(grp.rows));
     if (sorted.length) {
       var hi = sorted[0], lo = sorted[sorted.length - 1];
       para_(cursor, '本場景最高：' + txt_(hi.question) + '（' + num_(hi.mean, 2) + '）；' +
@@ -4503,8 +4651,9 @@ function sectionLearning_(cursor, ctx) {
 function sectionRanking_(cursor, ctx) {
   heading_(cursor, sectionById_('RANKING').title, 1);
   // 沒有平均的題目（評分全是 0 分「不予評分」）不參加排名：它不是最差，是沒有評。
-  // 它們列在第四章「評分全為 0 分的題目」。
-  var rows = ratedRowsOnly_(allRows_(ctx.payload));
+  // 它們列在第四章「評分全為 0 分的題目」。有效觀察涵蓋率未達門檻的題目同樣不參加
+  // （rankableRows_）：一、兩位評核官看到的題目不能被印成優勢或待改善。
+  var rows = rankableRows_(allRows_(ctx.payload));
   if (!rows.length) {
     para_(cursor, '沒有可排序的題目。');
     return;
@@ -4625,7 +4774,8 @@ function sectionEvaluator_(cursor, ctx) {
 
   heading_(cursor, '評分離散度最大的前十題', 2);
   // 沒有平均的題目（評分全是 0 分）標準差是 0，但那不是「意見一致」，不參加這張表。
-  var rows = ratedRowsOnly_(chartRows_(ctx.payload)).sort(function (a, b) {
+  // 有效觀察涵蓋率未達門檻的題目也不參加：這是一張「最值得先討論的題目」排名，不是逐題清單。
+  var rows = rankableRows_(chartRows_(ctx.payload)).sort(function (a, b) {
     return Number(b.sd || 0) - Number(a.sd || 0);
   }).slice(0, 10);
   if (!rows.length) {
@@ -4916,7 +5066,8 @@ function abilityCells_(ctx) {
       if (!Object.prototype.hasOwnProperty.call(row, s4)) continue;
       var c = row[s4] || {};
       // n:0 的格子代表那個組合完全沒有題目，或（0–4 量尺）題目的評分全是 0 分
-      // 「不予評分」—— 兩者都是沒有平均（mean:null），不是「得 0 分」。放進排序會讓
+      // 「不予評分」，或（2026-10-17 起）題目都因有效觀察涵蓋率未達門檻而不計入
+      // —— 都是沒有平均（mean:null），不是「得 0 分」。放進排序會讓
       // 待改善前三永遠是三個空格，什麼也沒說。
       if (!c.n || c.mean === null || c.mean === undefined) continue;
       out.push({ potential: pot, s4: s4, mean: Number(c.mean), n: c.n });
@@ -5023,7 +5174,8 @@ function specAbilityCross_(ctx) {
   var keys = s4Keys_(st);
   var pbs = st.potentialByS4 || {};
   // ⚠️ 沒有題目的格子一律留空白，**絕不填 0**（理由見 sectionOverall_ 圖2 的註解）。
-  // 題目的評分全是 0 分（不予評分）的格子後端回 {n:0, mean:null}，同樣留空白。
+  // 題目的評分全是 0 分（不予評分）、或題目都未達有效觀察涵蓋率門檻的格子，後端回
+  // {n:0, mean:null}，同樣留空白。
   // 整欄都沒有資料的 4S 類別直接不進圖，不留一根空軸。
   var liveKeys = [];
   for (var kk = 0; kk < keys.length; kk++) {
@@ -5076,6 +5228,8 @@ function specPotentialRadar_(ctx, p) {
     if (arows[j].potential !== p) continue;
     // 沒有平均的題目（評分全是 0 分「不予評分」）不畫，不當成 0 分的一軸。
     if (meanIsNull_(arows[j])) continue;
+    // 有效觀察涵蓋率未達門檻的題目也不畫：它不計入 stats.potentials，畫上去圖就跟旁邊的平均對不起來。
+    if (!isIncluded_(arows[j])) continue;
     rows.push([cleanIndicator_(arows[j].indicator) || arows[j].questionId || '（未命名）', Number(arows[j].mean)]);
   }
   return { title: p + '潛能各指標平均', type: 'RADAR', headers: ['指標', '平均分'], rows: rows };
@@ -5086,6 +5240,7 @@ function specCoverageRadar_(ctx) {
   var rows = [];
   for (var i = 0; i < crows.length; i++) {
     if (meanIsNull_(crows[i])) continue; // 理由同 specPotentialRadar_
+    if (!isIncluded_(crows[i])) continue; // 同上：不計入 stats.coverage 的題目不畫
     rows.push([cleanIndicator_(crows[i].indicator) || crows[i].questionId || '（未命名）', Number(crows[i].mean)]);
   }
   return { title: '演習覆蓋率各指標平均', type: 'RADAR', headers: ['指標', '平均分'], rows: rows };
@@ -5108,9 +5263,14 @@ function sceneS4Buckets_(ctx) {
     // s4ListOf 同一規則）。4S 格空白的題目 s4ListOf_ 回傳 []，一個桶都不進。
     var list = s4ListOf_(r);
     var sc = r.scores || [];
+    // 有效觀察涵蓋率未達門檻的題目（r.included === false）不進平均，與後端 stats.s4 同一
+    // 規則。桶照樣建、只是不放分數：與全 0 題一樣，整桶都是這種題目時下游把它當「沒有平均」。
+    // 舊後端沒有 included → 照舊全部放進去。
+    var inc = isIncluded_(r);
     for (var m = 0; m < list.length; m++) {
       var key = list[m] + '␟' + code;
       if (!bucket[key]) bucket[key] = [];
+      if (!inc) continue;
       for (var s2 = 0; s2 < sc.length; s2++) {
         // 0 分（不予評分）不進平均，與後端 stats.s4 同一規則（見 reportScale_ 的
         // excludeZero）。桶照樣建：一個場景×類別的題目全是 0 分時，它是一個空桶，
@@ -5198,8 +5358,10 @@ function fillRowData_(def, ctx) {
   if (def.id === 'ROW_BOT3') {
     return { values: abilityValueRows_(rankedTop_(abilityCells_(ctx), 3, true)), colors: null };
   }
+  // 指標明細的排序與錨點式第七、八章同一條（sortListedByMeanAsc_）：不納入的題目照列，
+  // 排在納入的題目之後。填入式沒有表註，這件事只能寫在報告產生紀錄（fillModeCoverage_）。
   if (def.id === 'ROW_COV') {
-    var cov = sortByMeanAsc_(ctx.payload.coverageRows || []);
+    var cov = sortListedByMeanAsc_(ctx.payload.coverageRows || []);
     for (i = 0; i < cov.length; i++) {
       out.push([cleanIndicator_(cov[i].indicator), txt_(cov[i].question), num_(cov[i].mean, 1)]);
     }
@@ -5211,7 +5373,7 @@ function fillRowData_(def, ctx) {
     for (i = 0; i < arows.length; i++) {
       if (arows[i].potential === def.potential) pool.push(arows[i]);
     }
-    var sorted = sortByMeanAsc_(pool);
+    var sorted = sortListedByMeanAsc_(pool);
     for (i = 0; i < sorted.length; i++) {
       out.push([
         shortScene_(sorted[i].itemName, ctx.prefix),
@@ -5677,16 +5839,28 @@ function fillModeCoverage_(ctx) {
     '所以若不特別說明，缺漏是隱形的）。');
   // 評分全是 0 分（不予評分）的題目沒有平均，不會出現在任何圖上 —— 與上一條同一種
   // 隱形缺口。舊後端沒有 unratedQuestions，舊量尺下這一條不出現。
-  // ⚠️ 不能寫「本報告未列出」：{{列_覆蓋率指標}}／{{列_反應指標}} 等表格用 sortByMeanAsc_，
+  // ⚠️ 不能寫「本報告未列出」：{{列_覆蓋率指標}}／{{列_反應指標}} 等表格用 sortListedByMeanAsc_，
   // 這種題目照樣長成一列、分數印「—」排在最後（fillRowData_）。填入式沒有表註，
   // 那個「—」只能在這裡解釋。
   var unrated = st.unratedQuestions || [];
   var scale = reportScale_(ctx.payload);
+  // 有平均、但有效觀察涵蓋率未達門檻而不納入的題目（2026-10-17）。它們在指標明細表格上
+  // 照列分數、卻排在比它分數高的題目之後，而填入式沒有表註 —— 不寫在這裡，那個順序看起來
+  // 就像排錯了。接在同一條後面、不另起一條；沒有這種題目時這一條與改版前逐字相同。
+  var lowF = lowCoverageRows_(chartRows_(ctx.payload)).length;
+  var lowText = function (lead) {
+    return lowF
+      ? '有效觀察涵蓋率未達 ' + inclusionThresholdText_(ctx.payload) + ' 的三項潛能與覆蓋率題目' + lead + lowF +
+        ' 題：照列平均，但不計入任何加總與平均、不畫在圖上，指標明細表格把它們排在其他有平均的題目之後。'
+      : '';
+  };
   if (unrated.length || scale.lowExcluded) {
     out.push('評分全是 ' + unratedText_(scale) + '的題目 ' + unrated.length + ' 題' + (unrated.length
       ? '：它們沒有平均，不會出現在任何圖上；指標明細表格若列到它們，分數欄印「—」並排在該表最後。' +
         '填入式範本沒有逐題列出這份清單的表格。'
-      : '。'));
+      : '。') + lowText('另有 '));
+  } else if (lowF) {
+    out.push(lowText(' '));
   }
   out.push('評核官差異：本模式一律匿名，且不輸出任何逐評核官資料。');
   out.push('標準差：填入式的分數欄只有一位小數的平均值，沒有欄位放 SD。');
