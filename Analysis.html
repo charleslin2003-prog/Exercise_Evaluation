@@ -1370,13 +1370,13 @@ function renderNotRated(){
   const q=x=>`<td title="${esc(x.questionId)}">${esc(x.question||x.questionId)}</td>`;
   if (list.single){
     card.innerHTML=head+'<div class="table-wrap"><table>'+
-      '<thead><tr><th style="width:3em;text-align:center">序號</th><th>場景</th><th>問題</th></tr></thead><tbody>'+
+      '<thead><tr><th style="width:3em;text-align:center">序號</th><th>場景</th><th>評核題目</th></tr></thead><tbody>'+
       list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td>${q(x)}</tr>`).join('')+
       '</tbody></table></div>'+note;
     return;
   }
   card.innerHTML=head+'<div class="table-wrap"><table>'+
-    '<thead><tr><th style="width:3em;text-align:center">項次</th><th>地點</th><th>演練單元</th><th>問題</th></tr></thead><tbody>'+
+    '<thead><tr><th style="width:3em;text-align:center">項次</th><th>地點</th><th>演練單元</th><th>評核題目</th></tr></thead><tbody>'+
     list.map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.stage)}</td><td${x.goal?` title="${esc(x.goal)}"`:''}>${esc(x.itemName)}</td>${q(x)}</tr>`).join('')+
     '</tbody></table></div>'+note;
 }
