@@ -717,6 +717,15 @@ class Component extends DCLogic {
     const sceneStripRe = new RegExp('^' + scenePrefix + '\\s*', 'i');
     const baseRowStyle = 'display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #ffffff; border: 2px solid #d8d2bf; border-radius: 14px; box-sizing: border-box; color: #161512; text-align: left;';
     const doneItems = this.state.doneItems;
+    // 單層演習（項目與問題只有一個層欄，所以每個頂層節點都是葉節點）沒有
+    // 「SCENE A1」可抓，上面那組正規表示式一個都比不到，徽章會整排空白。
+    // 這種情況改用在清單裡的序號，評核官才有東西可以互相指稱（「第 3 個」）。
+    // 只在單層時才這樣做：多層演習的徽章是場景編號，那是設定表給的真實編號，
+    // 用序號蓋掉會讓畫面和紀錄表、報告裡的場景編號對不起來。
+    // 序號跟著 rawRows 的順序，而單層時沒有可展開的群組，順序就是設定表的列序，
+    // 不會因為展開／收合而跳動。
+    const singleLevel = loaded && rootItems.length > 0 && rootItems.every((n) => !!n.questions);
+    let leafSeq = 0;
     const rows = rawRows.map((r) => {
       const isGroup = r.kind === 'group';
       const indent = r.depth * 18;
@@ -726,8 +735,10 @@ class Component extends DCLogic {
       // 被改寫成要顯示的文字，所以這裡要先用它比對「已完成」記錄。
       const isDone = !isGroup && !!doneItems[r.label];
       if (!isGroup) {
+        leafSeq += 1;
         const numMatch = sceneNumRe.exec(r.label);
         if (numMatch) iconText = numMatch[1].toUpperCase();
+        else if (singleLevel) iconText = String(leafSeq);
         if (r.goal) {
           label = r.goal;
         } else {
