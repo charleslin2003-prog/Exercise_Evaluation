@@ -36,7 +36,7 @@ at `a7d1871`.
 | `CONFIG_SPREADSHEET_ID` | `1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ` | in **both** `ConfigWithSubmit.gs` and `Config.gs` — they must stay equal |
 | `RECORD_SPREADSHEET_ID` | `11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8` | |
 | `CONFIG_URL` / `RECORD_URL` | the `AKfycbxtcCix…` / `AKfycbzA5pE8…` deployments (the owner's own cloud account, since `abb1b2d`, 2026-10-14) | `Config` was **not** retired, so the two stay different values. The release's original `AKfycbyIEReG…` / `AKfycbzBiivE…` are no longer referenced by either page |
-| `REGISTRY_SPREADSHEET_ID` | `1ZiluDuw…` (production 租戶註冊表, since `f813130`, 2026-10-14) | registry **on**: `?t=`/`?ex=` route, the session dropdown shows, and **`action=sessions` — no key of any kind — is live for a real hospital**. `f813130` flagged that this was the day the posture question had to be re-answered; `abb1b2d` then switched the frontend on after asserting **four** of the red-line items (no spreadsheet id, key, sheet name or row number — not 檔案擁有者, `registryWarning`, reason strings or file names). Nothing in the repo records the owner explicitly accepting the exposure. ⚠️ Also unverified: `abb1b2d`'s evidence used `wanfang-7f3a2c` / 2026a 萬芳醫地下空間 / 2026b 萬芳醫院急救站 — exactly the **sandbox** registry's rows (handover §4), the same hid `f813130` cited as proof a deployment was reading the sandbox. So no commit shows the live `RECORD_URL` deployment reading the *production* registry; resolve a production-only 醫院代號 before relying on it |
+| `REGISTRY_SPREADSHEET_ID` | `1ZiluDuw…` (production 租戶註冊表, since `f813130`, 2026-10-14) | registry **on**: `?t=`/`?ex=` route, the session dropdown shows, and **`action=sessions` — no key of any kind — is live for a real hospital**. `f813130` flagged that this was the day the posture question had to be re-answered; `abb1b2d` then switched the frontend on after asserting **four** of the red-line items (no spreadsheet id, key, sheet name or row number — not 檔案擁有者, `registryWarning`, reason strings or file names). Nothing in the repo records the owner explicitly accepting the exposure. **Resolved 2026-10-20 — the live `RECORD_URL` deployment is reading the *production* registry.** The doubt was real and worth recording: `abb1b2d`'s evidence used `wanfang-7f3a2c` / 2026a 萬芳醫地下空間 / 2026b 萬芳醫院急救站, which are **also** the sandbox registry's rows (handover §4) — the same hid `f813130` had cited as proof a deployment was reading the sandbox. So the 醫院代號 can never settle this, and the note that asked for a production-only one was asking for something that does not exist. What settles it is the **data behind** the row: `action=sessions&t=wanfang-7f3a2c` returns the owner's real window 2026/10/18 13:00–15:10, and `action=analysis` on it returns 80 record rows / evaluators A01,A02,A04,A06 — against the sandbox's 122 rows / 6 codes including `TEST-USER`. Re-verify the same way (payload contents, never the hid) |
 | `REPORT_URL` (`Analysis.html`) | `AKfycby3amN8…` (the owner's report Web App, since `abb1b2d`) | 產生 Google 文件 is **enabled**. `docEndpoint` appends `&key=`, so this line may only ever name a deployment the owner controls — never a personal or dev one. That deployment answers `BAD_ACTION` to a bare GET and to `action=analysis` (verified in `abb1b2d`): it has zero keyless branches |
 | `ADMIN_KEY` | `''` | `action=selftest` / `action=flush` disabled |
 | `ANALYSIS_KEY` | **unchanged** | see the warning below — still byte-identical to `dev`'s |
@@ -56,6 +56,18 @@ at `a7d1871`.
 > 觀察紀錄 box (the old backend returns no `commentEnabled`, so the client shows it) and
 > **anything typed into it is silently dropped**, because the old backend never writes that
 > column. Close that window fast, and do it outside a live drill.
+>
+> **Verified 2026-10-20: all three are current — the 10-17 pastes are done.** Check this
+> by fingerprint, never by reading commits: the config branch returns `exerciseLocation`;
+> `action=analysis` returns `meta.scale`/`levelCount`/`stageOrder`, `r.s4List` and
+> `stats.unratedQuestions` (10-16) plus `meta.exerciseLocation`, `stats.inclusion` and
+> `r.included` (10-17); and the report Web App's `action=reportCheck` echoes a build string
+> to compare against `REPORT_BUILD_` — it reported `2026-10-17 template`, matching the
+> repo, with 檢查設定 passing 23/23 on the fill-mode template. That `reportCheck` echo is
+> the **only** direct version read anywhere; the other two deployments can only be dated by
+> which fields they return. This table records repo constants, not deploy state, and said
+> for days that pastes were pending after they had happened — so re-probe before telling
+> anyone to repaste.
 
 Verified live on 2026-10-06 against the sandbox: config branch returns 8 codes
 (A01–A07 + TEST-USER); `doPost` writes; `action=analysis` returns
