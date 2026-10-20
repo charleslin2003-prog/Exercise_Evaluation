@@ -430,6 +430,23 @@ below has an owner, documents other than the owner should cite it, not restate i
   row number or 檔案擁有者. It also derives which session is `future`/`past` from the live
   registry instead of hardcoding 演習代號, so editing the registry doesn't silently rot it.
   Listed in `.vercelignore` — `scripts/` must never be served.
+- `scripts/sync-dev-from-master.sh` — keeps `dev` level with `master` **without letting the
+  sandbox constants drift back to production**. `dev` once sat 20 commits behind for six
+  days because every change landed on `master` directly, and catching up by hand means
+  redoing the same merge → swap-8-constants → verify dance every time; the failure mode is
+  not a build error but the test site silently reading and *writing* the hospital's real
+  record spreadsheet, which already happened once on 2026-10-14. The script merges,
+  force-pins the eight constants to the sandbox values, and runs the whole verification
+  (each constant, the two pages' `RECORD_URL` matching each other, the two backends'
+  `CONFIG_SPREADSHEET_ID` matching each other, `ANALYSIS_KEY` front/back consistency, and a
+  residue scan for every production id and `/exec`). Exit 0/1; it **never pushes**, and
+  refuses to run anywhere but `dev`. It deliberately does **not** rewrite the inline
+  comments or this file's Branch state header — that is prose, not a mechanical
+  substitution — so it detects and warns instead; a comment describing the wrong branch is
+  worse than none, because it reads as confirmation. `--dry-run` verifies the working tree
+  without merging or writing, and is the one mode that tolerates a dirty tree. A merge
+  conflict is the *expected* signal that `master` changed an environment constant, and the
+  script stops for a human rather than guessing.
 - `docs/manual-test-checklist.md` — the complement: only what genuinely cannot be automated,
   with the reason stated for each (Apps Script's `SpreadsheetApp`/`DriveApp`/`DocumentApp`
   exist only inside Google's runtime — no external tool, cloud agent included, can drive
