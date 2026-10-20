@@ -13,13 +13,13 @@
 // 沒有。CONFIG_URL 還指著 Config.gs 的部署，所以「沒帶 ?t=/?ex= 的設定載入」
 // 行為不變（它本來就不認識租戶註冊表）。
 
-// 正式分支（master）：下面兩個 ID 是業主正式的那一對。註冊表關閉時（見下方
-// REGISTRY_SPREADSHEET_ID = ''）它們就是唯一的 fallback 租戶，每一個請求都走它們。
-// 沙箱那一對只存在 dev 分支，不在這裡重述。
-var CONFIG_SPREADSHEET_ID = '1j3UCbdSKeOip4Nz-Ymek-mjAH3bGTqiZyI3G__-ubdQ';  // 演習評核_設定
+// 測試分支（dev）：下面兩個 ID 是個人帳號底下的沙箱試算表，不是業主正式的那一對。
+// 註冊表關閉時它們就是唯一的 fallback 租戶，每一個請求都走它們。
+// ⚠️ 合併回 master 前務必確認這兩行沒有被帶過去——正式值只在 master 分支上。
+var CONFIG_SPREADSHEET_ID = '1yiZDnbEFNHddzlTMWaz-bBgI0IvRWXMJ0H3WplyPJDk';  // 演習評核_設定（測試）
 
 // 紀錄表是另一個試算表，把這裡改成該檔案的 ID。
-var RECORD_SPREADSHEET_ID = '11HeRKAHkVt4N7T8A8BG6EwstPMNc5EL2FZUIDDatGJ8';  // 演習評核_紀錄
+var RECORD_SPREADSHEET_ID = '1jD6DXmPgTV9664XoIveD_cqNQd9V8vq6aM7EtMoI6FM';  // 演習評核_紀錄（測試）
 var RECORD_SHEET_NAME = '評核紀錄';
 // 評核紀錄 的欄位分成「必要」跟「選填」兩類。必要欄（問題ID/分數/人員代號/
 // 送出時間）一定要存在，缺了就丟錯；選填欄視實際表格有沒有那一欄決定要不要
@@ -106,15 +106,13 @@ var ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
 // 「legacy／第一場」租戶（見 fallbackTenant_）。還沒建註冊表時
 // REGISTRY_SPREADSHEET_ID 就留空字串——空字串的意思是「整個註冊表機制關閉，
 // 一律走 fallback」，連 openById 都不會打一次。
-// 正式分支（master）：業主的正式租戶註冊表（2026-10-14 建立）。
-// ⚠️ 填了它＝多場次正式開啟，連帶 action=sessions 這條**完全沒有金鑰**的分支開始
-// 對外服務。那個姿態問題（持有 ?t= 的人可以列舉同一家醫院的所有 演習代號）在
-// CLAUDE.md「The action=sessions exposure」有完整記錄，建註冊表這天就是要重新
-// 回答它的那天。
-// ⚠️ 絕對不要填成沙箱註冊表 1oab1W2U…。2026-10-14 實測發現業主新部署誤用了沙箱
-// 的三個 ID，沙箱醫院代號 wanfang-7f3a2c 在正式端點解得開——正式站整個讀到開發者
-// 的沙箱，畫面上完全看不出來。
-var REGISTRY_SPREADSHEET_ID = '1ZiluDuw7m6LP4tN0xz4oKGm_zBT2A_24tMispQOyE9k';
+// 測試分支（dev）：沙箱租戶註冊表。多場次在這裡是開著的，所以 action=sessions
+// 這條**完全沒有金鑰**的分支也在對外服務——但服務的是沙箱資料。
+// ⚠️ 兩份註冊表都有 wanfang-7f3a2c 這個醫院代號，所以**光看代號分不出**打到的是
+// 沙箱還是正式。2026-10-14 就踩過：業主的新部署誤用了沙箱的三個 ID，而沙箱代號在
+// 正式端點解得開，畫面上完全看不出來。要分辨只能看回傳的資料本身（列數、評核官
+// 代號、時間窗），不能看代號。
+var REGISTRY_SPREADSHEET_ID = '1oab1W2UFo71qeZ-fEz_cYtE__3dNFw_OG_7TzrUZdfk';
 var REGISTRY_SHEET_NAME = '租戶註冊表';
 var DEFAULT_RECORD_SHEET_NAME = '評核紀錄';
 // 註冊表快取：設定表「改一格、手機重整就生效」是對業主的承諾，所以設定表

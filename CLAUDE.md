@@ -22,14 +22,46 @@ item's questions on the drill's own 評分標準 scale — 1–5 on older drills
 since 2026-10-16, see "The score scale follows 評分標準" — (with an optional per-question
 free-text 觀察紀錄), and submitting.
 
-### Branch state — **this branch is the production release (2026-10-14)**
+### Branch state — ⚠️ **you are reading the `dev` copy; this table describes `master`**
 
-This is the `dev` → `master` promotion described in
-`docs/build-from-scratch-從零建置.md` §4. Every constant on this branch is the
-**production** value; the sandbox values live only on `dev` and are deliberately no longer
-restated in the inline comments, because those comments ship to the production site with
-the HTML. The rollback point is the branch **`一版`** (and `origin/master` before this push),
-at `a7d1871`.
+**On `dev` every constant below is the *sandbox* value instead**, pointing at the
+developer's personal spreadsheets and `/exec` deployments. `dev` was brought level with
+`master` on 2026-10-20 (fast-forward to `18c41f4`, 20 commits: the 10-16 multi-4S and
+score-scale work, the 10-17 inclusion gate and fill-mode template, the 4S label change) and
+the eight constants were then switched back. So **the code is identical to production and
+only the data differs** — which is the whole point of `dev`, and also the thing that makes
+it dangerous to skim: a page served from `exerciseevaluationtest.vercel.app` looks exactly
+like the hospital's.
+
+`dev` → `master` values:
+
+| | `dev` (sandbox) | `master` (production) |
+|---|---|---|
+| `Start.dc.html` `CONFIG_URL` / `RECORD_URL` | `AKfycbxuIddv…` / `AKfycbzQLAJC…` | `AKfycbxtcCix…` / `AKfycbzA5pE8…` |
+| `Analysis.html` `RECORD_URL` / `REPORT_URL` | `AKfycbzQLAJC…` / `AKfycbwEeMUS…` | `AKfycbzA5pE8…` / `AKfycby3amN8…` |
+| `CONFIG_SPREADSHEET_ID` (both `.gs`) | `1yiZDnbEFN…` | `1j3UCbdSKe…` |
+| `RECORD_SPREADSHEET_ID` | `1jD6DXmPgT…` | `11HeRKAHkV…` |
+| `REGISTRY_SPREADSHEET_ID` | `1oab1W2UFo…` | `1ZiluDuw7m…` |
+| `ANALYSIS_KEY`, `ADMIN_KEY` | **identical on both** — see the key warning below | |
+
+⚠️ **The 醫院代號 `wanfang-7f3a2c` exists in *both* registries**, so a `?t=` code can never
+tell you which environment answered. Only the payload can: sandbox returns 122 record rows
+and six evaluator codes including `TEST-USER`; production returned 80 rows and
+A01/A02/A04/A06 on 2026-10-20. This already caused one real incident (see the
+`REGISTRY_SPREADSHEET_ID` row).
+
+Merging `dev` → `master` means switching those eight back, per
+`docs/build-from-scratch-從零建置.md` §4-4 — and note `dev` is no longer behind, so a future
+promotion is a constants swap, not a feature merge.
+
+---
+
+Everything below describes **`master`**, the production release of 2026-10-14 — the
+`dev` → `master` promotion described in `docs/build-from-scratch-從零建置.md` §4. Every
+constant there is the **production** value; sandbox values live only on `dev` and are
+deliberately not restated in that branch's inline comments, because those comments ship to
+the production site with the HTML. The rollback point is the branch **`一版`** (and
+`origin/master` before that push), at `a7d1871`.
 
 | constant | value on this branch | note |
 |---|---|---|
@@ -233,9 +265,13 @@ release promoted `dev` onto it (see the Branch state section above); the pre-rel
 is preserved as the branch **`一版`**, which is the rollback target. The rule was that outside
 a release every change lands on `dev` and "更新" means `dev`. **In practice `master` has
 taken direct commits since the release** (`f813130`, `abb1b2d`, `2201f36`, `7b946ee`, and the
-2026-10-16 multi-4S change, which the owner asked for directly on 正式版) while `dev` stayed at
-`4782edf` — so `dev` is now *behind* production. Ask which branch before starting; don't
-assume `dev`, and don't promote `dev` onto `master` without first bringing those across.
+2026-10-16/10-17 work, which the owner asked for directly on 正式版) while `dev` stayed at
+`4782edf`. That gap is **closed as of 2026-10-20**: `dev` was fast-forwarded to `18c41f4` and
+its eight constants switched back to the sandbox, so the two branches now differ by data
+only. Ask which branch before starting; don't assume `dev`. A future promotion is therefore
+a constants swap, not a feature merge — but check that it is still true before relying on
+it, because the thing that made it false last time was ordinary day-to-day commits landing
+on `master` alone.
 A second Vercel project (`exercise_evaluation_test` →
 `exerciseevaluationtest.vercel.app`, same GitHub repo) has its Production Branch set to
 `dev`, so pushing `dev` deploys the test site and pushing `master` deploys the hospital's.

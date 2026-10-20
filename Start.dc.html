@@ -264,18 +264,20 @@ button{font-family:inherit;cursor:pointer}
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#161512","options":["#161512","#7a4e0f","#1f7a4d","#2b5fd9"]},"$preview":{"width":390,"height":844}}'>
-// 正式分支（master）：下面兩個 /exec 是業主公司帳號底下的正式部署，分數會寫進
-// 業主的正式紀錄表。測試用的沙箱值只存在 dev 分支，不在這裡重述——這段註解會
-// 隨 HTML 一起送到正式站。
+// 測試分支（dev）：下面兩個 /exec 是個人帳號底下的沙箱部署，讀寫的是沙箱試算表。
+// 業主的正式值只存在 master 分支，不在這裡重述——這段註解會隨 HTML 一起送到
+// 測試站（exerciseevaluationtest.vercel.app）。
+// ⚠️ 合併回 master 前，這兩行連同 Analysis.html 的兩行、兩支 .gs 的四個 ID，
+//    一共八個常數都要換成正式值。程序見 docs/build-from-scratch-從零建置.md §4-4。
 //
-// CONFIG_URL：正式 Config 專案（apps-script/Config.gs，只有 doGet）。頁面網址沒有
+// CONFIG_URL：沙箱 Config 專案（apps-script/Config.gs，只有 doGet）。頁面網址沒有
 // 帶 ?t= / ?ex= 時走它，行為與多租戶上線前一字不差。
-const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxtcCix2GTCQ0kh4nC32ONWPqpYibnC_fJKbTZzJMAoYmHuPlOtMCotH5bVySkq9AIbfg/exec';
-// RECORD_URL：正式 ConfigWithSubmit 專案（設定分支＋doPost＋action=analysis＋
-// action=sessions）。2026-10-14 起接上正式租戶註冊表，所以帶 ?t= 的連結會走場次路由。
-// 改這支後端要用業主帳號在 Apps Script 編輯器「編輯現有部署」重新部署，選
-// 「新增部署」會產生另一個 /exec，這一行就會對不上。
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzA5pE8JrbB4qCsdDvQMEEQMiQsIVytILbv-gDqd4apZ8C1p5kb-Rj7cLZYtRAS42Q-/exec';
+const CONFIG_URL = 'https://script.google.com/macros/s/AKfycbxuIddvtDOkaqDw7Hua07VnekLO85W6_u47UZzVVfl0ngSen_ps4-V4rHVVLX1jddwP8A/exec';
+// RECORD_URL：沙箱 ConfigWithSubmit 專案（設定分支＋doPost＋action=analysis＋
+// action=sessions），接的是沙箱租戶註冊表，帶 ?t= 的連結會走場次路由。
+// 改這支後端一樣要在 Apps Script 編輯器「編輯現有部署」重新部署，選「新增部署」
+// 會產生另一個 /exec，這一行就會對不上。
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec';
 
 // 多醫院／多演習路由：連結上的 ?t=（醫院代號）與 ?ex=（演習代號）。兩者都是
 // 註冊表裡不可猜的 slug，後端只用它們查註冊表那一列，代號本身永遠不會被當成

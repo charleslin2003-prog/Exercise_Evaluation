@@ -283,10 +283,10 @@ tr.exclRow td{color:var(--muted)}
 <script>
 // 跟 apps-script/ConfigWithSubmit.gs 部署後的 RECORD_URL 一致（跟 Start.dc.html
 // 用同一個 /exec 網址，用 action=analysis 參數走分析用的 doGet 分支）。
-// 正式分支（master）：正式 ConfigWithSubmit 部署，讀業主的正式紀錄表。
+// 測試分支（dev）：沙箱 ConfigWithSubmit 部署，讀的是沙箱紀錄表。
 // 這一行必須跟 Start.dc.html 的 RECORD_URL 完全相同，否則儀表板與評核官表單
-// 會讀到不同的後端。沙箱值只存在 dev 分支，不在這裡重述。
-const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzA5pE8JrbB4qCsdDvQMEEQMiQsIVytILbv-gDqd4apZ8C1p5kb-Rj7cLZYtRAS42Q-/exec';
+// 會讀到不同的後端。業主的正式值只存在 master 分支，不在這裡重述。
+const RECORD_URL = 'https://script.google.com/macros/s/AKfycbzQLAJCv3-lMgWeJ6k0zDYdqkepMiycTivwksmuqbkXUZngHSZmtWGh8c9DDs5ykytX/exec';
 // 必須跟 ConfigWithSubmit.gs 裡的 ANALYSIS_KEY 完全一致，兩邊都要換成同一組
 // 自訂的隨機字串再部署 —— 這把金鑰只存在於這個檔案，不會出現在 Start.dc.html。
 const ANALYSIS_KEY = 'WrHSeTn1bkVtD2C9QriISkCy2Q_I8Jub';
@@ -325,13 +325,12 @@ const WANT_REPORT = Q.get('view') === 'report';
 // ⚠️ 空字串 = 這個部署還沒有報告產生器，「產生 Google 文件」會維持停用並說明原因。
 //    部署好之後只要把 /exec 網址貼進這一行，其他程式都不用動。
 //
-// 正式分支（master）：業主公司帳號底下的正式報告 Web App（2026-10-14 接上）。
-// 它是獨立部署、零免金鑰分支——實測裸 GET 與 action=analysis 都回 BAD_ACTION，
-// 只認 reportCheck／reportStart／reportContinue／reportStatus／reportAbandon。
-// ⚠️ 這一行只能填業主自己帳號底下的部署。docEndpoint 會把分析金鑰當 &key= 送過去
-//    （見下方「產生 Google 文件」組網址處），填成任何別人的 /exec 就等於把正式
-//    分析金鑰交給對方。
-const REPORT_URL = 'https://script.google.com/macros/s/AKfycby3amN8X_38wanYHBEydhhT5WpalvsAcHrJPgUwQeifRnBpdpE5_SbqqzNtqm5aF8yLbA/exec';
+// 測試分支（dev）：個人帳號底下的沙箱報告部署（獨立專案「演習評核報告 Web」）。
+// ⚠️ docEndpoint 會把分析金鑰當 &key= 送到這一行指的部署（見下方「產生 Google
+//    文件」組網址處）。而 dev 與 master 目前共用同一把 ANALYSIS_KEY，所以這裡填
+//    的沙箱部署收到的就是正式那把金鑰——合併回 master 時務必換成業主自己的
+//    報告部署，絕不能把這一行帶過去。
+const REPORT_URL = 'https://script.google.com/macros/s/AKfycbwEeMUSu5W1rXKTpD-9K9bklv3oXkN-Sz6N8vbUuq2l6rq70rmZfDbRtoxMzbI34z_jrg/exec';
 
 let DATA = null;
 const fmt=x=>x==null?'—':Number(x).toFixed(2);
