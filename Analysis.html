@@ -657,6 +657,15 @@ function normalisePotentials(d){
   if (inc && Array.isArray(inc.excludedQuestions)) for (const q of inc.excludedQuestions) q.potential = fix(q.potential);
 }
 
+// 兩個名字，兩種用途，刻意分開：
+//   orgTitle()     機構是誰 —— 設定試算表 演習資訊 的「機構名稱」。標頭、分頁標題、
+//                  報告封面的機構列都用它。業主要的是「萬芳醫院」，不是註冊表那一列
+//                  的顯示名稱（那欄常帶著 _R7、_V2 這種版本後綴）。
+//   displayName()  是哪一場 —— 註冊表的「顯示名稱」。CSV 檔名與產生報告對話框的
+//                  「對象」用它，因為那兩處要分得出同一家醫院的不同場次。
+// 兩者都會在對方空白時互相退回：沙箱 2026b 的設定表沒有「機構名稱」那一列，
+// orgTitle() 於是顯示「萬芳醫院急救站」，跟改版前一樣。
+function orgTitle(){return (DATA && DATA.meta && (DATA.meta.orgName || DATA.meta.displayName)) || '演習評核'}
 function displayName(){return (DATA && DATA.meta && (DATA.meta.displayName || DATA.meta.orgName)) || '演習評核'}
 
 // 演習日期：設定表那一格若是真正的日期格式，後端序列化出來會是
@@ -678,8 +687,8 @@ function init(){
   // Chrome 的「另存為 PDF」檔名直接取 document.title，所以標題一定要動態設定，
   // 不能停在 HTML 裡那個暫時值，否則每一家醫院印出來的檔名都一樣。
   buildSceneGoals();
-  document.title = displayName() + '｜演習評核分析平台';
-  document.getElementById('orgTitle').textContent = displayName() + '｜演習評核分析平台';
+  document.title = orgTitle() + '｜演習評核分析平台';
+  document.getElementById('orgTitle').textContent = orgTitle() + '｜演習評核分析平台';
   // 沒有單獨的副標題列了：徽章優先顯示「演習類別」，沒填就退回顯示
   // 「演習名稱」頂著用，兩個都沒有就不顯示這個徽章。「演習類別」跟「主題」
   // 是演習資訊表裡兩個不同的欄位（分別對應 exerciseCategory/exerciseTopic），
@@ -1142,7 +1151,7 @@ function renderReportCover(){
   const place=String(m.exerciseLocation==null?'':m.exerciseLocation).trim();
   const prefill={'演習地點':place};
   document.getElementById('reportCover').innerHTML=
-    `<div class="coverOrg">${esc(m.displayName||m.orgName||'演習評核')}</div>`+
+    `<div class="coverOrg">${esc(orgTitle())}</div>`+
     `<div class="coverTitle">演習評核分析報告</div>`+
     `<div class="coverGrid">${rows.map(r=>`<div class="k">${esc(r[0])}</div><div>${esc(r[1]||'—')}</div>`).join('')}</div>`+
     `<div class="signGrid">${signs.map((s,i)=>`<div><div class="k">${esc(s)}</div><div class="editable" contenteditable="true" spellcheck="false" id="coverEdit${i}">${esc(prefill[s]||'')}</div></div>`).join('')}</div>`+
