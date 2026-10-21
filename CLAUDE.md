@@ -1385,9 +1385,19 @@ All rendering is plain DOM string-building off one in-memory `DATA` object (the
 `Start.dc.html`/`support.js`). Each tab has a `render*()` called from `init()`; there's no
 reactive binding, so any update after `DATA` changes needs its `render*()` re-invoked.
 
-`init()` also sets `document.title` and `#orgTitle` from
-`meta.displayName || meta.orgName || '演習評核'` (Chrome's "Save as PDF" filename comes
-from `document.title`), and the CSV filename from the same expression. `shortScene()` is
+**Two name helpers, deliberately not one** (2026-10-21). `orgTitle()` is
+`meta.orgName || meta.displayName || '演習評核'` — *which hospital*, i.e. the config
+spreadsheet's 演習資訊 「機構名稱」 row — and feeds `#orgTitle`, `document.title` and the
+report cover's `.coverOrg`. `displayName()` keeps the old
+`meta.displayName || meta.orgName || '演習評核'` — *which session*, i.e. the registry's
+顯示名稱 — and feeds the CSV filename and the 產生 Google 文件 dialog's `docRun.sessionLabel`,
+both of which have to tell one drill from another. Each falls back to the other when its own
+field is blank, so a config sheet with no 機構名稱 row renders exactly as before. The split
+exists because the owner's 顯示名稱 carries version suffixes (`萬芳醫地下空間_R7`,
+`急救站_V2`) that are useful in a session picker and wrong as a page heading.
+⚠️ Chrome's "Save as PDF" filename comes from `document.title`, so since this change **two
+sessions of the same hospital propose the same PDF filename** — the session is still on the
+cover, but the filename no longer distinguishes them. `shortScene()` is
 built from `meta.scenePrefix` (escaped) and is the one function all three code-using
 places share.
 
